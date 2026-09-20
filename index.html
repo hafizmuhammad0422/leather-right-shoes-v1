@@ -1394,13 +1394,14 @@ function normalizeShoeBoxReceiveVoucherFields(){
     next[f.id] = {
       show: src.show!==false,
       label: String(src.label || f.label),
+      bold: src.bold===true,
       builtin:true
     };
   });
   Object.keys(current).forEach(id=>{
     const src=current[id];
     if(src && src.custom && !SHOE_BOX_RECEIVE_VOUCHER_FIELDS.some(f=>f.id===id)){
-      next[id]={show:src.show!==false,label:String(src.label||'Custom Field'),value:String(src.value||''),custom:true};
+      next[id]={show:src.show!==false,label:String(src.label||'Custom Field'),value:String(src.value||''),bold:src.bold===true,custom:true};
     }
   });
   settings.shoeBoxReceiveVoucherFields = next;
@@ -1427,13 +1428,14 @@ function normalizeShoeSoleReceiveVoucherFields(){
     next[f.id] = {
       show: src.show!==false,
       label: String(src.label || f.label),
+      bold: src.bold===true,
       builtin:true
     };
   });
   Object.keys(current).forEach(id=>{
     const src=current[id];
     if(src && src.custom && !SHOE_SOLE_RECEIVE_VOUCHER_FIELDS.some(f=>f.id===id)){
-      next[id]={show:src.show!==false,label:String(src.label||'Custom Field'),value:String(src.value||''),custom:true};
+      next[id]={show:src.show!==false,label:String(src.label||'Custom Field'),value:String(src.value||''),bold:src.bold===true,custom:true};
     }
   });
   settings.shoeSoleReceiveVoucherFields = next;
@@ -4057,6 +4059,9 @@ function openShoeBoxReceiveVoucherCustomizeModal(onDone){
       <span>${esc(f?.label||item.label||'Custom Field')}</span>
       <input data-sbv-cfg-label="${esc(id)}" value="${esc(item.label||'')}" placeholder="Label">
       ${item.custom?`<input data-sbv-cfg-value="${esc(id)}" value="${esc(item.value||'')}" placeholder="Value">`:'<span style="font-size:11px;color:var(--muted);">Built-in</span>'}
+      <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--muted);white-space:nowrap;">
+        <input type="checkbox" data-sbv-cfg-bold="${esc(id)}" ${item.bold===true?'checked':''}> Bold
+      </label>
       <button type="button" class="btn red small" data-sbv-cfg-delete="${esc(id)}">Delete</button>
     </div>`;
   }).join('');
@@ -4086,7 +4091,7 @@ function openShoeBoxReceiveVoucherCustomizeModal(onDone){
     const value=prompt('Field value to show on the voucher',clean);
     if(value===null)return;
     const id='custom_'+uid();
-    config[id]={show:true,label:clean,value:String(value).trim(),custom:true};
+    config[id]={show:true,label:clean,value:String(value).trim(),bold:false,custom:true};
     mountRows();
   };
   document.getElementById('sbvCustomizeCancel').onclick=closeModal;
@@ -4095,9 +4100,11 @@ function openShoeBoxReceiveVoucherCustomizeModal(onDone){
       const showEl=document.querySelector(`[data-sbv-cfg-show="${CSS.escape(id)}"]`);
       const labelEl=document.querySelector(`[data-sbv-cfg-label="${CSS.escape(id)}"]`);
       const valueEl=document.querySelector(`[data-sbv-cfg-value="${CSS.escape(id)}"]`);
+      const boldEl=document.querySelector(`[data-sbv-cfg-bold="${CSS.escape(id)}"]`);
       if(showEl) config[id].show=showEl.checked;
       if(labelEl) config[id].label=labelEl.value.trim()||config[id].label||'Field';
       if(valueEl) config[id].value=valueEl.value.trim();
+      config[id].bold=!!boldEl?.checked;
     });
     settings.shoeBoxReceiveVoucherFields=config;
     settings.shoeBoxReceiveVoucherRemovedBuiltins=Array.from(removedBuiltins);
@@ -4115,7 +4122,7 @@ function shoeBoxVoucherLine(field,row,supplier,voucherNo){
   else if(field==='atoms') value=`${shoeBoxQuantityDisplay(row.atoms ?? row.items)} Atoms`;
   else if(field==='totalAtoms') value=`${shoeBoxQuantityDisplay(row.totalAtoms)} Atoms`;
   else if(cfg.custom) value=cfg.value||'';
-  return value?`<div class="rline"><span>${esc(cfg.label)}:</span><span>${esc(value)}</span></div>`:'';
+  return value?`<div class="rline" style="${cfg.bold===true?'font-weight:900;':''}"><span>${esc(cfg.label)}:</span><span>${esc(value)}</span></div>`:'';
 }
 function shoeBoxVoucherText(field,row,supplier,voucherNo){
   const cfg=shoeBoxVoucherFieldConfig()[field]; if(!cfg?.show)return '';
@@ -4147,9 +4154,9 @@ function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes=''){
   const showReceived=cfg.atoms?.show!==false;
   const productHeader=cfg.productName?.label||'Product Name';
   const receivedHeader=cfg.atoms?.label||'Received Atoms';
-  const productRows=(showProduct||showReceived)?rows.map(p=>`<tr>${showProduct?`<td>${esc(p.productName)}</td>`:''}${showReceived?`<td style="text-align:right;">${shoeBoxQuantityDisplay(p.atoms ?? p.items)} Atoms</td>`:''}</tr>`).join(''):'';
-  const header=(showProduct||showReceived)?`<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>${showProduct?`<th style="text-align:left;">${esc(productHeader)}</th>`:''}${showReceived?`<th style="text-align:right;">${esc(receivedHeader)}</th>`:''}</tr></thead><tbody>${productRows}</tbody></table>`:'';
-  const totalLine=cfg.totalAtoms?.show!==false?`<div class="rline"><span>${esc(cfg.totalAtoms?.label||'Total Atoms')}:</span><span>${shoeBoxQuantityDisplay(totalAtoms)} Atoms</span></div>`:'';
+  const productRows=(showProduct||showReceived)?rows.map(p=>`<tr>${showProduct?`<td style="${cfg.productName?.bold===true?'font-weight:900;':''}">${esc(p.productName)}</td>`:''}${showReceived?`<td style="text-align:right;${cfg.atoms?.bold===true?'font-weight:900;':''}">${shoeBoxQuantityDisplay(p.atoms ?? p.items)} Atoms</td>`:''}</tr>`).join(''):'';
+  const header=(showProduct||showReceived)?`<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>${showProduct?`<th style="text-align:left;${cfg.productName?.bold===true?'font-weight:900;':''}">${esc(productHeader)}</th>`:''}${showReceived?`<th style="text-align:right;${cfg.atoms?.bold===true?'font-weight:900;':''}">${esc(receivedHeader)}</th>`:''}</tr></thead><tbody>${productRows}</tbody></table>`:'';
+  const totalLine=cfg.totalAtoms?.show!==false?`<div class="rline" style="${cfg.totalAtoms?.bold===true?'font-weight:900;':''}"><span>${esc(cfg.totalAtoms?.label||'Total Atoms')}:</span><span>${shoeBoxQuantityDisplay(totalAtoms)} Atoms</span></div>`:'';
   const summaryByProduct=new Map();
   rows.forEach(p=>{
     const pid=String(p.productId||'');
@@ -4158,7 +4165,7 @@ function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes=''){
     const total=shoeBoxCurrentProductTotalAtoms(supplier,product);
     summaryByProduct.set(pid,{name:p.productName||product?.name||'Product',total});
   });
-  const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeBoxQuantityDisplay(x.total)} Atoms</span></div>`).join('')}</div>`:'';
+  const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;${cfg.receivingSummary?.bold===true?'font-weight:900;':''}">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline" style="${cfg.receivingSummary?.bold===true?'font-weight:900;':''}"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeBoxQuantityDisplay(x.total)} Atoms</span></div>`).join('')}</div>`:'';
   return `<div id="sbsReceiveVoucherPrint" class="receipt-paper" style="width:80mm;margin:auto;"><h3 style="text-align:center;margin:0;">${esc(settings.factoryName||'Leather Right Shoes')}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub" style="font-weight:700;margin-top:3px;">SHOE BOX RECEIVE VOUCHER</div><hr>${lines}<hr>${header}${totalLine}${summary}</div>`;
 }
 function shoeBoxVoucherLine(field,row,supplier,voucherNo){
@@ -5033,6 +5040,9 @@ function openShoeSoleReceiveVoucherCustomizeModal(onDone){
       <span>${esc(f?.label||item.label||'Custom Field')}</span>
       <input data-ssv-cfg-label="${esc(id)}" value="${esc(item.label||'')}" placeholder="Label">
       ${item.custom?`<input data-ssv-cfg-value="${esc(id)}" value="${esc(item.value||'')}" placeholder="Value">`:'<span style="font-size:11px;color:var(--muted);">Built-in</span>'}
+      <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--muted);white-space:nowrap;">
+        <input type="checkbox" data-ssv-cfg-bold="${esc(id)}" ${item.bold===true?'checked':''}> Bold
+      </label>
       <button type="button" class="btn red small" data-ssv-cfg-delete="${esc(id)}">Delete</button>
     </div>`;
   }).join('');
@@ -5062,7 +5072,7 @@ function openShoeSoleReceiveVoucherCustomizeModal(onDone){
     const value=prompt('Field value to show on the voucher',clean);
     if(value===null)return;
     const id='custom_'+uid();
-    config[id]={show:true,label:clean,value:String(value).trim(),custom:true};
+    config[id]={show:true,label:clean,value:String(value).trim(),bold:false,custom:true};
     mountRows();
   };
   document.getElementById('ssvCustomizeCancel').onclick=closeModal;
@@ -5071,9 +5081,11 @@ function openShoeSoleReceiveVoucherCustomizeModal(onDone){
       const showEl=document.querySelector(`[data-ssv-cfg-show="${CSS.escape(id)}"]`);
       const labelEl=document.querySelector(`[data-ssv-cfg-label="${CSS.escape(id)}"]`);
       const valueEl=document.querySelector(`[data-ssv-cfg-value="${CSS.escape(id)}"]`);
+      const boldEl=document.querySelector(`[data-ssv-cfg-bold="${CSS.escape(id)}"]`);
       if(showEl) config[id].show=showEl.checked;
       if(labelEl) config[id].label=labelEl.value.trim()||config[id].label||'Field';
       if(valueEl) config[id].value=valueEl.value.trim();
+      config[id].bold=!!boldEl?.checked;
     });
     settings.shoeSoleReceiveVoucherFields=config;
     settings.shoeSoleReceiveVoucherRemovedBuiltins=Array.from(removedBuiltins);
@@ -5091,7 +5103,7 @@ function shoeSoleVoucherLine(field,row,supplier,voucherNo){
   else if(field==='atoms') value=`${shoeSoleQuantityDisplay(row.atoms ?? row.items)} Atoms`;
   else if(field==='totalAtoms') value=`${shoeSoleQuantityDisplay(row.totalAtoms)} Atoms`;
   else if(cfg.custom) value=cfg.value||'';
-  return value?`<div class="rline"><span>${esc(cfg.label)}:</span><span>${esc(value)}</span></div>`:'';
+  return value?`<div class="rline" style="${cfg.bold===true?'font-weight:900;':''}"><span>${esc(cfg.label)}:</span><span>${esc(value)}</span></div>`:'';
 }
 function shoeSoleVoucherText(field,row,supplier,voucherNo){
   const cfg=shoeSoleVoucherFieldConfig()[field]; if(!cfg?.show)return '';
@@ -5123,9 +5135,9 @@ function renderShoeSoleVoucherPreview(supplierIndex,purchaseIds,notes=''){
   const showReceived=cfg.atoms?.show!==false;
   const productHeader=cfg.productName?.label||'Product Name';
   const receivedHeader=cfg.atoms?.label||'Received Atoms';
-  const productRows=(showProduct||showReceived)?rows.map(p=>`<tr>${showProduct?`<td>${esc(p.productName)}</td>`:''}${showReceived?`<td style="text-align:right;">${shoeSoleQuantityDisplay(p.atoms ?? p.items)} Atoms</td>`:''}</tr>`).join(''):'';
-  const header=(showProduct||showReceived)?`<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>${showProduct?`<th style="text-align:left;">${esc(productHeader)}</th>`:''}${showReceived?`<th style="text-align:right;">${esc(receivedHeader)}</th>`:''}</tr></thead><tbody>${productRows}</tbody></table>`:'';
-  const totalLine=cfg.totalAtoms?.show!==false?`<div class="rline"><span>${esc(cfg.totalAtoms?.label||'Total Atoms')}:</span><span>${shoeSoleQuantityDisplay(totalAtoms)} Atoms</span></div>`:'';
+  const productRows=(showProduct||showReceived)?rows.map(p=>`<tr>${showProduct?`<td style="${cfg.productName?.bold===true?'font-weight:900;':''}">${esc(p.productName)}</td>`:''}${showReceived?`<td style="text-align:right;${cfg.atoms?.bold===true?'font-weight:900;':''}">${shoeSoleQuantityDisplay(p.atoms ?? p.items)} Atoms</td>`:''}</tr>`).join(''):'';
+  const header=(showProduct||showReceived)?`<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>${showProduct?`<th style="text-align:left;${cfg.productName?.bold===true?'font-weight:900;':''}">${esc(productHeader)}</th>`:''}${showReceived?`<th style="text-align:right;${cfg.atoms?.bold===true?'font-weight:900;':''}">${esc(receivedHeader)}</th>`:''}</tr></thead><tbody>${productRows}</tbody></table>`:'';
+  const totalLine=cfg.totalAtoms?.show!==false?`<div class="rline" style="${cfg.totalAtoms?.bold===true?'font-weight:900;':''}"><span>${esc(cfg.totalAtoms?.label||'Total Atoms')}:</span><span>${shoeSoleQuantityDisplay(totalAtoms)} Atoms</span></div>`:'';
   const summaryByProduct=new Map();
   rows.forEach(p=>{
     const pid=String(p.productId||'');
@@ -5134,7 +5146,7 @@ function renderShoeSoleVoucherPreview(supplierIndex,purchaseIds,notes=''){
     const total=shoeSoleCurrentProductTotalAtoms(supplier,product);
     summaryByProduct.set(pid,{name:p.productName||product?.name||'Product',total});
   });
-  const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeSoleQuantityDisplay(x.total)} Atoms</span></div>`).join('')}</div>`:'';
+  const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;${cfg.receivingSummary?.bold===true?'font-weight:900;':''}">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline" style="${cfg.receivingSummary?.bold===true?'font-weight:900;':''}"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeSoleQuantityDisplay(x.total)} Atoms</span></div>`).join('')}</div>`:'';
   return `<div id="sssReceiveVoucherPrint" class="receipt-paper" style="width:80mm;margin:auto;"><h3 style="text-align:center;margin:0;">${esc(settings.factoryName||'Leather Right Shoes')}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub" style="font-weight:700;margin-top:3px;">SHOE BOX RECEIVE VOUCHER</div><hr>${lines}<hr>${header}${totalLine}${summary}</div>`;
 }
 function shoeSoleVoucherLine(field,row,supplier,voucherNo){
