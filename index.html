@@ -254,14 +254,18 @@
   .settings-logo-preview{max-width:80px;max-height:80px;border:1px solid var(--line);border-radius:4px;padding:4px;background:#fff;}
 
   @media print{
+    @page{size:80mm auto;margin:0;}
+    html,body{width:80mm;max-width:80mm;margin:0!important;padding:0!important;background:#fff;}
     body *{visibility:hidden;}
     #printArea, #printArea *{visibility:visible;}
-    #printArea{position:absolute;top:0;left:0;}
-    .receipt-paper{border:none;}
+    #printArea{position:absolute;top:0;left:4mm;width:72mm!important;max-width:72mm!important;box-sizing:border-box;margin:0!important;padding:3mm 0!important;border:none!important;overflow-wrap:anywhere;word-break:break-word;}
+    #printArea .rline{display:flex;justify-content:space-between;gap:5mm;overflow-wrap:anywhere;}
+    #printArea .rline span{min-width:0;overflow-wrap:anywhere;word-break:break-word;}
+    #printArea img{max-width:100%;height:auto;}
   }
   @media print {
-    body { margin: 0; padding: 0; background: #fff; }
-    div { page-break-inside: avoid; }
+    body { margin: 0!important; padding: 0!important; background: #fff; }
+    div { page-break-inside: auto; }
   }
 
     /* ---------- WORKER TABLE VISUAL POLISH (scoped only to Workers) ---------- */
@@ -1463,6 +1467,10 @@ function normalizeGasVoucherFields(){
     }
   });
   settings.gasVoucherFields = settings.gasVoucherFields.filter(f=>f && (f.builtin || f.custom));
+  settings.gasVoucherFields.forEach(f=>{
+    if(!f || typeof f!=='object') return;
+    f.bold = f.bold === true;
+  });
   settings.gasVoucherRemovedBuiltins = Array.from(removedBuiltinIds).filter(id=>GAS_VOUCHER_BUILTIN_FIELDS.some(f=>f.id===id));
 }
 normalizeGasVoucherFields();
@@ -1857,7 +1865,7 @@ function printMaterialStock(id){
   const m=materials.find(x=>x.id===id);if(!m)return;
   const w=window.open('','_blank');
   if(!w){toast('Please allow pop-ups to print the report');return;}
-  const receiptstyle=`<style>@page{size:80mm auto;margin:0;}html,body{margin:0;padding:0;background:#fff;font-family:'Courier New',monospace;width:80mm;}body>div{width:80mm;box-sizing:border-box;}div{page-break-inside:avoid;}@media print{body{width:80mm;margin:0;padding:0;}}</style>`;
+  const receiptstyle=`<style>@page{size:80mm auto;margin:0;}html,body{margin:0;padding:0;background:#fff;font-family:'Courier New',monospace;width:80mm;box-sizing:border-box;}body>div{width:72mm;max-width:72mm;box-sizing:border-box;margin:0 auto;}div{page-break-inside:avoid;}@media print{body{width:80mm;margin:0;padding:0;}}</style>`;
   w.document.write('<!doctype html><html><head><title>Material Stock Report</title>'+receiptstyle+'</head><body>'+materialReportHtml(m)+'</body></html>');
   w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
@@ -2496,7 +2504,7 @@ function printMaterialHistory(materialId){
   </div>`;
   const w=window.open('','_blank');
   if(!w){toast('Please allow pop-ups to print');return;}
-  w.document.write('<!doctype html><html><head><title>Stock History</title><style>@page{size:80mm auto;margin:0;}html,body{margin:0;padding:0;background:#fff;font-family:"Courier New",monospace;width:80mm;}body>div{width:80mm;box-sizing:border-box;}@media print{body{width:80mm;}}</style></head><body>'+historyHtml+'</body></html>');
+  w.document.write('<!doctype html><html><head><title>Stock History</title><style>@page{size:80mm auto;margin:0;}html,body{margin:0;padding:0;background:#fff;font-family:"Courier New",monospace;width:80mm;box-sizing:border-box;}body>div{width:72mm;max-width:72mm;box-sizing:border-box;margin:0 auto;}@media print{body{width:80mm;}}</style></head><body>'+historyHtml+'</body></html>');
   w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
 
@@ -3113,7 +3121,7 @@ function showReceipt(tx){
   modal(`
     <h3 style="margin-top:0;">Receipt Ready</h3>
     <div id="receiptWrap">
-      <div class="receipt-paper" id="printArea" style="width:80mm;">
+      <div class="receipt-paper" id="printArea" style="width:72mm;max-width:72mm;box-sizing:border-box;margin:0 auto;">
         <div class="brand-head">
           ${s.logo? `<img class="logo" src="${s.logo}" alt="Logo">` : ''}
           <h3>${esc(String(s.factoryName||'LEATHER RIDE SHOES BY HAJI').replace(/\s+BY\s+HAJI.*$/i,'').trim() || 'LEATHER RIDE SHOES')}</h3>
@@ -3140,7 +3148,7 @@ function showReceipt(tx){
       <button class="btn ghost" id="btnCloseReceipt">Close</button>
     </div>
   `);
-  document.getElementById('btnPrint').onclick = ()=> window.print();
+  document.getElementById('btnPrint').onclick = ()=> printElement('printArea');
   document.getElementById('btnWhatsapp').onclick = ()=> shareReceiptImage(tx);
   document.getElementById('btnWorkerWhatsapp').onclick = ()=> shareReceiptImageToWorker(tx);
   document.getElementById('btnCloseReceipt').onclick = ()=>{ closeModal(); render(); };
@@ -3313,7 +3321,25 @@ function createBill(lines){
   const bill={id:uid(),billNo:settings.nextBillNo||1001,date:new Date().toISOString(),shopkeeperId:s.id,shopkeeperName:s.name,lines:clean,total,paid,note:window.__billNote||''};settings.nextBillNo=(bill.billNo||1001)+1;bills.push(bill);persistAll();audit('Sales Bill Created',`Bill #${bill.billNo} — ${s.name} — ${total}`);delete window.__billSk;delete window.__billPaid;delete window.__billNote;closeModal();render();showBill(bill);toast('Bill created');
 }
 function showBill(b){const s=shopkeepers.find(x=>x.id===b.shopkeeperId);modal(`<h3>Bill #${b.billNo}</h3><div id="billPrintArea" class="receipt-paper" style="width:80mm;margin:auto;"><h3>${esc(settings.factoryName)}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub">Sales Bill</div><hr><div class="rline"><span>Bill #:</span><span>${b.billNo}</span></div><div class="rline"><span>Date:</span><span>${fmtDate(b.date)}</span></div><div class="rline"><span>Shopkeeper:</span><span>${esc(s?s.name:b.shopkeeperName)}</span></div><hr>${b.lines.map(l=>`<div style="margin:4px 0;"><div>${esc(l.articleName)}</div><div class="rline"><span>${l.qty} × ${money(l.rate)}</span><span>${money(l.qty*l.rate)}</span></div></div>`).join('')}<hr><div class="rline"><b>Total</b><b>${money(b.total)}</b></div><div class="rline"><span>Paid</span><span>${money(b.paid)}</span></div><div class="rline"><span>Balance</span><span>${money(b.total-b.paid)}</span></div>${b.note?`<hr><div class="footer">${esc(b.note)}</div>`:''}</div><div class="modal-actions"><button class="btn brass" id="printBill">🖨️ Print Bill</button><button class="btn ghost" id="closeBill">Close</button></div>`);document.getElementById('printBill').onclick=()=>printElement('billPrintArea');document.getElementById('closeBill').onclick=closeModal;}
-function printElement(id){const el=document.getElementById(id);if(!el)return;const win=window.open('','_blank','width=420,height=700');if(!win){toast('Please allow popups to print');return;}win.document.write('<!doctype html><html><head><title>Print</title><style>body{margin:0;padding:10px;font-family:Courier New,monospace;color:#000}.receipt-paper{font-size:12px}.rline{display:flex;justify-content:space-between;margin:3px 0}.sub{text-align:center;font-size:11px}.footer{text-align:center}</style></head><body>'+el.outerHTML+'</body></html>');win.document.close();win.focus();setTimeout(()=>{win.print();win.close();},250);}
+function printElement(id){
+  const el=document.getElementById(id);
+  if(!el){toast('Print content not found');return;}
+  const win=window.open('','_blank','width=500,height=800');
+  if(!win){toast('Please allow pop-ups to print');return;}
+  const printCss=`@page{margin:0;}*{box-sizing:border-box;}html,body{margin:0!important;padding:0!important;background:#fff!important;color:#000!important;}body{width:80mm!important;font-family:"Courier New",monospace;font-size:12px;line-height:1.25;}body>.receipt-paper{display:block!important;width:72mm!important;max-width:72mm!important;margin:0 auto!important;padding:3mm 0!important;border:0!important;background:#fff!important;color:#000!important;overflow-wrap:anywhere;word-break:break-word;}body>.receipt-paper *{visibility:visible!important;color:#000!important;background:transparent!important;}body>.receipt-paper img{display:block;max-width:100%;height:auto;margin:0 auto;}body>.receipt-paper .rline{display:flex;justify-content:space-between;gap:4mm;margin:3px 0;white-space:normal;}body>.receipt-paper .rline span{min-width:0;overflow-wrap:anywhere;word-break:break-word;}@media print{html,body{width:80mm!important;margin:0!important;padding:0!important;}body>.receipt-paper{width:72mm!important;max-width:72mm!important;margin:0 auto!important;padding:3mm 0!important;}}`;
+  win.document.open();
+  win.document.write('<!doctype html><html><head><meta charset="UTF-8"><title>Thermal Receipt</title><style>'+printCss+'</style></head><body>'+el.outerHTML+'</body></html>');
+  win.document.close();
+  win.focus();
+  setTimeout(()=>{
+    try{
+      win.print();
+    }catch(e){
+      try{win.close();}catch(_){}
+      toast('Print failed');
+    }
+  },700);
+}
 function showBillFromId(id){const b=bills.find(x=>x.id===id);if(b)showBill(b);}
 
 /* ============ AUDIT LOG ============ */
@@ -3963,7 +3989,7 @@ function printShoeBoxReceiveSummary(supplierIndex,filter,customStart='',customEn
     const rs=(supplier.purchases||[]).filter(p=>v.purchaseIds.includes(String(p.id)));
     return `<div class="voucher"><div class="center bold">${esc(v.voucherNo)}</div><div class="meta">Supplier: ${esc(shoeBoxSupplierDisplayName(supplier,supplierIndex))}</div><div class="meta">Date: ${esc(fmtDate(v.date))}</div><div class="meta">Time: ${v.date?new Date(v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):''}</div><hr>${rs.map(p=>`<div class="row"><span>${esc(p.productName)}</span><span>${shoeBoxQuantityDisplay(p.atoms ?? p.items)} Atoms</span></div>`).join('')}<hr><div class="row bold"><span>Total Atoms</span><span>${shoeBoxQuantityDisplay(v.totalAtoms)} Atoms</span></div></div>`;
   }).join('<div class="cut"></div>');
-  win.document.write(`<!doctype html><html><head><title>Receive Summary</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:8px;color:#111;width:80mm;font-size:11px}.head{text-align:center;margin-bottom:8px}.head h2{font-size:15px;margin:0 0 3px}.meta{font-size:10px;margin:2px 0}.row{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.small{font-size:10px}.bold{font-weight:700}.center{text-align:center}.voucher{margin-bottom:8px}.cut{border-top:1px dashed #777;margin:8px 0}@media print{body{width:80mm;padding:5px}}</style></head><body><div class="head"><h2>${esc(settings.factoryName||'Leather Right Shoes')}</h2><div class="meta">SHOE BOX RECEIVE SUMMARY</div><div class="meta">${esc(range)}</div></div>${voucherBlocks||'<div>No receiving found.</div>'}<div class="cut"></div><div class="row bold"><span>Period Total Atoms</span><span>${shoeBoxQuantityDisplay(totals.totalAtoms)} Atoms</span></div><script>window.onload=function(){window.print();};<\/script></body></html>`);
+  win.document.write(`<!doctype html><html><head><title>Receive Summary</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:4mm;color:#111;width:80mm;box-sizing:border-box;font-size:11px}.head{text-align:center;margin-bottom:8px}.head h2{font-size:15px;margin:0 0 3px}.meta{font-size:10px;margin:2px 0}.row{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.small{font-size:10px}.bold{font-weight:700}.center{text-align:center}.voucher{margin-bottom:8px}.cut{border-top:1px dashed #777;margin:8px 0}@media print{body{width:80mm;padding:5px}}</style></head><body><div class="head"><h2>${esc(settings.factoryName||'Leather Right Shoes')}</h2><div class="meta">SHOE BOX RECEIVE SUMMARY</div><div class="meta">${esc(range)}</div></div>${voucherBlocks||'<div>No receiving found.</div>'}<div class="cut"></div><div class="row bold"><span>Period Total Atoms</span><span>${shoeBoxQuantityDisplay(totals.totalAtoms)} Atoms</span></div><script>window.onload=function(){window.print();};<\/script></body></html>`);
   win.document.close();
 }
 
@@ -4205,7 +4231,7 @@ function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=fals
   document.getElementById('sbsVoucherPrint').onclick=()=>{
     const win=window.open('','_blank','width=420,height=700');
     if(!win){toast('Please allow popups to print');return;}
-    win.document.write(`<!doctype html><html><head><title>Receive Voucher ${esc(voucherNo)}</title><style>@page{size:80mm auto;margin:0}body{font-family:Arial,sans-serif;margin:0;padding:6px;width:80mm}.receipt-paper{width:100%;margin:auto}.rline{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin:3px 0}.sub{font-size:10px;text-align:center}.footer{font-size:10px}table{width:100%;font-size:9px}th,td{padding:2px 1px}hr{border:0;border-top:1px dashed #777;margin:6px 0}@media print{body{width:80mm;padding:4px}}</style></head><body>${html}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+    win.document.write(`<!doctype html><html><head><title>Receive Voucher ${esc(voucherNo)}</title><style>@page{size:80mm auto;margin:0}body{font-family:Arial,sans-serif;margin:0;padding:4mm;width:80mm;box-sizing:border-box;}.receipt-paper{width:100%;margin:auto}.rline{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin:3px 0}.sub{font-size:10px;text-align:center}.footer{font-size:10px}table{width:100%;font-size:9px}th,td{padding:2px 1px}hr{border:0;border-top:1px dashed #777;margin:6px 0}@media print{body{width:80mm;padding:4px}}</style></head><body>${html}<script>window.onload=function(){window.print();};<\/script></body></html>`);
     win.document.close();
   };
   if(autoPrint) setTimeout(()=>document.getElementById('sbsVoucherPrint')?.click(),120);
@@ -4939,7 +4965,7 @@ function printShoeSoleReceiveSummary(supplierIndex,filter,customStart='',customE
     const rs=(supplier.purchases||[]).filter(p=>v.purchaseIds.includes(String(p.id)));
     return `<div class="voucher"><div class="center bold">${esc(v.voucherNo)}</div><div class="meta">Supplier: ${esc(shoeSoleSupplierDisplayName(supplier,supplierIndex))}</div><div class="meta">Date: ${esc(fmtDate(v.date))}</div><div class="meta">Time: ${v.date?new Date(v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):''}</div><hr>${rs.map(p=>`<div class="row"><span>${esc(p.productName)}</span><span>${shoeSoleQuantityDisplay(p.atoms ?? p.items)} Atoms</span></div>`).join('')}<hr><div class="row bold"><span>Total Atoms</span><span>${shoeSoleQuantityDisplay(v.totalAtoms)} Atoms</span></div></div>`;
   }).join('<div class="cut"></div>');
-  win.document.write(`<!doctype html><html><head><title>Receive Summary</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:8px;color:#111;width:80mm;font-size:11px}.head{text-align:center;margin-bottom:8px}.head h2{font-size:15px;margin:0 0 3px}.meta{font-size:10px;margin:2px 0}.row{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.small{font-size:10px}.bold{font-weight:700}.center{text-align:center}.voucher{margin-bottom:8px}.cut{border-top:1px dashed #777;margin:8px 0}@media print{body{width:80mm;padding:5px}}</style></head><body><div class="head"><h2>${esc(settings.factoryName||'Leather Right Shoes')}</h2><div class="meta">SHOE BOX RECEIVE SUMMARY</div><div class="meta">${esc(range)}</div></div>${voucherBlocks||'<div>No receiving found.</div>'}<div class="cut"></div><div class="row bold"><span>Period Total Atoms</span><span>${shoeSoleQuantityDisplay(totals.totalAtoms)} Atoms</span></div><script>window.onload=function(){window.print();};<\/script></body></html>`);
+  win.document.write(`<!doctype html><html><head><title>Receive Summary</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:4mm;color:#111;width:80mm;box-sizing:border-box;font-size:11px}.head{text-align:center;margin-bottom:8px}.head h2{font-size:15px;margin:0 0 3px}.meta{font-size:10px;margin:2px 0}.row{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.small{font-size:10px}.bold{font-weight:700}.center{text-align:center}.voucher{margin-bottom:8px}.cut{border-top:1px dashed #777;margin:8px 0}@media print{body{width:80mm;padding:5px}}</style></head><body><div class="head"><h2>${esc(settings.factoryName||'Leather Right Shoes')}</h2><div class="meta">SHOE BOX RECEIVE SUMMARY</div><div class="meta">${esc(range)}</div></div>${voucherBlocks||'<div>No receiving found.</div>'}<div class="cut"></div><div class="row bold"><span>Period Total Atoms</span><span>${shoeSoleQuantityDisplay(totals.totalAtoms)} Atoms</span></div><script>window.onload=function(){window.print();};<\/script></body></html>`);
   win.document.close();
 }
 
@@ -5181,7 +5207,7 @@ function openShoeSoleReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=fal
   document.getElementById('sssVoucherPrint').onclick=()=>{
     const win=window.open('','_blank','width=420,height=700');
     if(!win){toast('Please allow popups to print');return;}
-    win.document.write(`<!doctype html><html><head><title>Receive Voucher ${esc(voucherNo)}</title><style>@page{size:80mm auto;margin:0}body{font-family:Arial,sans-serif;margin:0;padding:6px;width:80mm}.receipt-paper{width:100%;margin:auto}.rline{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin:3px 0}.sub{font-size:10px;text-align:center}.footer{font-size:10px}table{width:100%;font-size:9px}th,td{padding:2px 1px}hr{border:0;border-top:1px dashed #777;margin:6px 0}@media print{body{width:80mm;padding:4px}}</style></head><body>${html}<script>window.onload=function(){window.print();};<\/script></body></html>`);
+    win.document.write(`<!doctype html><html><head><title>Receive Voucher ${esc(voucherNo)}</title><style>@page{size:80mm auto;margin:0}body{font-family:Arial,sans-serif;margin:0;padding:4mm;width:80mm;box-sizing:border-box;}.receipt-paper{width:100%;margin:auto}.rline{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin:3px 0}.sub{font-size:10px;text-align:center}.footer{font-size:10px}table{width:100%;font-size:9px}th,td{padding:2px 1px}hr{border:0;border-top:1px dashed #777;margin:6px 0}@media print{body{width:80mm;padding:4px}}</style></head><body>${html}<script>window.onload=function(){window.print();};<\/script></body></html>`);
     win.document.close();
   };
   if(autoPrint) setTimeout(()=>document.getElementById('sssVoucherPrint')?.click(),120);
@@ -6292,6 +6318,10 @@ function openGasVoucherSettingsModal(){
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:6px;">
             <input type="checkbox" data-gftoggle="${i}" ${f.enabled?'checked':''} title="Show on voucher">
             <span style="font-size:10px;color:var(--muted);">${f.builtin?'Built-in':'Custom'}</span>
+            <label style="display:flex;align-items:center;gap:3px;margin:0 0 0 auto;font-size:10px;color:var(--muted);cursor:pointer;">
+              <input type="checkbox" data-gfbold="${i}" ${f.bold===true?'checked':''} title="Bold this field">
+              <span>Bold</span>
+            </label>
           </div>
           <input type="text" data-gflabel="${i}" value="${esc(f.label||'')}" placeholder="Field name" style="width:100%;box-sizing:border-box;margin-bottom:6px;">
           <div style="display:flex;gap:4px;">
@@ -6302,7 +6332,7 @@ function openGasVoucherSettingsModal(){
         </div>`;}).join('')}
     </div>`).join('');
   modal(`<h3>Customize Voucher</h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Tick only the fields you want on the voucher. The same selected fields and order are used in Preview and Print. Quantity (KG) is automatically highlighted. Pending Gas and Total Gas are automatic supplier-balance fields and are shown in KG.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Tick the fields you want on the voucher. For each field, use <strong>Bold</strong> when you want that field to appear bold. The same selection, order, labels and bold settings are used in Preview and Print. Quantity (KG) keeps its existing highlighted treatment.</div>
     ${rows}
     <label style="margin-top:14px;">Add Custom Field</label>
     <div class="row">
@@ -6313,6 +6343,12 @@ function openGasVoucherSettingsModal(){
     <div class="modal-actions"><button class="btn ghost" id="gfClose">Close</button></div>`);
   document.querySelectorAll('[data-gftoggle]').forEach(el=>el.addEventListener('change',()=>{
     const i=parseInt(el.dataset.gftoggle); settings.gasVoucherFields[i].enabled=el.checked; persistAll();
+  }));
+  document.querySelectorAll('[data-gfbold]').forEach(el=>el.addEventListener('change',()=>{
+    const i=parseInt(el.dataset.gfbold);
+    if(!settings.gasVoucherFields[i]) return;
+    settings.gasVoucherFields[i].bold = el.checked;
+    persistAll();
   }));
   document.querySelectorAll('[data-gflabel]').forEach(el=>el.addEventListener('change',()=>{
     const i=parseInt(el.dataset.gflabel); const label=el.value.trim();
@@ -6342,7 +6378,7 @@ function openGasVoucherSettingsModal(){
   document.getElementById('btnAddGasField').onclick=()=>{
     const label=document.getElementById('gfNewLabel').value.trim();
     if(!label){toast('Enter a field name');return;}
-    settings.gasVoucherFields.push({id:'custom_'+uid(),label,enabled:true,custom:true});
+    settings.gasVoucherFields.push({id:'custom_'+uid(),label,enabled:true,custom:true,bold:false});
     persistAll(); toast('Custom field added'); openGasVoucherSettingsModal();
   };
 
@@ -6352,7 +6388,7 @@ function openGasVoucherSettingsModal(){
     restoreWrap.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:5px;">Add Standard Field Again</div><div style="display:flex;flex-wrap:wrap;gap:5px;">${removedBuiltins.map(f=>`<button type="button" class="btn ghost small" data-gfrestore="${esc(f.id)}">+ ${esc(f.label)}</button>`).join('')}</div>`;
     restoreWrap.querySelectorAll('[data-gfrestore]').forEach(el=>el.addEventListener('click',()=>{
       const id=el.dataset.gfrestore; const bf=GAS_VOUCHER_BUILTIN_FIELDS.find(f=>f.id===id); if(!bf) return;
-      settings.gasVoucherFields.push({id:bf.id,label:bf.label,enabled:true,builtin:true});
+      settings.gasVoucherFields.push({id:bf.id,label:bf.label,enabled:true,builtin:true,bold:false});
       settings.gasVoucherRemovedBuiltins=(settings.gasVoucherRemovedBuiltins||[]).filter(x=>x!==id);
       persistAll(); toast('Field added again'); openGasVoucherSettingsModal();
     }));
@@ -6548,19 +6584,23 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
     const val = gasFieldValue(voucher, f.id, previewMode);
     if(!val) return '';
 
+    const boldStyle = f.bold===true ? 'font-weight:900;' : '';
+    const labelStyle = f.bold===true ? 'font-weight:900;' : '';
+    const valueStyle = f.bold===true ? 'font-weight:900;' : '';
+
     if(f.id==='qtyKg'){
-      return `<div class="rline" style="margin:8px 0;padding:7px 6px;border:1px solid var(--line,#ddd);border-radius:6px;font-size:16px;font-weight:900;">
-        <span>${esc(f.label)}:</span><span style="font-weight:900;">${esc(val)}</span>
+      return `<div class="rline" style="margin:8px 0;padding:7px 6px;border:1px solid var(--line,#ddd);border-radius:6px;font-size:16px;font-weight:900;${boldStyle}">
+        <span style="${labelStyle}">${esc(f.label)}:</span><span style="font-weight:900;">${esc(val)}</span>
       </div>`;
     }
 
     if(f.id==='pendingGasKg' || f.id==='totalGasKg'){
-      return `<div class="rline" style="font-weight:800;">
-        <span>${esc(f.label)}:</span><span>${esc(val)}</span>
+      return `<div class="rline" style="${boldStyle}">
+        <span style="${labelStyle}">${esc(f.label)}:</span><span style="${valueStyle}">${esc(val)}</span>
       </div>`;
     }
 
-    return `<div class="rline"><span>${esc(f.label)}:</span><span>${esc(val)}</span></div>`;
+    return `<div class="rline" style="${boldStyle}"><span style="${labelStyle}">${esc(f.label)}:</span><span style="${valueStyle}">${esc(val)}</span></div>`;
   }).join('');
 
   return `<div class="brand-head"><h3>${esc(String(settings.factoryName||'LEATHER RIDE SHOES BY HAJI ABID'))}</h3></div>
