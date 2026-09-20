@@ -265,20 +265,21 @@
   }
 
     /* ---------- WORKER TABLE VISUAL POLISH (scoped only to Workers) ---------- */
-  .worker-table-wrap{border:1px solid var(--line);border-radius:10px;background:#fff;overflow:auto;}
-  .worker-table{margin:0;border-collapse:separate;border-spacing:0;min-width:760px;font-size:13px;}
-  .worker-table thead th{background:#f7f4ec;color:#5f594d;font-size:11px;font-weight:800;letter-spacing:.45px;text-transform:uppercase;padding:11px 10px;border-bottom:2px solid #ddd5c5;white-space:nowrap;text-align:left;vertical-align:middle;}
-  .worker-table tbody td{padding:10px;border-bottom:1px solid #ebe7de;background:#fff;vertical-align:middle;text-align:left!important;white-space:nowrap;}
+  /* ---------- WORKER TABLE DESKTOP AUTO-FIT (width only) ---------- */
+  .worker-table-wrap{border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden;width:100%;max-width:100%;}
+  .worker-table{margin:0;border-collapse:separate;border-spacing:0;width:100%;max-width:100%;min-width:0;table-layout:fixed;font-size:13px;}
+  .worker-table thead th{background:#f7f4ec;color:#5f594d;font-size:11px;font-weight:800;letter-spacing:.45px;text-transform:uppercase;padding:11px 8px;border-bottom:2px solid #ddd5c5;white-space:normal;overflow-wrap:anywhere;word-break:break-word;text-align:left;vertical-align:middle;}
+  .worker-table tbody td{padding:10px 8px;border-bottom:1px solid #ebe7de;background:#fff;vertical-align:middle;text-align:left!important;white-space:normal;overflow-wrap:anywhere;word-break:break-word;min-width:0;max-width:0;}
   .worker-table tbody tr:last-child td{border-bottom:0;}
   .worker-table tbody tr:hover td{background:#faf7f0;}
-  .worker-table .worker-photo-cell{width:48px;text-align:left!important;}
-  .worker-table .worker-value-cell{min-width:110px;text-align:left!important;}
+  .worker-table .worker-photo-cell{width:48px;text-align:left!important;white-space:nowrap;overflow-wrap:normal;word-break:normal;}
+  .worker-table .worker-value-cell{min-width:0;width:auto;text-align:left!important;}
   .worker-table .worker-name-cell{font-weight:800;color:var(--ink);font-size:13px;}
-  .worker-table .worker-category-badge{display:inline-flex;align-items:center;max-width:180px;padding:4px 9px;border-radius:999px;background:#f8ecd8;color:#75551e;border:1px solid #ead4ad;font-size:11px;font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .worker-table .worker-category-badge{display:inline-flex;align-items:center;max-width:100%;padding:4px 7px;border-radius:999px;background:#f8ecd8;color:#75551e;border:1px solid #ead4ad;font-size:11px;font-weight:800;line-height:1.2;white-space:normal;overflow-wrap:anywhere;word-break:break-word;}
   .worker-table .worker-number-value{font-family:"Courier New",monospace;font-weight:800;color:#315b86;}
   .worker-table .worker-date-value{font-weight:700;color:#5f594d;}
-  .worker-table .actions-cell{justify-content:flex-start!important;text-align:left!important;}
-  .worker-table .actions-cell .btn{margin-right:4px;}
+  .worker-table .actions-cell{width:72px;justify-content:flex-start!important;text-align:left!important;white-space:normal;overflow-wrap:normal;word-break:normal;}
+  .worker-table .actions-cell .btn{margin-right:2px;margin-bottom:2px;}
   .worker-table th,.worker-table td{direction:ltr;text-align:left!important;}
   .worker-profile-distribute{border:1px solid #dfd5bf;background:linear-gradient(135deg,#fbfaf6 0%,#fff 100%);}
   .worker-profile-distribute .wh-section-title{display:flex;align-items:center;gap:8px;margin-top:0;color:var(--ink);}
@@ -287,7 +288,11 @@
   .worker-distribute-history table th,.worker-distribute-history table td{text-align:left!important;}
   @media(max-width:700px){
     .worker-distribute-form{grid-template-columns:1fr;}
-    .worker-table{min-width:700px;}
+    /* Preserve existing mobile table behavior; desktop auto-fit applies above 700px. */
+    .worker-table-wrap{overflow:auto;}
+    .worker-table{min-width:700px;table-layout:auto;}
+    .worker-table thead th{white-space:nowrap;overflow-wrap:normal;word-break:normal;}
+    .worker-table tbody td{white-space:nowrap;overflow-wrap:normal;word-break:normal;max-width:none;}
   }
 
 .worker-link{background:none;border:none;padding:0;color:var(--brass-dark);font-weight:600;font-size:14px;cursor:pointer;text-decoration:underline;font-family:inherit;}
@@ -416,6 +421,323 @@
 #gasBalanceCard .gas-pay-balance-item{padding:7px 8px;}
 </style>
 
+<style id="mobile-responsive-layer">
+/* =========================================================
+   MOBILE-ONLY RESPONSIVE PRESENTATION LAYER
+   Desktop styles remain unchanged.
+   ========================================================= */
+@media (max-width: 700px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden;}
+  #app{width:100%;max-width:100%;min-width:0;}
+  #topbar{
+    height:auto;
+    min-height:58px;
+    padding:8px 10px;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  #topbar .topbar-left-spacer{display:none;}
+  #topbar .topbar-center{
+    width:100%;
+    min-width:0;
+    order:1;
+    text-align:center;
+  }
+  #topbar .factory-title-row{
+    justify-content:center;
+    min-width:0;
+    gap:7px;
+  }
+  #topbar .factory-title-row .topLogoClickArea{
+    flex:0 0 auto;
+    width:32px!important;
+    height:32px!important;
+  }
+  #topbar .factory-title-row .topLogoClickArea img{
+    width:32px!important;
+    height:32px!important;
+    object-fit:contain;
+  }
+  #topbar .factory-title{
+    font-size:16px!important;
+    line-height:1.15;
+    letter-spacing:1px;
+    max-width:calc(100vw - 70px);
+    overflow-wrap:anywhere;
+  }
+  #topbar .sub{
+    font-size:9px;
+    line-height:1.2;
+    margin-top:3px;
+    letter-spacing:.7px;
+    overflow-wrap:anywhere;
+  }
+  #topbar .topbar-right{
+    order:2;
+    width:100%;
+    text-align:center;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:8px;
+    font-size:11px;
+  }
+  #liveDate,#liveTime{font-size:11px!important;margin:0!important;}
+
+  #appBody{
+    display:flex;
+    flex-direction:column;
+    width:100%;
+    min-width:0;
+  }
+  #appBody>nav{
+    width:100%;
+    max-width:none;
+    flex:0 0 auto;
+    padding:8px 10px;
+    position:relative;
+    z-index:20;
+    box-sizing:border-box;
+  }
+  #appBody>nav .brand{
+    padding:0;
+    margin:0;
+    border:0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    min-height:40px;
+  }
+  #appBody>nav .brand h1{
+    font-size:13px;
+    margin:0;
+  }
+  #appBody>nav .brand span{font-size:10px;}
+  #mobileMenuToggle{
+    display:inline-flex!important;
+    align-items:center;
+    justify-content:center;
+    min-width:42px;
+    min-height:40px;
+    padding:8px 12px;
+    border:1px solid #4a4f59;
+    border-radius:7px;
+    background:#2a2f39;
+    color:#fff;
+    font-size:20px;
+    line-height:1;
+    cursor:pointer;
+    touch-action:manipulation;
+  }
+  #navItems{
+    display:none;
+    width:100%;
+    margin-top:7px;
+  }
+  #appBody>nav.mobile-nav-open #navItems{display:block;}
+  #appBody>nav button.nav-item{
+    min-height:44px;
+    padding:10px 12px;
+    font-size:14px;
+    border-left:3px solid transparent;
+    border-radius:5px;
+    touch-action:manipulation;
+  }
+
+  main#mainArea{
+    width:100%;
+    max-width:none;
+    min-width:0;
+    box-sizing:border-box;
+    padding:16px 10px 28px;
+    overflow-x:hidden;
+  }
+  h2.page-title{
+    font-size:19px;
+    margin-bottom:14px;
+    padding-bottom:9px;
+    overflow-wrap:anywhere;
+  }
+
+  .card{
+    max-width:100%;
+    box-sizing:border-box;
+    padding:15px;
+    margin-bottom:14px;
+    min-width:0;
+  }
+  .grid,
+  .grid-4,
+  .grid-2,
+  .grid-6,
+  .dashboard-financial-row{
+    grid-template-columns:1fr!important;
+    min-width:0;
+  }
+  .dashboard-stats-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px;
+  }
+  .dashboard-stats-grid>*,
+  .grid>*,
+  .card>*{min-width:0;max-width:100%;}
+
+  button,.btn,select,input,textarea{
+    max-width:100%;
+    box-sizing:border-box;
+  }
+  button,.btn{
+    min-height:42px;
+    touch-action:manipulation;
+  }
+  .btn.small{
+    min-height:36px;
+  }
+  input,select,textarea{
+    width:100%;
+    min-height:42px;
+    font-size:16px;
+  }
+  label{
+    display:block;
+    max-width:100%;
+    overflow-wrap:anywhere;
+  }
+
+  /* Common form/grid patterns */
+  .form-grid,
+  .form-row,
+  .filters,
+  .filter-row{
+    grid-template-columns:1fr!important;
+    flex-direction:column;
+    align-items:stretch!important;
+    width:100%;
+    min-width:0;
+  }
+  .form-grid>*,
+  .form-row>*,
+  .filters>*,
+  .filter-row>*{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+  }
+
+  /* Workers controls */
+  #workerCategoryFilterSelect,
+  #workerSearchInput{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+  }
+  [data-worker-summary]{
+    width:100%;
+    justify-content:space-between;
+    text-align:left;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
+  .worker-distribute-form{
+    grid-template-columns:1fr!important;
+    width:100%;
+  }
+
+  /* Tables: fit the viewport instead of creating desktop-style horizontal overflow. */
+  .table-wrap,
+  .worker-table-wrap,
+  .worker-distribute-history,
+  .card:has(>table){
+    width:100%;
+    max-width:100%;
+    box-sizing:border-box;
+    overflow-x:hidden!important;
+  }
+  table{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    table-layout:fixed!important;
+    border-collapse:collapse;
+  }
+  th,td{
+    max-width:100%;
+    min-width:0!important;
+    white-space:normal!important;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+    vertical-align:top;
+    font-size:11px;
+    line-height:1.35;
+  }
+  .worker-table{
+    min-width:0!important;
+    font-size:11px!important;
+  }
+  .worker-table thead th,
+  .worker-table tbody td{
+    padding:7px 5px!important;
+    white-space:normal!important;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+  }
+  .worker-table .worker-photo-cell{
+    width:40px!important;
+  }
+  .worker-table .actions-cell{
+    width:68px!important;
+  }
+  .worker-table .actions-cell .btn{
+    min-width:28px;
+    min-height:32px;
+    padding:4px 6px;
+    margin:0 2px 3px 0;
+  }
+  .worker-table .worker-category-badge{
+    max-width:100%;
+    white-space:normal;
+  }
+  .worker-table .worker-number-value{
+    font-family:inherit;
+  }
+
+  /* Generic dense cards/rows */
+  .row,
+  .flex-row,
+  .actions,
+  .card-actions{
+    flex-wrap:wrap!important;
+    min-width:0;
+    max-width:100%;
+  }
+  .actions>*,
+  .card-actions>*{
+    max-width:100%;
+  }
+  img{
+    max-width:100%;
+  }
+  pre,code{
+    max-width:100%;
+    white-space:pre-wrap;
+    overflow-wrap:anywhere;
+  }
+  .modal,
+  .modal-content,
+  .dialog{
+    width:calc(100vw - 20px)!important;
+    max-width:calc(100vw - 20px)!important;
+    max-height:90vh;
+    box-sizing:border-box;
+    overflow:auto;
+  }
+}
+
+/* The hamburger is only a mobile control; desktop navigation remains exactly as before. */
+#mobileMenuToggle{display:none;}
+</style>
+
+
 </head>
 <body>
 <div id="app">
@@ -446,6 +768,7 @@
     <nav>
       <div class="brand">
         <h1>MENU</h1>
+        <button type="button" id="mobileMenuToggle" aria-label="Open menu" aria-expanded="false">☰</button>
       </div>
       <div id="navItems"><button class="nav-item" data-page="dashboard">📊 Dashboard</button><button class="nav-item" data-page="materials">📦 Materials / Stock</button><button class="nav-item" data-page="workers">👷 Workers</button><button class="nav-item" data-page="issue">📤 Material Distribution</button><button class="nav-item" data-page="articles">👞 Shoe Articles</button><button class="nav-item" data-page="bills">🧾 Sales Bills</button><button class="nav-item" data-page="shopkeepers">👤 Shopkeepers / Khata</button><button class="nav-item" data-page="history">📜 Transaction History</button><button class="nav-item" data-page="audit">🛡️ Audit Log</button><button class="nav-item" data-page="settings">⚙️ Settings</button><button class="nav-item active" data-page="backup">💾 Backup</button><button class="nav-item" data-page="archive">🗄️ Archive</button></div>
     </nav>
@@ -778,6 +1101,7 @@ let settings = loadDB(DB_KEYS.settings, {
   customWorkerColumns:[],
   workerColumnOrder:[],
   workerColumnLabels:{},
+  workerHiddenBuiltinFields:[],
   boxImages:{},
   dashboardMiddleBoxes:[],
   gasSupplier:{},
@@ -803,6 +1127,7 @@ let settings = loadDB(DB_KEYS.settings, {
 });
 settings.customWorkerColumns = Array.isArray(settings.customWorkerColumns) ? settings.customWorkerColumns : [];
 settings.workerColumnLabels = (settings.workerColumnLabels && typeof settings.workerColumnLabels==='object') ? settings.workerColumnLabels : {};
+settings.workerHiddenBuiltinFields = Array.isArray(settings.workerHiddenBuiltinFields) ? settings.workerHiddenBuiltinFields : [];
 function normalizeWorkerColumnLabels(){
   const defaults = {name:'Worker Name', category:'Category', phone:'Phone Number', whatsapp:'WhatsApp Number'};
 
@@ -833,13 +1158,27 @@ function normalizeWorkerColumnLabels(){
       col.label=col.name.trim();
     }
   });
+
+  // Built-in fields can now be hidden from the Worker UI without deleting
+  // their definitions or any Worker data stored under them.
+  const builtinIds = new Set(Object.keys(defaults));
+  settings.workerHiddenBuiltinFields = Array.isArray(settings.workerHiddenBuiltinFields)
+    ? settings.workerHiddenBuiltinFields.map(id=>String(id)).filter(id=>builtinIds.has(id))
+    : [];
+  settings.workerHiddenBuiltinFields = Array.from(new Set(settings.workerHiddenBuiltinFields));
 }
 normalizeWorkerColumnLabels();
 function normalizeWorkerColumnOrder(){
-  const builtins = ['name','category','phone','whatsapp'];
-  const customIds = (settings.customWorkerColumns||[]).map(c=>c.id);
+  const allBuiltins = ['name','category','phone','whatsapp'];
+  const hiddenBuiltins = new Set(Array.isArray(settings.workerHiddenBuiltinFields) ? settings.workerHiddenBuiltinFields.map(String) : []);
+  const builtins = allBuiltins.filter(id=>!hiddenBuiltins.has(id));
+  const customIds = (settings.customWorkerColumns||[])
+    .filter(c=>c && typeof c==='object' && c.id!=null && String(c.id).trim()!=='')
+    .map(c=>String(c.id));
   const valid = new Set([...builtins, ...customIds]);
-  let order = Array.isArray(settings.workerColumnOrder) ? settings.workerColumnOrder.filter(id=>valid.has(id)) : [];
+  let order = Array.isArray(settings.workerColumnOrder)
+    ? settings.workerColumnOrder.map(String).filter(id=>valid.has(id))
+    : [];
   [...builtins, ...customIds].forEach(id=>{ if(!order.includes(id)) order.push(id); });
   settings.workerColumnOrder = order;
 }
@@ -1297,11 +1636,13 @@ function getWorkerFieldDefs(){
   return defs;
 }
 function workerFieldValue(w,id){
+  if(!w || id==null) return '';
   if(id==='name') return w.name||'';
   if(id==='category') return w.category||'';
   if(id==='phone') return w.phone||'';
   if(id==='whatsapp') return w.whatsapp||'';
-  return (w.customFields||{})[id] || '';
+  const customFields = w.customFields && typeof w.customFields==='object' ? w.customFields : {};
+  return customFields[String(id)] || '';
 }
 
 /* ============ BATCH 2 SECURITY / AUDIT ============ */
@@ -3230,6 +3571,8 @@ function openManageColumnsModal(){
   normalizeWorkerColumnLabels();
   const defs = getWorkerFieldDefs();
   const order = settings.workerColumnOrder;
+  const hiddenBuiltins = new Set(Array.isArray(settings.workerHiddenBuiltinFields) ? settings.workerHiddenBuiltinFields.map(String) : []);
+  const builtinIds = ['name','category','phone','whatsapp'];
   const rows = order.map((id,i)=>{
     const def = defs[id];
     if(!def) return '';
@@ -3237,17 +3580,29 @@ function openManageColumnsModal(){
       <div style="flex:1;min-width:180px;">
         ${def.builtin
           ? `<input type="text" data-builtinlabel="${esc(id)}" value="${esc(def.label)}" aria-label="Rename ${esc(def.label)}" style="width:100%;">`
-          : `<div style="padding:9px 10px;border:1px solid #eee;border-radius:5px;background:#faf9f6;">${esc(def.label)}${def.builtin? ' <span style="color:#b9b09a;font-size:11px;">(built-in)</span>' : ''}</div>`}
+          : `<div style="padding:9px 10px;border:1px solid #eee;border-radius:5px;background:#faf9f6;">${esc(def.label)}</div>`}
       </div>
       ${def.builtin? '<span style="color:#b9b09a;font-size:11px;white-space:nowrap;">(built-in)</span>' : ''}
       <button type="button" class="btn ghost small" data-colup="${i}" ${i===0?'disabled':''} style="flex:0 0 auto;">↑</button>
       <button type="button" class="btn ghost small" data-coldown="${i}" ${i===order.length-1?'disabled':''} style="flex:0 0 auto;">↓</button>
-      ${def.builtin? '' : `<button type="button" class="btn red small" data-removecol="${id}" style="flex:0 0 auto;">Remove</button>`}
+      <button type="button" class="btn red small" data-removecol="${esc(id)}" style="flex:0 0 auto;">Delete</button>
     </div>`;
   }).join('');
+
+  const hiddenRows = builtinIds.filter(id=>hiddenBuiltins.has(id)).map(id=>{
+    const def=defs[id];
+    if(!def) return '';
+    return `<div class="row" style="align-items:center;margin-top:8px;gap:6px;">
+      <div style="flex:1;min-width:180px;padding:9px 10px;border:1px solid #eee;border-radius:5px;background:#faf9f6;">${esc(def.label)}</div>
+      <span style="color:#b9b09a;font-size:11px;white-space:nowrap;">(built-in • hidden)</span>
+      <button type="button" class="btn ghost small" data-restorebuiltin="${esc(id)}" style="flex:0 0 auto;">Restore</button>
+    </div>`;
+  }).join('');
+
   modal(`<h3>Manage Worker Columns</h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Use ↑ / ↓ to set the order columns appear in (table and Edit Worker form both follow this order). Built-in fields stay built-in and can only have their display names renamed.</div>
-    <div id="colListWrap">${rows}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Use ↑ / ↓ to set the order columns appear in (table and Edit Worker form both follow this order). Built-in fields can be renamed or hidden without deleting their saved Worker data.</div>
+    <div id="colListWrap">${rows || '<div class="empty">No visible Worker Columns.</div>'}</div>
+    ${hiddenRows ? `<div style="margin-top:16px;font-size:12px;font-weight:800;color:var(--ink);">Hidden Built-in Fields</div><div>${hiddenRows}</div>` : ''}
     <label style="margin-top:16px;">New Column Name</label>
     <div class="row">
       <input id="newColName" placeholder="e.g. CNIC, Advance Amount, Address">
@@ -3257,6 +3612,7 @@ function openManageColumnsModal(){
       <button class="btn brass" id="btnSaveBuiltinNames">Save Built-in Names</button>
       <button class="btn ghost" id="colClose">Close</button>
     </div>`);
+
   document.querySelectorAll('[data-colup]').forEach(b=>b.addEventListener('click', ()=>{
     const i = parseInt(b.dataset.colup);
     if(i>0){ const arr=settings.workerColumnOrder; [arr[i-1],arr[i]]=[arr[i],arr[i-1]]; persistAll(); render(); openManageColumnsModal(); }
@@ -3266,18 +3622,41 @@ function openManageColumnsModal(){
     const arr = settings.workerColumnOrder;
     if(i<arr.length-1){ [arr[i+1],arr[i]]=[arr[i],arr[i+1]]; persistAll(); render(); openManageColumnsModal(); }
   }));
+
   document.querySelectorAll('[data-removecol]').forEach(b=>b.addEventListener('click', ()=>{
-    const id = b.dataset.removecol;
+    const id = String(b.dataset.removecol||'');
     const def = defs[id];
-    openConfirmModal(`Remove the "${def?def.label:'this'}" column? Data saved in it for workers will be hidden (not deleted from storage).`, ()=>{
-      settings.customWorkerColumns = settings.customWorkerColumns.filter(c=>c.id!==id);
-      settings.workerColumnOrder = settings.workerColumnOrder.filter(x=>x!==id);
+    if(!def) return;
+    openConfirmModal('Are you sure you want to remove this field?', ()=>{
+      if(def.builtin){
+        const hidden = Array.isArray(settings.workerHiddenBuiltinFields) ? settings.workerHiddenBuiltinFields.map(String) : [];
+        if(!hidden.includes(id)) hidden.push(id);
+        settings.workerHiddenBuiltinFields = hidden;
+      }else{
+        // Existing custom-field deletion behavior remains unchanged: only
+        // the column definition/order is removed; Worker data is retained.
+        settings.customWorkerColumns = settings.customWorkerColumns.filter(c=>String(c?.id||'')!==id);
+      }
+      settings.workerColumnOrder = settings.workerColumnOrder.filter(x=>String(x)!==id);
       persistAll();
       render();
-      toast('Column removed');
+      toast('Field removed');
       openManageColumnsModal();
     });
   }));
+
+  document.querySelectorAll('[data-restorebuiltin]').forEach(b=>b.addEventListener('click', ()=>{
+    const id=String(b.dataset.restorebuiltin||'');
+    const hidden=Array.isArray(settings.workerHiddenBuiltinFields) ? settings.workerHiddenBuiltinFields.map(String) : [];
+    settings.workerHiddenBuiltinFields=hidden.filter(x=>x!==id);
+    if(!settings.workerColumnOrder.includes(id)) settings.workerColumnOrder.push(id);
+    normalizeWorkerColumnOrder();
+    persistAll();
+    render();
+    toast('Built-in field restored');
+    openManageColumnsModal();
+  }));
+
   document.getElementById('btnSaveBuiltinNames').onclick=()=>{
     normalizeWorkerColumnLabels();
     document.querySelectorAll('[data-builtinlabel]').forEach(input=>{
@@ -3294,7 +3673,7 @@ function openManageColumnsModal(){
   document.getElementById('btnAddColumn').onclick=()=>{
     const label = document.getElementById('newColName').value.trim();
     if(!label){ toast('Enter a column name'); return; }
-    const dup = settings.customWorkerColumns.some(c=>c.label.toLowerCase()===label.toLowerCase());
+    const dup = settings.customWorkerColumns.some(c=>c && typeof c==='object' && String(c.label||c.name||'').toLowerCase()===label.toLowerCase());
     if(dup){ toast('This column already exists'); return; }
     const newCol = {id:uid(), label};
     settings.customWorkerColumns.push(newCol);
@@ -6983,5 +7362,27 @@ initApp();
 </script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}</script>
 
+
+<script id="mobile-navigation-layer">
+(function(){
+  const nav=document.querySelector('#appBody>nav');
+  const toggle=document.getElementById('mobileMenuToggle');
+  if(!nav || !toggle) return;
+  toggle.addEventListener('click',()=>{
+    const open=nav.classList.toggle('mobile-nav-open');
+    toggle.setAttribute('aria-expanded',open?'true':'false');
+    toggle.textContent=open?'✕':'☰';
+  });
+  nav.querySelectorAll('#navItems .nav-item').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      if(window.matchMedia && window.matchMedia('(max-width:700px)').matches){
+        nav.classList.remove('mobile-nav-open');
+        toggle.setAttribute('aria-expanded','false');
+        toggle.textContent='☰';
+      }
+    });
+  });
+})();
+</script>
 
 </body></html>
