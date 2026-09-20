@@ -139,6 +139,9 @@
 
   .stat{padding:14px;min-height:88px;max-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border-radius:10px;border:1px solid var(--line);background:#fbfaf7;cursor:pointer;transition:all .2s ease;position:relative;overflow:hidden;}
   .stat>*{position:relative;z-index:1;}
+  /* Only the dashboard card's visible presentation (emoji/icon, count and label)
+     is hidden. The existing box-icons area remains available for image/edit controls. */
+  .dashboard-card-presentation-hide > div:not(.box-icons){display:none !important;}
   .stat::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:var(--brass);opacity:0;transition:opacity .2s ease;z-index:2;}
   .stat:hover{transform:translateY(-4px);box-shadow:0 8px 20px rgba(0,0,0,.12);border-color:var(--brass);}
   .stat:hover::before{opacity:1;}
@@ -261,7 +264,33 @@
     div { page-break-inside: avoid; }
   }
 
-  .worker-link{background:none;border:none;padding:0;color:var(--brass-dark);font-weight:600;font-size:14px;cursor:pointer;text-decoration:underline;font-family:inherit;}
+    /* ---------- WORKER TABLE VISUAL POLISH (scoped only to Workers) ---------- */
+  .worker-table-wrap{border:1px solid var(--line);border-radius:10px;background:#fff;overflow:auto;}
+  .worker-table{margin:0;border-collapse:separate;border-spacing:0;min-width:760px;font-size:13px;}
+  .worker-table thead th{background:#f7f4ec;color:#5f594d;font-size:11px;font-weight:800;letter-spacing:.45px;text-transform:uppercase;padding:11px 10px;border-bottom:2px solid #ddd5c5;white-space:nowrap;text-align:left;vertical-align:middle;}
+  .worker-table tbody td{padding:10px;border-bottom:1px solid #ebe7de;background:#fff;vertical-align:middle;text-align:left!important;white-space:nowrap;}
+  .worker-table tbody tr:last-child td{border-bottom:0;}
+  .worker-table tbody tr:hover td{background:#faf7f0;}
+  .worker-table .worker-photo-cell{width:48px;text-align:left!important;}
+  .worker-table .worker-value-cell{min-width:110px;text-align:left!important;}
+  .worker-table .worker-name-cell{font-weight:800;color:var(--ink);font-size:13px;}
+  .worker-table .worker-category-badge{display:inline-flex;align-items:center;max-width:180px;padding:4px 9px;border-radius:999px;background:#f8ecd8;color:#75551e;border:1px solid #ead4ad;font-size:11px;font-weight:800;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .worker-table .worker-number-value{font-family:"Courier New",monospace;font-weight:800;color:#315b86;}
+  .worker-table .worker-date-value{font-weight:700;color:#5f594d;}
+  .worker-table .actions-cell{justify-content:flex-start!important;text-align:left!important;}
+  .worker-table .actions-cell .btn{margin-right:4px;}
+  .worker-table th,.worker-table td{direction:ltr;text-align:left!important;}
+  .worker-profile-distribute{border:1px solid #dfd5bf;background:linear-gradient(135deg,#fbfaf6 0%,#fff 100%);}
+  .worker-profile-distribute .wh-section-title{display:flex;align-items:center;gap:8px;margin-top:0;color:var(--ink);}
+  .worker-distribute-form{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(120px,.7fr) auto;gap:10px;align-items:end;margin-top:12px;}
+  .worker-distribute-history{margin-top:16px;}
+  .worker-distribute-history table th,.worker-distribute-history table td{text-align:left!important;}
+  @media(max-width:700px){
+    .worker-distribute-form{grid-template-columns:1fr;}
+    .worker-table{min-width:700px;}
+  }
+
+.worker-link{background:none;border:none;padding:0;color:var(--brass-dark);font-weight:600;font-size:14px;cursor:pointer;text-decoration:underline;font-family:inherit;}
   .worker-link:hover{color:var(--ink);}
   tr.tx-row{cursor:pointer;}
   tr.tx-row:hover td{background:#f3ede0;}
@@ -748,6 +777,7 @@ let settings = loadDB(DB_KEYS.settings, {
   customStats:[],
   customWorkerColumns:[],
   workerColumnOrder:[],
+  workerColumnLabels:{},
   boxImages:{},
   dashboardMiddleBoxes:[],
   gasSupplier:{},
@@ -772,6 +802,14 @@ let settings = loadDB(DB_KEYS.settings, {
   }
 });
 settings.customWorkerColumns = Array.isArray(settings.customWorkerColumns) ? settings.customWorkerColumns : [];
+settings.workerColumnLabels = (settings.workerColumnLabels && typeof settings.workerColumnLabels==='object') ? settings.workerColumnLabels : {};
+function normalizeWorkerColumnLabels(){
+  const defaults = {name:'Worker Name', category:'Category', phone:'Phone Number', whatsapp:'WhatsApp Number'};
+  Object.keys(defaults).forEach(id=>{
+    if(!settings.workerColumnLabels[id]) settings.workerColumnLabels[id]=defaults[id];
+  });
+}
+normalizeWorkerColumnLabels();
 function normalizeWorkerColumnOrder(){
   const builtins = ['name','category','phone','whatsapp'];
   const customIds = (settings.customWorkerColumns||[]).map(c=>c.id);
@@ -1218,11 +1256,12 @@ function openMiddleBoxModal(i){
   });
 }
 function getWorkerFieldDefs(){
+  normalizeWorkerColumnLabels();
   const defs = {
-    name:{label:'Worker Name', builtin:true},
-    category:{label:'Category', builtin:true},
-    phone:{label:'Phone Number', builtin:true},
-    whatsapp:{label:'WhatsApp Number', builtin:true}
+    name:{label:settings.workerColumnLabels.name||'Worker Name', builtin:true},
+    category:{label:settings.workerColumnLabels.category||'Category', builtin:true},
+    phone:{label:settings.workerColumnLabels.phone||'Phone Number', builtin:true},
+    whatsapp:{label:settings.workerColumnLabels.whatsapp||'WhatsApp Number', builtin:true}
   };
   (settings.customWorkerColumns||[]).forEach(c=>{ defs[c.id] = {label:c.label, builtin:false}; });
   return defs;
@@ -1322,6 +1361,7 @@ function goBack(){
 }
 
 let selectedWorkerId = null;
+let workerSummaryDetailType = 'baqi';
 
 function applyWallpaper(){
   document.documentElement.style.setProperty('--app-wallpaper', settings.wallpaper ? `url(${settings.wallpaper})` : 'none');
@@ -1365,6 +1405,7 @@ function render(){
   else if(currentPage==='materials') main.innerHTML = pageMaterials();
   else if(currentPage==='workers') main.innerHTML = pageWorkers();
   else if(currentPage==='workerHistory') main.innerHTML = pageWorkerHistory(selectedWorkerId);
+  else if(currentPage==='workerSummaryDetail') main.innerHTML = pageWorkerSummaryDetail(workerSummaryDetailType);
   else if(currentPage==='issue') main.innerHTML = pageIssue();
    else if(currentPage==='articles') main.innerHTML = pageArticles();
    else if(currentPage==='bills') main.innerHTML = pageBills();
@@ -1387,7 +1428,10 @@ function render(){
   else if(currentPage==='shoeSoleReceive1') main.innerHTML = pageShoeSoleReceiveDetail(0);
   else if(currentPage==='shoeSoleReceive2') main.innerHTML = pageShoeSoleReceiveDetail(1);
   if(currentPage!=='dashboard'){
-    if(currentPage==='shoeBoxSupplier1' || currentPage==='shoeBoxSupplier2'){
+    if(currentPage==='workerSummaryDetail'){
+      // The detail page renders its own Back to Workers button so the current
+      // Worker filter/search state can be preserved exactly.
+    } else if(currentPage==='shoeBoxSupplier1' || currentPage==='shoeBoxSupplier2'){
       main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeBoxSuppliers" style="margin-bottom:14px;">← Back to Shoe Box Suppliers</button>` + main.innerHTML;
     } else if(currentPage==='shoeBoxReceive1' || currentPage==='shoeBoxReceive2'){
       const receiveSupplierIndex=currentPage==='shoeBoxReceive2'?1:0;
@@ -1561,37 +1605,37 @@ function pageDashboard(){
     
     <!-- KEY METRICS SECTION -->
     <div class="dashboard-stats-grid">
-      <div class="stat" id="dashBox-materials" data-statclick="materials" style="${boxBgStyle('materials')}">
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-materials" data-statclick="materials" style="${boxBgStyle('materials')}">
         <div class="box-icons"><span data-boximg="materials|Materials">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">📦</div>
         ${numBadge(0, activeMaterials.length)}
         ${labelBadge(0, "MATERIALS")}
       </div>
-      <div class="stat" id="dashBox-workers" data-statclick="workers" style="${boxBgStyle('workers')}">
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-workers" data-statclick="workers" style="${boxBgStyle('workers')}">
         <div class="box-icons"><span data-boximg="workers|Workers">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">👷</div>
         ${numBadge(1, activeWorkers.length)}
         ${labelBadge(1, "WORKERS")}
       </div>
-      <div class="stat" id="dashBox-articles" data-statclick="articles" style="${boxBgStyle('articles')}">
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-articles" data-statclick="articles" style="${boxBgStyle('articles')}">
         <div class="box-icons"><span data-boximg="articles|Articles">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">👞</div>
         ${numBadge(2, activeArticles.length)}
         ${labelBadge(2, "ARTICLES")}
       </div>
-      <div class="stat" id="dashBox-today" data-statclick="today" style="${boxBgStyle('today')}">
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-today" data-statclick="today" style="${boxBgStyle('today')}">
         <div class="box-icons"><span data-boximg="today|Today's Dist.">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">📤</div>
         ${numBadge(3, todayIssues.length)}
         ${labelBadge(3, "TODAY'S DIST.")}
       </div>
-      <div class="stat ${lowStock.length? 'warn':''}" id="dashBox-lowstock" style="${boxBgStyle('lowstock')}">
+      <div class="stat dashboard-card-presentation-hide ${lowStock.length? 'warn':''}" id="dashBox-lowstock" style="${boxBgStyle('lowstock')}">
         <div class="box-icons"><span data-boximg="lowstock|Low Stock">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">⚠️</div>
         ${numBadge(4, lowStock.length)}
         ${labelBadge(4, "LOW STOCK")}
       </div>
-      <div class="stat" id="dashBox-customers" data-statclick="shopkeepers" style="${boxBgStyle('customers')}">
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-customers" data-statclick="shopkeepers" style="${boxBgStyle('customers')}">
         <div class="box-icons"><span data-boximg="customers|Customers">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">🛒</div>
         ${numBadge(5, shopkeepers.length)}
@@ -1602,7 +1646,7 @@ function pageDashboard(){
     <!-- CUSTOM / EDITABLE METRICS SECTION (Worker Categories) -->
     <div class="dashboard-stats-grid">
       ${settings.customStats.map((cs,i)=> cs && cs.name ? `
-      <div class="stat" id="dashBox-cat${i}" data-customstat="${i}" data-categorybox="1" style="${boxBgStyle('cat'+i)}">
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-cat${i}" data-customstat="${i}" data-categorybox="1" style="${boxBgStyle('cat'+i)}">
         <div class="box-icons"><span data-editcustomstat="${i}">✏️</span><span data-boximg="cat${i}|${esc(cs.name)}">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">${esc(cs.icon||'📌')}</div>
         ${numBadge(6+i, activeWorkers.filter(w=>w.category===cs.name).length)}
@@ -1617,7 +1661,7 @@ function pageDashboard(){
     <!-- MIDDLE SECTION (6 boxes, features to be added later) -->
     <div class="dashboard-stats-grid">
       ${settings.dashboardMiddleBoxes.map((mb,i)=> mb && mb.name ? `
-      <div class="stat" id="dashBox-mid${i}" data-midbox="${i}" style="${boxBgStyle('mid'+i)}">
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-mid${i}" data-midbox="${i}" style="${boxBgStyle('mid'+i)}">
         <div class="box-icons"><span data-editmidbox="${i}">✏️</span><span data-boximg="mid${i}|${esc(mb.name)}">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">${esc(mb.icon||'📦')}</div>
         ${labelBadge(12+i, esc(mb.name.toUpperCase()))}
@@ -1630,32 +1674,32 @@ function pageDashboard(){
 
     <!-- ACTION BUTTONS (same size as boxes above) -->
     <div class="dashboard-stats-grid">
-      <button type="button" class="stat" id="dashBox-act0" data-page="issue" style="${boxBgStyle('act0')}">
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act0" data-page="issue" style="${boxBgStyle('act0')}">
         <div class="box-icons"><span data-boximg="act0|New Distribution">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">➕</div>
         ${labelBadge(18, "NEW DISTRIBUTION")}
       </button>
-      <button type="button" class="stat" id="dashBox-act1" data-page="articles" style="${boxBgStyle('act1')}">
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act1" data-page="articles" style="${boxBgStyle('act1')}">
         <div class="box-icons"><span data-boximg="act1|New Article">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">➕</div>
         ${labelBadge(19, "NEW ARTICLE")}
       </button>
-      <button type="button" class="stat" id="dashBox-act2" data-page="bills" style="${boxBgStyle('act2')}">
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act2" data-page="bills" style="${boxBgStyle('act2')}">
         <div class="box-icons"><span data-boximg="act2|New Bill">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">📋</div>
         ${labelBadge(20, "NEW BILL")}
       </button>
-      <button type="button" class="stat" id="dashBox-act3" data-page="materials" style="${boxBgStyle('act3')}">
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act3" data-page="materials" style="${boxBgStyle('act3')}">
         <div class="box-icons"><span data-boximg="act3|Materials">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">📦</div>
         ${labelBadge(21, "MATERIALS")}
       </button>
-      <button type="button" class="stat" id="dashBox-act4" data-page="workers" style="${boxBgStyle('act4')}">
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act4" data-page="workers" style="${boxBgStyle('act4')}">
         <div class="box-icons"><span data-boximg="act4|Workers">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">👷</div>
         ${labelBadge(22, "WORKERS")}
       </button>
-      <button type="button" class="stat" id="dashBox-act5" data-page="settings" style="${boxBgStyle('act5')}">
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act5" data-page="settings" style="${boxBgStyle('act5')}">
         <div class="box-icons"><span data-boximg="act5|Settings">🖼️</span></div>
         <div style="font-size:20px;margin-bottom:4px;">⚙️</div>
         ${labelBadge(23, "SETTINGS")}
@@ -2115,9 +2159,152 @@ async function shareHistoryOnWhatsApp(materialId){
   }catch(err){toast('Could not generate history picture');}
 }
 
+let workerSearchQuery = '';
+
+function getWorkerSummaryAmount(worker, kind){
+  if(!worker) return 0;
+  if(kind==='baqi'){
+    // BAQI must come ONLY from the existing Manage Columns field whose exact
+    // column label is BAQI. No new field/account/calculation is introduced.
+    const baqiColumn=(settings.customWorkerColumns||[]).find(c=>String(c?.label??'').trim().toLowerCase()==='baqi');
+    if(!baqiColumn) return 0;
+    const custom=worker.customFields && typeof worker.customFields==='object' ? worker.customFields : {};
+    let raw=custom[baqiColumn.id];
+    // Preserve compatibility with the existing worker data if the value is
+    // stored under the same existing column label/key.
+    if((raw===undefined || raw===null || raw==='') && Object.prototype.hasOwnProperty.call(custom,baqiColumn.label)){
+      raw=custom[baqiColumn.label];
+    }
+    if(raw===null || raw===undefined || String(raw).trim()==='') return 0;
+    const normalized=String(raw).replace(/,/g,'').replace(/[^0-9.\-]/g,'');
+    const n=Number(normalized);
+    return Number.isFinite(n) ? Math.max(0,n) : 0;
+  }
+  const directCandidates = ['additionalAdvance','totalAdditionalAdvance','additionalAdvanceAmount','extraAdvance'];
+  const nestedCandidates = ['account','workerAccount','balanceAccount','financialAccount'];
+  const readNumber = value=>{
+    if(value===null || value===undefined || value==='') return null;
+    const n=Number(String(value).replace(/[^0-9.\-]/g,''));
+    return Number.isFinite(n) ? n : null;
+  };
+  for(const key of directCandidates){
+    const n=readNumber(worker[key]);
+    if(n!==null) return Math.max(0,n);
+  }
+  for(const parentKey of nestedCandidates){
+    const parent=worker[parentKey];
+    if(!parent || typeof parent!=='object') continue;
+    for(const key of directCandidates){
+      const n=readNumber(parent[key]);
+      if(n!==null) return Math.max(0,n);
+    }
+    if(kind==='baqi'){
+      const totalAdvance=readNumber(parent.totalAdvance ?? parent.advance);
+      const repayments=readNumber(parent.totalRepayments ?? parent.repayments ?? parent.totalPayments);
+      if(totalAdvance!==null || repayments!==null){
+        return Math.max(0,(totalAdvance||0)-(repayments||0));
+      }
+    }
+  }
+  const customDefs=settings.customWorkerColumns||[];
+  for(const c of customDefs){
+    const label=String(c?.label||'').toLowerCase();
+    const matches=kind==='baqi'
+      ? /(baqi|باقی|remaining\s*balance|current\s*balance|balance)/i.test(label)
+      : /(additional\s*advance|total\s*additional\s*advance|additional\s*advance\s*amount|extra\s*advance)/i.test(label);
+    if(matches){
+      const n=readNumber(worker.customFields?.[c.id]);
+      if(n!==null) return Math.max(0,n);
+    }
+  }
+  if(kind==='baqi'){
+    const totalAdvance=readNumber(worker.totalAdvance);
+    const repayments=readNumber(worker.totalRepayments ?? worker.repayments ?? worker.totalPayments);
+    if(totalAdvance!==null || repayments!==null){
+      return Math.max(0,(totalAdvance||0)-(repayments||0));
+    }
+  }
+  return 0;
+}
+function getFilteredWorkerSummaryList(){
+  const activeWorkers=workers.filter(w=>!w.archived);
+  const q=String(workerSearchQuery||'').trim().toLowerCase();
+  const searched=q ? activeWorkers.filter(w=>{
+    const custom=Object.values(w.customFields||{}).join(' ');
+    return [w.name,w.category,w.phone,w.whatsapp,custom].join(' ').toLowerCase().includes(q);
+  }) : activeWorkers;
+  return workerCategoryFilter ? searched.filter(w=>w.category===workerCategoryFilter) : searched;
+}
+function workerMoneyDisplay(amount){
+  return 'Rs. '+(Math.round((Number(amount)||0)*100)/100).toLocaleString('en-PK');
+}
+function printWorkerSummary(type){
+  const list=getFilteredWorkerSummaryList().map(w=>({name:w.name,amount:getWorkerSummaryAmount(w,type)})).filter(x=>x.amount>0);
+  const total=list.reduce((s,x)=>s+x.amount,0);
+  const isBaqi=type==='baqi';
+  const title=isBaqi?'BAQI WORKERS':'ADDITIONAL ADVANCE WORKERS';
+  const companyName=settings.factoryName||'LEATHER RIDE SHOES BY HAJI';
+  const rows=list.map(x=>`<tr><td class="name">${esc(x.name)}</td><td class="amt">Rs. ${x.amount.toLocaleString('en-PK')}</td></tr>`).join('');
+  const w=window.open('','_blank');
+  if(!w){toast('Please allow pop-ups to print');return;}
+  w.document.write(`<!doctype html><html><head><title>${title}</title><style>
+    @page{size:80mm auto;margin:0;}
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;width:80mm;background:#fff;color:#000;}
+    body{font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.3;}
+    .receipt{width:72mm;margin:0 auto;padding:4mm 0 5mm;}
+    .company{text-align:center;font-size:12px;font-weight:800;margin:0 0 2mm;word-break:break-word;}
+    .title{text-align:center;font-size:15px;font-weight:800;margin:0 0 3mm;letter-spacing:.2px;}
+    .rule{border-top:1px dashed #000;margin:2mm 0;}
+    table{width:100%;border-collapse:collapse;table-layout:fixed;}
+    th,td{padding:1.8mm 0;text-align:left;vertical-align:top;}
+    th{font-size:10px;font-weight:800;border-bottom:1px solid #000;}
+    th:last-child,td:last-child{text-align:right;width:36%;}
+    td.name{width:64%;padding-right:2mm;overflow-wrap:anywhere;}
+    td.amt{font-weight:700;white-space:nowrap;}
+    tfoot td{font-weight:800;border-top:2px solid #000;padding-top:2.5mm;font-size:13px;}
+    .empty{text-align:center!important;font-weight:600;padding:4mm 0;}
+    .total-label{text-transform:uppercase;}
+  </style></head><body><div class="receipt">
+    <div class="company">${esc(companyName)}</div>
+    <div class="title">${title}</div>
+    <div class="rule"></div>
+    <table><thead><tr><th>Worker Name</th><th>${isBaqi?'BAQI':'Amount'}</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="2" class="empty">No workers with an amount greater than zero.</td></tr>'}</tbody>
+    <tfoot><tr><td class="total-label">TOTAL ${isBaqi?'BAQI':'ADDITIONAL ADVANCE'}</td><td>Rs. ${total.toLocaleString('en-PK')}</td></tr></tfoot></table>
+  </div></body></html>`);
+  w.document.close();w.focus();setTimeout(()=>w.print(),250);
+}
+function pageWorkerSummaryDetail(type){
+  const list=getFilteredWorkerSummaryList().map(w=>({name:w.name,amount:getWorkerSummaryAmount(w,type)})).filter(x=>x.amount>0);
+  const total=list.reduce((s,x)=>s+x.amount,0);
+  const title=type==='baqi'?'باقی (BAQI) Details':'Additional Advance Details';
+  const amountLabel=type==='baqi'?'BAQI Amount':'Additional Advance Amount';
+  const filterText=workerCategoryFilter||workerSearchQuery ? `<div class="card" style="padding:10px 14px;margin-bottom:12px;background:#fdf5e8;border-color:#e0b877;">Current Workers Filter/Search is applied: <strong>${esc(workerCategoryFilter||'')}</strong>${workerSearchQuery?` ${workerCategoryFilter?' + ':''} Search: <strong>${esc(workerSearchQuery)}</strong>`:''}</div>` : '';
+  return `<button type="button" class="btn ghost small" id="btnBackWorkerSummary" style="margin-bottom:14px;">← Back to Workers</button>
+    <div class="card"><div class="wh-section-title">${esc(title)}</div>${filterText}
+      <div style="overflow-x:auto;"><table><thead><tr><th>Worker Name</th><th>${esc(amountLabel)}</th></tr></thead><tbody>
+        ${list.length?list.map(x=>`<tr><td>${esc(x.name)}</td><td style="font-weight:800;">Rs. ${x.amount.toLocaleString('en-PK')}</td></tr>`).join(''):'<tr><td colspan="2" class="empty">No Workers with an amount greater than zero.</td></tr>'}
+      </tbody><tfoot><tr><th>TOTAL ${type==='baqi'?'BAQI':'ADDITIONAL ADVANCE'}</th><th>Rs. ${total.toLocaleString('en-PK')}</th></tr></tfoot></table></div>
+      <div class="modal-actions"><button class="btn brass" id="btnPrintWorkerSummary">🖨️ Print</button></div>
+    </div>`;
+}
+function openWorkerSummaryDetail(type){
+  if(currentPage!=='workerSummaryDetail') navHistory.push(currentPage);
+  workerSummaryDetailType=type;
+  currentPage='workerSummaryDetail';
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page==='workers'));
+  render();
+}
+
 function pageWorkers(){
   const activeWorkers = workers.filter(w=>!w.archived);
-  const shown = workerCategoryFilter ? activeWorkers.filter(w=>w.category===workerCategoryFilter) : activeWorkers;
+  const q = String(workerSearchQuery||'').trim().toLowerCase();
+  const searched = q ? activeWorkers.filter(w=>{
+    const custom = Object.values(w.customFields||{}).join(' ');
+    return [w.name,w.category,w.phone,w.whatsapp,custom].join(' ').toLowerCase().includes(q);
+  }) : activeWorkers;
+  const shown = workerCategoryFilter ? searched.filter(w=>w.category===workerCategoryFilter) : searched;
   normalizeWorkerColumnOrder();
   const defs = getWorkerFieldDefs();
   const order = settings.workerColumnOrder;
@@ -2127,16 +2314,23 @@ function pageWorkers(){
       <span>Showing category: <strong>${esc(workerCategoryFilter)}</strong> (${shown.length})</span>
       <button class="btn ghost small" id="btnClearWorkerFilter">Show All Workers</button>
     </div>` : ''}
-    <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
       <button class="btn brass" id="btnAddWorker">+ Add New Worker</button>
       <button class="btn ghost" id="btnManageColumns">⚙️ Manage Columns</button>
+      <select id="workerCategoryFilterSelect" style="width:auto;min-width:150px;max-width:210px;height:38px;padding:7px 10px;">
+        <option value="">Worker Filter — All</option>
+        ${(settings.customStats||[]).filter(cs=>cs&&cs.name).map(cs=>`<option value="${esc(cs.name)}" ${workerCategoryFilter===cs.name?'selected':''}>${esc(cs.name)}</option>`).join('')}
+      </select>
+      <input type="text" id="workerSearchInput" value="${esc(workerSearchQuery||'')}" placeholder="Search Worker..." autocomplete="off" style="width:180px;max-width:100%;height:38px;padding:7px 10px;">
+      <button type="button" class="btn ghost" data-worker-summary="baqi" style="min-height:38px;">Total BAQI <strong style="margin-left:4px;">Rs. ${getFilteredWorkerSummaryList().reduce((s,w)=>s+getWorkerSummaryAmount(w,'baqi'),0).toLocaleString('en-PK')}</strong></button>
+      <button type="button" class="btn ghost" data-worker-summary="additionalAdvance" style="min-height:38px;">Total Additional Advance <strong style="margin-left:4px;">Rs. ${getFilteredWorkerSummaryList().reduce((s,w)=>s+getWorkerSummaryAmount(w,'additionalAdvance'),0).toLocaleString('en-PK')}</strong></button>
     </div>
-    <div class="card" style="overflow-x:auto;">
+    <div class="card worker-table-wrap">
       ${shown.length? `
-      <table>
+      <table class="worker-table">
         <thead>
           <tr>
-            <th></th>
+            <th class="worker-photo-cell"></th>
             ${order.map(id=>`<th>${esc(defs[id]?defs[id].label:'')}</th>`).join('')}
             <th>Actions</th>
           </tr>
@@ -2144,11 +2338,19 @@ function pageWorkers(){
         <tbody>
           ${shown.map(w=>{
             return `<tr class="tx-row" data-viewwk="${w.id}">
-              <td><div class="entity-photo ${w.photo?'zoomable':''}" data-lightboxphoto="${w.id}" style="width:34px;height:34px;font-size:12px;">${w.photo? `<img src="${w.photo}">` : `<span>${initials(w.name)}</span>`}</div></td>
+              <td class="worker-photo-cell"><div class="entity-photo ${w.photo?'zoomable':''}" data-lightboxphoto="${w.id}" style="width:34px;height:34px;font-size:12px;">${w.photo? `<img src="${w.photo}">` : `<span>${initials(w.name)}</span>`}</div></td>
               ${order.map(id=>{
                 const val = workerFieldValue(w,id);
                 const display = val? esc(val) : '<span style="color:#b9b09a;">—</span>';
-                return `<td>${id==='name'? `<strong>${display}</strong>` : display}</td>`;
+                let cls='worker-value-cell';
+                let content=display;
+                if(id==='name') cls+=' worker-name-cell';
+                if(id==='category' && val) content=`<span class="worker-category-badge">${display}</span>`;
+                if(['phone','whatsapp'].includes(id) && val) cls+=' worker-number-value';
+                const defLabel=String(defs[id]?.label||'').toLowerCase();
+                if(/date|time/.test(id+' '+defLabel) && val) cls+=' worker-date-value';
+                if(/amount|advance|balance|qty|quantity|number|count|total/.test(id+' '+defLabel) && val) cls+=' worker-number-value';
+                return `<td class="${cls}">${content}</td>`;
               }).join('')}
               <td class="actions-cell"><button class="btn blue small" data-editwk="${w.id}">✏️</button> <button class="btn orange small" data-delwk="${w.id}">🗄️</button></td>
             </tr>`;
@@ -2202,6 +2404,42 @@ function pageWorkerHistory(workerId){
       <div style="display:flex;gap:8px;">
         <button class="btn blue small" data-editwk="${w.id}">Edit Profile</button>
         <button class="btn orange small" data-delwk="${w.id}">Archive</button>
+      </div>
+    </div>
+
+    <div class="card worker-profile-distribute">
+      <div class="wh-section-title">📦 Distribute Raw Materials</div>
+      <div style="font-size:12px;color:var(--muted);">Material given to this Worker will use the existing Material Distribution transaction and stock logic.</div>
+      <div class="worker-distribute-form">
+        <div>
+          <label>Material</label>
+          <select id="workerDistributeMaterial">
+            <option value="">Select Material</option>
+            ${materials.filter(m=>!m.archived).map(m=>`<option value="${m.id}">${esc(m.name)} — ${m.stock} ${esc(m.unit)} in stock</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>Quantity</label>
+          <input id="workerDistributeQty" type="number" step="any" min="0" placeholder="Enter quantity">
+        </div>
+        <button type="button" class="btn brass" id="workerDistributeSubmit" data-worker-distribute="${w.id}">Distribute Material</button>
+      </div>
+      <div class="worker-distribute-history">
+        <div class="wh-section-title">Worker Material Distribution History</div>
+        ${allTx.length? `
+          <table>
+            <thead><tr><th>Date</th><th>Time</th><th>Material</th><th>Quantity</th></tr></thead>
+            <tbody>
+              ${allTx.map(t=>`
+                <tr>
+                  <td>${esc(t.date.slice(0,10))}</td>
+                  <td>${fmtTime(new Date(t.date))}</td>
+                  <td>${esc(t.materialName)}</td>
+                  <td>${esc(String(t.qty))} ${esc(t.unit)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        ` : `<div class="empty">No raw material distribution history for this Worker yet.</div>`}
       </div>
     </div>
 
@@ -2959,27 +3197,36 @@ function openCustomStatModal(i){
 
 function openManageColumnsModal(){
   normalizeWorkerColumnOrder();
+  normalizeWorkerColumnLabels();
   const defs = getWorkerFieldDefs();
   const order = settings.workerColumnOrder;
   const rows = order.map((id,i)=>{
     const def = defs[id];
     if(!def) return '';
     return `<div class="row" style="align-items:center;margin-top:8px;gap:6px;">
-      <div style="flex:1;padding:9px 10px;border:1px solid #eee;border-radius:5px;background:#faf9f6;">${esc(def.label)}${def.builtin? ' <span style="color:#b9b09a;font-size:11px;">(built-in)</span>' : ''}</div>
+      <div style="flex:1;min-width:180px;">
+        ${def.builtin
+          ? `<input type="text" data-builtinlabel="${esc(id)}" value="${esc(def.label)}" aria-label="Rename ${esc(def.label)}" style="width:100%;">`
+          : `<div style="padding:9px 10px;border:1px solid #eee;border-radius:5px;background:#faf9f6;">${esc(def.label)}${def.builtin? ' <span style="color:#b9b09a;font-size:11px;">(built-in)</span>' : ''}</div>`}
+      </div>
+      ${def.builtin? '<span style="color:#b9b09a;font-size:11px;white-space:nowrap;">(built-in)</span>' : ''}
       <button type="button" class="btn ghost small" data-colup="${i}" ${i===0?'disabled':''} style="flex:0 0 auto;">↑</button>
       <button type="button" class="btn ghost small" data-coldown="${i}" ${i===order.length-1?'disabled':''} style="flex:0 0 auto;">↓</button>
       ${def.builtin? '' : `<button type="button" class="btn red small" data-removecol="${id}" style="flex:0 0 auto;">Remove</button>`}
     </div>`;
   }).join('');
   modal(`<h3>Manage Worker Columns</h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Use ↑ / ↓ to set the order columns appear in (table and Edit Worker form both follow this order). Built-in fields can be reordered but not removed.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Use ↑ / ↓ to set the order columns appear in (table and Edit Worker form both follow this order). Built-in fields stay built-in and can only have their display names renamed.</div>
     <div id="colListWrap">${rows}</div>
     <label style="margin-top:16px;">New Column Name</label>
     <div class="row">
       <input id="newColName" placeholder="e.g. CNIC, Advance Amount, Address">
       <button type="button" class="btn brass" id="btnAddColumn" style="flex:0 0 auto;">+ Add</button>
     </div>
-    <div class="modal-actions"><button class="btn ghost" id="colClose">Close</button></div>`);
+    <div class="modal-actions">
+      <button class="btn brass" id="btnSaveBuiltinNames">Save Built-in Names</button>
+      <button class="btn ghost" id="colClose">Close</button>
+    </div>`);
   document.querySelectorAll('[data-colup]').forEach(b=>b.addEventListener('click', ()=>{
     const i = parseInt(b.dataset.colup);
     if(i>0){ const arr=settings.workerColumnOrder; [arr[i-1],arr[i]]=[arr[i],arr[i-1]]; persistAll(); render(); openManageColumnsModal(); }
@@ -3001,6 +3248,19 @@ function openManageColumnsModal(){
       openManageColumnsModal();
     });
   }));
+  document.getElementById('btnSaveBuiltinNames').onclick=()=>{
+    normalizeWorkerColumnLabels();
+    document.querySelectorAll('[data-builtinlabel]').forEach(input=>{
+      const id=input.dataset.builtinlabel;
+      const value=input.value.trim();
+      const defaults={name:'Worker Name',category:'Category',phone:'Phone Number',whatsapp:'WhatsApp Number'};
+      settings.workerColumnLabels[id]=value || defaults[id];
+    });
+    persistAll();
+    render();
+    toast('Built-in column names saved');
+    openManageColumnsModal();
+  };
   document.getElementById('btnAddColumn').onclick=()=>{
     const label = document.getElementById('newColName').value.trim();
     if(!label){ toast('Enter a column name'); return; }
@@ -6221,8 +6481,21 @@ function attachPageHandlers(){
 
 
   // Workers
+  document.querySelectorAll('[data-worker-summary]').forEach(b=>b.addEventListener('click', ()=>openWorkerSummaryDetail(b.dataset.workerSummary)));
+  document.getElementById('btnBackWorkerSummary')?.addEventListener('click', ()=>goBack());
+  document.getElementById('btnPrintWorkerSummary')?.addEventListener('click', ()=>printWorkerSummary(workerSummaryDetailType));
   document.getElementById('btnAddWorker')?.addEventListener('click', ()=>openWorkerModal());
   document.getElementById('btnClearWorkerFilter')?.addEventListener('click', ()=>{ workerCategoryFilter=null; render(); });
+  document.getElementById('workerCategoryFilterSelect')?.addEventListener('change', e=>{
+    workerCategoryFilter = e.target.value || null;
+    render();
+  });
+  document.getElementById('workerSearchInput')?.addEventListener('input', e=>{
+    workerSearchQuery = e.target.value || '';
+    render();
+    const input=document.getElementById('workerSearchInput');
+    if(input){ input.focus(); input.setSelectionRange(input.value.length,input.value.length); }
+  });
   document.getElementById('btnManageColumns')?.addEventListener('click', openManageColumnsModal);
   document.querySelectorAll('[data-editwk]').forEach(b=>b.addEventListener('click', (e)=>{ e.stopPropagation(); openWorkerModal(b.dataset.editwk); }));
   document.querySelectorAll('[data-delwk]').forEach(b=>b.addEventListener('click', (e)=>{
@@ -6259,6 +6532,25 @@ function attachPageHandlers(){
     const wk = workers.find(x=>x.id===el.dataset.lightboxphoto);
     if(wk && wk.photo) openImageLightbox(wk.photo);
   }));
+  document.getElementById('workerDistributeSubmit')?.addEventListener('click', ()=>{
+    const btn=document.getElementById('workerDistributeSubmit');
+    const workerId=btn?.dataset.workerDistribute;
+    const materialId=document.getElementById('workerDistributeMaterial')?.value || '';
+    const qtyEl=document.getElementById('workerDistributeQty');
+    const qty=qtyEl ? parseFloat(qtyEl.value) : NaN;
+    if(!workerId){ toast('Worker not found'); return; }
+    if(!materialId){ toast('Please select a material'); return; }
+    if(!Number.isFinite(qty) || qty<=0){ toast('Please enter a valid quantity'); return; }
+    issueSelWorker=workerId;
+    issueSelMaterial=materialId;
+    issueQtyValue=String(qty);
+    const temp=document.createElement('input');
+    temp.type='hidden'; temp.id='issQty'; temp.value=String(qty);
+    document.body.appendChild(temp);
+    submitIssue();
+    document.getElementById('issQty')?.remove();
+    render();
+  });
   document.getElementById('backToWorkers')?.addEventListener('click', ()=>goto('workers'));
   // Shoe Box Suppliers
   document.querySelectorAll('[data-opensbs]').forEach(card=>card.addEventListener('click',()=>goto(parseInt(card.dataset.opensbs)===0?'shoeBoxSupplier1':'shoeBoxSupplier2')));
