@@ -805,8 +805,33 @@ settings.customWorkerColumns = Array.isArray(settings.customWorkerColumns) ? set
 settings.workerColumnLabels = (settings.workerColumnLabels && typeof settings.workerColumnLabels==='object') ? settings.workerColumnLabels : {};
 function normalizeWorkerColumnLabels(){
   const defaults = {name:'Worker Name', category:'Category', phone:'Phone Number', whatsapp:'WhatsApp Number'};
+
+  // Backward-compatible safety: old or partially written Worker Column settings
+  // must never crash the Workers page. Do not delete valid column definitions.
+  if(!settings || typeof settings!=='object') return;
+  if(!settings.workerColumnLabels || typeof settings.workerColumnLabels!=='object' || Array.isArray(settings.workerColumnLabels)){
+    settings.workerColumnLabels = {};
+  }
+
   Object.keys(defaults).forEach(id=>{
-    if(!settings.workerColumnLabels[id]) settings.workerColumnLabels[id]=defaults[id];
+    const current = settings.workerColumnLabels[id];
+    if(typeof current!=='string' || !current.trim()){
+      settings.workerColumnLabels[id]=defaults[id];
+    }
+  });
+
+  // Custom Worker Columns are existing data, so preserve every valid object.
+  // Malformed/null entries are safely ignored by consumers rather than causing
+  // a `.name` / `.label` read on undefined or null.
+  if(!Array.isArray(settings.customWorkerColumns)) settings.customWorkerColumns=[];
+
+  settings.customWorkerColumns.forEach(col=>{
+    if(!col || typeof col!=='object') return;
+    // Older versions may have stored the display text as `name`; keep it
+    // compatible without overwriting an existing valid `label`.
+    if((typeof col.label!=='string' || !col.label.trim()) && typeof col.name==='string' && col.name.trim()){
+      col.label=col.name.trim();
+    }
   });
 }
 normalizeWorkerColumnLabels();
@@ -1263,7 +1288,12 @@ function getWorkerFieldDefs(){
     phone:{label:settings.workerColumnLabels.phone||'Phone Number', builtin:true},
     whatsapp:{label:settings.workerColumnLabels.whatsapp||'WhatsApp Number', builtin:true}
   };
-  (settings.customWorkerColumns||[]).forEach(c=>{ defs[c.id] = {label:c.label, builtin:false}; });
+  (Array.isArray(settings.customWorkerColumns)?settings.customWorkerColumns:[]).forEach(c=>{
+    if(!c || typeof c!=='object' || c.id==null || String(c.id).trim()==='') return;
+    const label = (typeof c.label==='string' && c.label.trim()) ? c.label.trim()
+      : (typeof c.name==='string' && c.name.trim()) ? c.name.trim() : 'Custom Column';
+    defs[String(c.id)] = {label, builtin:false};
+  });
   return defs;
 }
 function workerFieldValue(w,id){
