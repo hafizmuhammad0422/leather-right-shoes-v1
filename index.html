@@ -2928,10 +2928,18 @@ function openWorkerModal(id){
   document.getElementById('wCancel').onclick=closeModal;
   document.getElementById('wPhotoPreviewWrap').addEventListener('click', ()=>{ if(pendingPhoto) openImageLightbox(pendingPhoto); });
   document.getElementById('wSave').onclick=()=>{
-    const name=document.getElementById('wName').value.trim();
-    const category=document.getElementById('wCategory').value;
-    const phone=document.getElementById('wPhone').value.trim();
-    const whatsapp=document.getElementById('wWhatsapp').value.trim();
+    const nameEl=document.getElementById('wName');
+    if(!nameEl){
+      toast('Worker Name field is required. Please enable Worker Name in Manage Columns.');
+      return;
+    }
+    const name=nameEl.value.trim();
+    const categoryEl=document.getElementById('wCategory');
+    const phoneEl=document.getElementById('wPhone');
+    const whatsappEl=document.getElementById('wWhatsapp');
+    const category=categoryEl ? categoryEl.value : '';
+    const phone=phoneEl ? phoneEl.value.trim() : '';
+    const whatsapp=whatsappEl ? whatsappEl.value.trim() : '';
     if(!name){ toast('Please enter a name'); return; }
     const customFields = {};
     document.querySelectorAll('.wCustomField').forEach(inp=>{ customFields[inp.dataset.colid] = inp.value.trim(); });
