@@ -2620,12 +2620,12 @@ function workerMoneyDisplay(amount){
   return 'Rs. '+(Math.round((Number(amount)||0)*100)/100).toLocaleString('en-PK');
 }
 function printWorkerSummary(type){
-  const list=getFilteredWorkerSummaryList().map(w=>({name:w.name,amount:getWorkerSummaryAmount(w,type)})).filter(x=>x.amount>0);
+  const list=getFilteredWorkerSummaryList().map(w=>({name:w.name,category:w.category,amount:getWorkerSummaryAmount(w,type)})).filter(x=>x.amount>0);
   const total=list.reduce((s,x)=>s+x.amount,0);
   const isBaqi=type==='baqi';
   const title=isBaqi?'BAQI WORKERS':'ADDITIONAL ADVANCE WORKERS';
   const companyName=settings.factoryName||'LEATHER RIDE SHOES BY HAJI';
-  const rows=list.map(x=>`<tr><td class="name">${esc(x.name)}</td><td class="amt">Rs. ${x.amount.toLocaleString('en-PK')}</td></tr>`).join('');
+  const rows=list.map(x=>`<tr><td class="name">${esc(x.name)}</td><td class="category">${esc(String(x.category||'—'))}</td><td class="amt">Rs. ${x.amount.toLocaleString('en-PK')}</td></tr>`).join('');
   const w=window.open('','_blank');
   if(!w){toast('Please allow pop-ups to print');return;}
   w.document.write(`<!doctype html><html><head><title>${title}</title><style>
@@ -2640,8 +2640,9 @@ function printWorkerSummary(type){
     table{width:100%;border-collapse:collapse;table-layout:fixed;}
     th,td{padding:1.8mm 0;text-align:left;vertical-align:top;}
     th{font-size:10px;font-weight:800;border-bottom:1px solid #000;}
-    th:last-child,td:last-child{text-align:right;width:36%;}
-    td.name{width:64%;padding-right:2mm;overflow-wrap:anywhere;}
+    th:last-child,td:last-child{text-align:right;width:28%;}
+    td.name{width:42%;padding-right:2mm;overflow-wrap:anywhere;}
+    td.category{width:30%;padding-right:2mm;overflow-wrap:anywhere;}
     td.amt{font-weight:700;white-space:nowrap;}
     tfoot td{font-weight:800;border-top:2px solid #000;padding-top:2.5mm;font-size:13px;}
     .empty{text-align:center!important;font-weight:600;padding:4mm 0;}
@@ -2650,14 +2651,14 @@ function printWorkerSummary(type){
     <div class="company">${esc(companyName)}</div>
     <div class="title">${title}</div>
     <div class="rule"></div>
-    <table><thead><tr><th>Worker Name</th><th>${isBaqi?'BAQI':'Amount'}</th></tr></thead>
+    <table><thead><tr><th>Worker Name</th><th>Worker Type</th><th>${isBaqi?'BAQI':'Amount'}</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="2" class="empty">No workers with an amount greater than zero.</td></tr>'}</tbody>
     <tfoot><tr><td class="total-label">TOTAL ${isBaqi?'BAQI':'ADDITIONAL ADVANCE'}</td><td>Rs. ${total.toLocaleString('en-PK')}</td></tr></tfoot></table>
   </div></body></html>`);
   w.document.close();w.focus();setTimeout(()=>w.print(),250);
 }
 function pageWorkerSummaryDetail(type){
-  const list=getFilteredWorkerSummaryList().map(w=>({name:w.name,amount:getWorkerSummaryAmount(w,type)})).filter(x=>x.amount>0);
+  const list=getFilteredWorkerSummaryList().map(w=>({name:w.name,category:w.category,amount:getWorkerSummaryAmount(w,type)})).filter(x=>x.amount>0);
   const total=list.reduce((s,x)=>s+x.amount,0);
   const title=type==='baqi'?'باقی (BAQI) Details':'Additional Advance Details';
   const amountLabel=type==='baqi'?'BAQI Amount':'Additional Advance Amount';
@@ -2665,7 +2666,7 @@ function pageWorkerSummaryDetail(type){
   return `<button type="button" class="btn ghost small" id="btnBackWorkerSummary" style="margin-bottom:14px;">← Back to Workers</button>
     <div class="card"><div class="wh-section-title">${esc(title)}</div>${filterText}
       <div style="overflow-x:auto;"><table><thead><tr><th>Worker Name</th><th>${esc(amountLabel)}</th></tr></thead><tbody>
-        ${list.length?list.map(x=>`<tr><td>${esc(x.name)}</td><td style="font-weight:800;">Rs. ${x.amount.toLocaleString('en-PK')}</td></tr>`).join(''):'<tr><td colspan="2" class="empty">No Workers with an amount greater than zero.</td></tr>'}
+        ${list.length?list.map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(String(x.category||'—'))}</td><td style="font-weight:800;">Rs. ${x.amount.toLocaleString('en-PK')}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">No Workers with an amount greater than zero.</td></tr>'}
       </tbody><tfoot><tr><th>TOTAL ${type==='baqi'?'BAQI':'ADDITIONAL ADVANCE'}</th><th>Rs. ${total.toLocaleString('en-PK')}</th></tr></tfoot></table></div>
       <div class="modal-actions"><button class="btn brass" id="btnPrintWorkerSummary">🖨️ Print</button></div>
     </div>`;
