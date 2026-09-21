@@ -4039,6 +4039,7 @@ function pageShoeBoxReceiveDetail(index){
     <div class="card" style="margin-bottom:14px;"><div style="display:flex;gap:6px;flex-wrap:wrap;">
       <button class="btn ${filter.filter==='today'?'brass':'ghost'} small" id="sbsReceiveToday">Today</button><button class="btn ${filter.filter==='weekly'?'brass':'ghost'} small" id="sbsReceiveWeekly">Weekly</button><button class="btn ${filter.filter==='monthly'?'brass':'ghost'} small" id="sbsReceiveMonthly">Monthly</button><button class="btn ${filter.filter==='custom'?'brass':'ghost'} small" id="sbsReceiveCustom">Custom Date</button>
     </div>${filter.filter==='custom'?`<div class="row" style="margin-top:10px;"><div><label>Start Date</label><input id="sbsReceiveStart" type="date" value="${esc(filter.start||'')}"></div><div><label>End Date</label><input id="sbsReceiveEnd" type="date" value="${esc(filter.end||'')}"></div><div style="display:flex;align-items:flex-end;"><button class="btn blue small" id="sbsReceiveApply">Apply</button></div></div>`:''}</div>
+    <div class="card" style="margin-bottom:14px;"><div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px;">Article-wise Received Summary</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;">${(supplier.products||[]).map(product=>{const pid=String(product?.id||product?.name||'');const qty=rows.filter(p=>String(p.productId||p.productName||'')===pid || (!p.productId && String(p.productName||'')===String(product?.name||''))).reduce((sum,p)=>sum+shoeBoxPurchaseItems(p),0);return `<div class="entity-card" style="padding:8px;text-align:center;min-width:0;"><div style="font-weight:800;font-size:12px;line-height:1.2;overflow-wrap:anywhere;">${esc(product?.name||'Product')}</div><div style="font-size:10px;color:var(--muted);margin-top:4px;">Received</div><div style="font-size:16px;font-weight:900;color:var(--brass-dark);margin-top:2px;">${shoeBoxQuantityDisplay(qty)} Atoms</div></div>`;}).join('')||'<div class="empty">No products added yet.</div>'}</div></div>
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;"><h3 style="margin:0;font-size:17px;">Receiving Summary</h3><span style="font-size:12px;color:var(--muted);">${vouchers.length} Voucher${vouchers.length===1?'':'s'}</span></div>
       <div style="display:grid;gap:8px;">${vouchers.length?vouchers.map(v=>`<div class="entity-card" style="padding:11px;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(90px,.7fr) minmax(110px,.8fr) auto;gap:10px;align-items:center;">
         <div><div style="font-weight:800;">${esc(v.voucherNo)}</div><div style="font-size:11px;color:var(--muted);margin-top:3px;">${fmtDate(v.date)} • ${esc(displayName)}</div></div>
@@ -4166,12 +4167,11 @@ function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes=''){
   const header=(showProduct||showReceived)?`<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>${showProduct?`<th style="text-align:left;${cfg.productName?.bold===true?'font-weight:900;':''}">${esc(productHeader)}</th>`:''}${showReceived?`<th style="text-align:right;${cfg.atoms?.bold===true?'font-weight:900;':''}">${esc(receivedHeader)}</th>`:''}</tr></thead><tbody>${productRows}</tbody></table>`:'';
   const totalLine=cfg.totalAtoms?.show!==false?`<div class="rline" style="${cfg.totalAtoms?.bold===true?'font-weight:900;':''}"><span>${esc(cfg.totalAtoms?.label||'Total Atoms')}:</span><span>${shoeBoxQuantityDisplay(totalAtoms)} Atoms</span></div>`:'';
   const summaryByProduct=new Map();
-  rows.forEach(p=>{
-    const pid=String(p.productId||'');
-    if(summaryByProduct.has(pid))return;
-    const product=(supplier.products||[]).find(x=>String(x.id)===pid);
+  (supplier.products||[]).forEach(product=>{
+    const pid=String(product?.id||product?.name||'');
+    if(!pid || summaryByProduct.has(pid))return;
     const total=shoeBoxCurrentProductTotalAtoms(supplier,product);
-    summaryByProduct.set(pid,{name:p.productName||product?.name||'Product',total});
+    summaryByProduct.set(pid,{name:product?.name||'Product',total});
   });
   const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;${cfg.receivingSummary?.bold===true?'font-weight:900;':''}">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline" style="${cfg.receivingSummary?.bold===true?'font-weight:900;':''}"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeBoxQuantityDisplay(x.total)} Atoms</span></div>`).join('')}</div>`:'';
   return `<div id="sbsReceiveVoucherPrint" class="receipt-paper" style="width:80mm;margin:auto;"><h3 style="text-align:center;margin:0;">${esc(settings.factoryName||'Leather Right Shoes')}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub" style="font-weight:700;margin-top:3px;">SHOE BOX RECEIVE VOUCHER</div><hr>${lines}<hr>${header}${totalLine}${summary}</div>`;
@@ -6430,7 +6430,7 @@ function openCreateGasVoucherModal(){
         <input id="gvWorkerSearch" autocomplete="off" placeholder="Type worker name...">
         <input id="gvWorker" type="hidden" value="">
         <div id="gvWorkerSearchResults" style="position:relative;z-index:100;background:var(--card,#fff);border:1px solid var(--border,#ddd);border-radius:8px;max-height:220px;overflow-y:auto;display:none;margin-top:6px;box-shadow:0 4px 12px rgba(0,0,0,.10);"></div>
-        <div id="gvSelectedWorker" style="margin-top:6px;font-size:12px;font-weight:700;"></div>
+        <div id="gvSelectedWorker" style="margin-top:8px;"></div>
       </div>
       <div><label>Worker ID (optional)</label><input id="gvWorkerId" placeholder="e.g. employee code"></div>
       <div><label>Gas Type</label><input id="gvGasType" value="${esc(settings.gasSupplier.gasType||'LPG')}"></div>
@@ -6459,12 +6459,48 @@ function openCreateGasVoucherModal(){
     return workers.filter(w=>w && w.name && String(w.name).trim());
   };
 
+  const getSelectedWorkerTotalGas = (worker)=>{
+    if(!worker) return 0;
+    const workerId = String(worker.id);
+    const workerName = String(worker.name||'').trim().toLowerCase();
+    return gasVouchers
+      .filter(v=>!v.voided && !v.deletedAt)
+      .filter(v=>{
+        const voucherWorkerId = String(v.workerRecordId||'');
+        if(voucherWorkerId && voucherWorkerId===workerId) return true;
+        return String(v.workerName||'').trim().toLowerCase()===workerName;
+      })
+      .reduce((sum,v)=>sum+(Number(v.qtyKg)||0),0);
+  };
+
+  const renderSelectedWorkerInfo = (worker)=>{
+    if(!worker){
+      gvSelectedWorker.innerHTML = '';
+      return;
+    }
+
+    const totalGas = getSelectedWorkerTotalGas(worker);
+    const workerType = String(worker.category||'').trim() || '—';
+    const totalLabel = `${worker.name} Total Gas`;
+
+    gvSelectedWorker.innerHTML = `
+      <div style="border:1px solid var(--line);border-radius:7px;background:#fbfaf7;padding:8px 10px;font-size:12px;">
+        <div style="display:grid;grid-template-columns:minmax(120px,42%) minmax(0,58%);gap:6px 10px;align-items:center;">
+          <div style="font-weight:700;color:var(--muted);text-align:left;">Worker Name</div>
+          <div style="font-weight:800;color:var(--ink);text-align:right;overflow-wrap:anywhere;">${esc(worker.name)}</div>
+          <div style="font-weight:700;color:var(--muted);text-align:left;">Worker Type</div>
+          <div style="font-weight:800;color:var(--ink);text-align:right;overflow-wrap:anywhere;">${esc(workerType)}</div>
+          <div style="font-weight:700;color:var(--muted);text-align:left;overflow-wrap:anywhere;">${esc(totalLabel)}</div>
+          <div style="font-weight:900;color:var(--brass-dark);text-align:right;white-space:nowrap;">${esc(String(Math.round((totalGas + Number.EPSILON) * 100) / 100))} KG</div>
+        </div>
+      </div>`;
+  };
+
   const selectGasWorker = (worker)=>{
     if(!worker) return;
     gvWorkerHidden.value = worker.id;
     gvWorkerSearch.value = worker.name;
-    gvSelectedWorker.textContent = `Selected Worker: ${worker.name}`;
-    gvSelectedWorker.style.color = 'var(--teal,#2f6d4f)';
+    renderSelectedWorkerInfo(worker);
     gvWorkerResults.style.display = 'none';
   };
 
@@ -6474,7 +6510,7 @@ function openCreateGasVoucherModal(){
     // No full list is displayed before the user starts searching.
     if(!q){
       gvWorkerHidden.value = '';
-      gvSelectedWorker.textContent = '';
+      gvSelectedWorker.innerHTML = '';
       gvWorkerResults.innerHTML = '';
       gvWorkerResults.style.display = 'none';
       return;
@@ -6500,7 +6536,7 @@ function openCreateGasVoucherModal(){
     // Any non-exact typing clears the selected worker ID, so a previous worker
     // cannot accidentally remain selected after the name is changed.
     gvWorkerHidden.value = '';
-    gvSelectedWorker.textContent = '';
+    gvSelectedWorker.innerHTML = '';
 
     if(!matches.length){
       gvWorkerResults.innerHTML = '<div style="padding:9px;color:var(--muted);">No saved worker found.</div>';
@@ -6623,9 +6659,44 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
     return `<div class="rline" style="${boldStyle}"><span style="${labelStyle}">${esc(f.label)}:</span><span style="${valueStyle}">${esc(val)}</span></div>`;
   }).join('');
 
+  // Print/thermal/share must carry the same selected-worker information that
+  // is shown on the Create Gas Voucher screen. This is display-only and does
+  // not change voucher calculations or stored data.
+  const workerRecordId = String(voucher?.workerRecordId||'');
+  const workerName = String(voucher?.workerName||'').trim();
+  const selectedWorker = workers.find(w=>{
+    if(workerRecordId && String(w.id)===workerRecordId) return true;
+    return String(w.name||'').trim().toLowerCase()===workerName.toLowerCase();
+  }) || null;
+
+  const printWorkerName = selectedWorker?.name || workerName;
+  const printWorkerType = String(selectedWorker?.category||'').trim() || '—';
+  const totalGas = gasVouchers
+    .filter(v=>!v.voided && !v.deletedAt)
+    .filter(v=>{
+      const voucherWorkerId = String(v.workerRecordId||'');
+      if(workerRecordId && voucherWorkerId && voucherWorkerId===workerRecordId) return true;
+      return String(v.workerName||'').trim().toLowerCase()===String(printWorkerName||'').trim().toLowerCase();
+    })
+    .reduce((sum,v)=>sum+(Number(v.qtyKg)||0),0);
+  const printWorkerTotalLabel = `${printWorkerName} Total Gas`;
+
+  const selectedWorkerPrintRows = printWorkerName ? `
+    <div style="margin:2px 0 8px;padding:6px 0;font-size:13px;font-weight:900;">
+      <div style="display:grid;grid-template-columns:minmax(120px,42%) minmax(0,58%);gap:5px 8px;align-items:center;">
+        <div style="font-weight:900;text-align:left;">Worker Name</div>
+        <div style="font-weight:900;text-align:right;overflow-wrap:anywhere;">${esc(printWorkerName)}</div>
+        <div style="font-weight:900;text-align:left;">Worker Type</div>
+        <div style="font-weight:900;text-align:right;overflow-wrap:anywhere;">${esc(printWorkerType)}</div>
+        <div style="font-weight:900;text-align:left;overflow-wrap:anywhere;">${esc(printWorkerTotalLabel)}</div>
+        <div style="font-weight:900;text-align:right;white-space:nowrap;">${esc(String(Math.round((totalGas + Number.EPSILON) * 100) / 100))} KG</div>
+      </div>
+    </div>` : '';
+
   return `<div class="brand-head"><h3>${esc(String(settings.factoryName||'LEATHER RIDE SHOES BY HAJI ABID'))}</h3></div>
     <div class="sub" style="font-weight:800;letter-spacing:1px;">${esc(titleText)}</div>
     <hr>
+    ${selectedWorkerPrintRows}
     ${rows}
     <hr>
     <div class="footer">${esc(settings.thankYou||'Thank you!')}</div>`;
