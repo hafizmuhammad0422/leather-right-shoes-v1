@@ -1039,16 +1039,19 @@ async function hydrateCloud(startupLocalSignature){
 }
 
 function persistLocalOnly(){
-  saveDBLocal(DB_KEYS.settings, settings);
-  saveDBLocal(DB_KEYS.materials, materials);
-  saveDBLocal(DB_KEYS.workers, workers);
-  saveDBLocal(DB_KEYS.tx, transactions);
-  saveDBLocal(DB_KEYS.moves, stockMovements);
-  saveDBLocal(DB_KEYS.articles, articles);
-  saveDBLocal(DB_KEYS.shopkeepers, shopkeepers);
-  saveDBLocal(DB_KEYS.bills, bills);
-  saveDBLocal(DB_KEYS.audit, auditLog);
-  saveDBLocal(DB_KEYS.gasVouchers, gasVouchers);
+  const results=[
+    saveDBLocal(DB_KEYS.settings, settings),
+    saveDBLocal(DB_KEYS.materials, materials),
+    saveDBLocal(DB_KEYS.workers, workers),
+    saveDBLocal(DB_KEYS.tx, transactions),
+    saveDBLocal(DB_KEYS.moves, stockMovements),
+    saveDBLocal(DB_KEYS.articles, articles),
+    saveDBLocal(DB_KEYS.shopkeepers, shopkeepers),
+    saveDBLocal(DB_KEYS.bills, bills),
+    saveDBLocal(DB_KEYS.audit, auditLog),
+    saveDBLocal(DB_KEYS.gasVouchers, gasVouchers)
+  ];
+  return results.every(Boolean);
 }
 
 function saveDBLocal(key, val){
@@ -1089,7 +1092,32 @@ function dataUrlToR2File(dataUrl){
   const ext=m[1]==='image/png'?'png':m[1]==='image/webp'?'webp':m[1]==='image/gif'?'gif':'jpg';
   return new File([bytes],`image.${ext}`,{type:m[1]});
 }
+let r2RefsBeforePendingUpload=null;
+function collectR2ImageUrls(value,out=new Set()){
+  if(typeof value==='string'){if(value.includes('/api/r2-image?key='))out.add(value);return out;}
+  if(Array.isArray(value)){value.forEach(v=>collectR2ImageUrls(v,out));return out;}
+  if(value&&typeof value==='object'){Object.values(value).forEach(v=>collectR2ImageUrls(v,out));}
+  return out;
+}
+function r2KeyFromUrl(url){
+  try{const u=new URL(url,location.href);if(!u.pathname.endsWith('/api/r2-image'))return '';return u.searchParams.get('key')||'';}catch{return '';}
+}
+async function deleteR2ImageUrl(url){
+  const key=r2KeyFromUrl(url);if(!key)return false;
+  await ensureR2ImageSession();
+  const res=await fetch('./api/r2-image',{method:'DELETE',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})});
+  return res.ok;
+}
+function cleanupReplacedR2ImagesAfterSave(){
+  if(!r2RefsBeforePendingUpload)return;
+  const before=r2RefsBeforePendingUpload;r2RefsBeforePendingUpload=null;
+  const current=collectR2ImageUrls(getCurrentState());
+  for(const oldUrl of before){
+    if(!current.has(oldUrl)) deleteR2ImageUrl(oldUrl).catch(()=>{});
+  }
+}
 async function uploadImageDataUrlToR2(dataUrl){
+  if(!r2RefsBeforePendingUpload) r2RefsBeforePendingUpload=collectR2ImageUrls(getCurrentState());
   await ensureR2ImageSession();
   const form=new FormData();form.append('file',dataUrlToR2File(dataUrl));
   const res=await fetch('./api/r2-image',{method:'POST',credentials:'same-origin',body:form});
@@ -1596,8 +1624,12 @@ let bills = loadDB(DB_KEYS.bills, []);
 let auditLog = loadDB(DB_KEYS.audit, []);
 
 function persistAll(){
-  persistLocalOnly();
-  scheduleCloudSync();
+  const saved=persistLocalOnly();
+  if(saved){
+    scheduleCloudSync();
+    cleanupReplacedR2ImagesAfterSave();
+  }
+  return saved;
 }
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
