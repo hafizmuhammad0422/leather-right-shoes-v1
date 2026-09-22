@@ -6,6 +6,7 @@
  * Route:
  *   GET  /api/r2-image?key=<object-key>
  *   POST /api/r2-image
+ *   DELETE /api/r2-image
  *
  * This file intentionally does NOT use D1, /api/state, LocalStorage,
  * or any frontend image/storage logic.
@@ -285,6 +286,11 @@ function isValidImageMagicBytes(bytes, contentType) {
   return false;
 }
 
+async function sha256Hex(buffer) {
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+}
+
 function contentDispositionFilename(key) {
   const name = key.split("/").pop() || "image";
   return name.replace(/["\\\r\n]/g, "_");
@@ -383,15 +389,6 @@ async function handlePost({ env, request }) {
   }
 
   const requestedKey = form.get("key");
-  const keyValidation = validateUploadKey(
-    typeof requestedKey === "string" ? requestedKey : null,
-    imageType
-  );
-
-  if (!keyValidation.ok) {
-    return json({ error: keyValidation.error }, 400);
-  }
-
   const body = await file.arrayBuffer();
   const bytes = new Uint8Array(body);
 
@@ -402,11 +399,32 @@ async function handlePost({ env, request }) {
     );
   }
 
+  // Content-addressed keys prevent the same processed image bytes from being
+  // stored more than once. Existing callers that explicitly provide a key keep
+  // their requested-key behavior; the app frontend does not provide one.
+  let keyValidation;
+  if (typeof requestedKey === "string" && requestedKey.trim()) {
+    keyValidation = validateUploadKey(requestedKey, imageType);
+  } else {
+    const hash = await sha256Hex(body);
+    keyValidation = { ok: true, key: `images/sha256-${hash}.${EXTENSIONS.get(imageType)}` };
+  }
+
+  if (!keyValidation.ok) {
+    return json({ error: keyValidation.error }, 400);
+  }
+
   try {
     const existingObject = await env.R2_IMAGES.head(keyValidation.key);
 
     if (existingObject) {
-      return json({ error: "Image key already exists." }, 409);
+      return json({
+        ok: true,
+        key: keyValidation.key,
+        contentType: imageType,
+        size: file.size,
+        duplicate: true
+      }, 200);
     }
 
     const uploadedObject = await env.R2_IMAGES.put(keyValidation.key, body, {
@@ -431,12 +449,36 @@ async function handlePost({ env, request }) {
         key: keyValidation.key,
         contentType: imageType,
         size: file.size,
+        duplicate: false,
       },
       201
     );
   } catch (error) {
     console.error("POST /api/r2-image failed:", error);
     return json({ error: "R2 image upload failed." }, 500);
+  }
+}
+
+async function handleDelete({ env, request }) {
+  if (!env?.R2_IMAGES) return json({ error: "R2 binding R2_IMAGES is not configured." }, 500);
+  const authorization = await authorizeUpload(env, request);
+  if (!authorization.ok) return authorization.response;
+
+  let payload;
+  try { payload = await request.json(); }
+  catch { return json({ error: "Invalid JSON request." }, 400); }
+
+  const validation = sanitizeKey(payload?.key);
+  if (!validation.ok) return json({ error: validation.error }, 400);
+
+  try {
+    const existing = await env.R2_IMAGES.head(validation.key);
+    if (!existing) return json({ ok: true, deleted: false, key: validation.key }, 200);
+    await env.R2_IMAGES.delete(validation.key);
+    return json({ ok: true, deleted: true, key: validation.key }, 200);
+  } catch (error) {
+    console.error("DELETE /api/r2-image failed:", error);
+    return json({ error: "R2 image delete failed." }, 500);
   }
 }
 
@@ -456,10 +498,14 @@ export async function onRequest(context) {
     return handlePost(context);
   }
 
+  if (method === "DELETE") {
+    return handleDelete(context);
+  }
+
   return new Response("Method Not Allowed", {
     status: 405,
     headers: {
-      Allow: "GET, POST",
+      Allow: "GET, POST, DELETE",
       "Cache-Control": "no-store",
     },
   });
