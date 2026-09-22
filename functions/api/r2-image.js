@@ -13,19 +13,11 @@
  * R2 binding:
  *   env.R2_IMAGES
  *
- * Upload authorization secret:
- *   env.R2_UPLOAD_TOKEN
- *
- * POST expects:
- *   Authorization: Bearer <R2_UPLOAD_TOKEN>
- *   Content-Type: multipart/form-data
- *
- * Multipart fields:
+ * POST expects multipart/form-data with:
  *   file = image file
  *   key  = optional object key
  *
  * Existing Base64 images are not read, migrated, replaced, or deleted.
- * Existing R2 objects are not overwritten.
  */
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -49,6 +41,16 @@ function json(data, status = 200, extraHeaders = {}) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      ...extraHeaders,
+    },
+  });
+}
+
+function text(data, status = 200, extraHeaders = {}) {
+  return new Response(data, {
+    status,
+    headers: {
       "Cache-Control": "no-store",
       ...extraHeaders,
     },
@@ -93,71 +95,51 @@ function validateOrigin(request) {
 }
 
 function constantTimeEqual(a, b) {
-  if (typeof a !== "string" || typeof b !== "string") {
-    return false;
-  }
-
   const encoder = new TextEncoder();
   const aBytes = encoder.encode(a);
   const bBytes = encoder.encode(b);
-
-  const maxLength = Math.max(aBytes.length, bBytes.length);
+  const length = Math.max(aBytes.length, bBytes.length);
   let difference = aBytes.length ^ bBytes.length;
 
-  for (let i = 0; i < maxLength; i += 1) {
-    const aByte = i < aBytes.length ? aBytes[i] : 0;
-    const bByte = i < bBytes.length ? bBytes[i] : 0;
-    difference |= aByte ^ bByte;
+  for (let i = 0; i < length; i += 1) {
+    difference |= (aBytes[i] || 0) ^ (bBytes[i] || 0);
   }
 
   return difference === 0;
 }
 
-function authorizeUpload(env, request) {
-  const configuredToken = env?.R2_UPLOAD_TOKEN;
-
-  if (
-    typeof configuredToken !== "string" ||
-    configuredToken.length === 0
-  ) {
-    return {
-      ok: false,
-      response: json(
-        { error: "Image upload is not configured." },
-        503
-      ),
-    };
+const SESSION_COOKIE_NAME = "lrs_r2_session";
+function b64url(bytes) {
+  let s = ""; for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+async function signSession(secret, value) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))));
+}
+function getCookie(request, name) {
+  const raw = request.headers.get("Cookie") || "";
+  for (const part of raw.split(";")) { const i = part.indexOf("="); if (i >= 0 && part.slice(0,i).trim() === name) return part.slice(i+1).trim(); }
+  return "";
+}
+async function hasValidSession(env, request) {
+  const secret = env?.R2_SESSION_SECRET;
+  if (typeof secret !== "string" || !secret) return false;
+  const parts = getCookie(request, SESSION_COOKIE_NAME).split(".");
+  if (parts.length !== 3) return false;
+  const [exp, nonce, sig] = parts;
+  if (!Number.isFinite(Number(exp)) || Number(exp) <= Math.floor(Date.now()/1000)) return false;
+  return constantTimeEqual(sig, await signSession(secret, `${exp}.${nonce}`));
+}
+async function authorizeUpload(env, request) {
+  if (await hasValidSession(env, request)) return { ok: true };
+  const configuredSecret = env?.R2_UPLOAD_TOKEN;
+  const authorization = request.headers.get("Authorization") || "";
+  if (typeof configuredSecret === "string" && configuredSecret && authorization.startsWith("Bearer ")) {
+    const suppliedSecret = authorization.slice(7);
+    if (suppliedSecret && constantTimeEqual(suppliedSecret, configuredSecret)) return { ok: true };
   }
-
-  const authorization = request.headers.get("Authorization");
-
-  if (
-    typeof authorization !== "string" ||
-    !authorization.startsWith("Bearer ")
-  ) {
-    return {
-      ok: false,
-      response: json({ error: "Unauthorized." }, 401, {
-        "WWW-Authenticate": "Bearer",
-      }),
-    };
-  }
-
-  const suppliedToken = authorization.slice("Bearer ".length);
-
-  if (
-    suppliedToken.length === 0 ||
-    !constantTimeEqual(suppliedToken, configuredToken)
-  ) {
-    return {
-      ok: false,
-      response: json({ error: "Unauthorized." }, 401, {
-        "WWW-Authenticate": "Bearer",
-      }),
-    };
-  }
-
-  return { ok: true };
+  return { ok: false, response: json({ error: "Unauthorized." }, 401) };
 }
 
 function sanitizeKey(rawKey) {
@@ -176,12 +158,11 @@ function sanitizeKey(rawKey) {
   }
 
   if (key.includes("\0")) {
-    return {
-      ok: false,
-      error: "Image key contains an invalid character.",
-    };
+    return { ok: false, error: "Image key contains an invalid character." };
   }
 
+  // R2 object keys are not filesystem paths, but rejecting traversal-like
+  // syntax prevents accidental use of unsafe path semantics by clients.
   if (
     key.startsWith("/") ||
     key.endsWith("/") ||
@@ -197,6 +178,8 @@ function sanitizeKey(rawKey) {
     return { ok: false, error: "Invalid image key." };
   }
 
+  // Keep this endpoint limited to an image namespace. This also prevents
+  // arbitrary application objects from being accessed through this API.
   if (!key.startsWith("images/")) {
     return {
       ok: false,
@@ -204,11 +187,10 @@ function sanitizeKey(rawKey) {
     };
   }
 
+  // Allow only predictable object-key characters. Spaces and encoded/control
+  // characters are intentionally excluded.
   if (!/^images\/[A-Za-z0-9._/-]+$/.test(key)) {
-    return {
-      ok: false,
-      error: "Image key contains unsupported characters.",
-    };
+    return { ok: false, error: "Image key contains unsupported characters." };
   }
 
   return { ok: true, key };
@@ -229,10 +211,7 @@ function validateUploadKey(rawKey, contentType) {
   }
 
   const result = sanitizeKey(rawKey);
-
-  if (!result.ok) {
-    return result;
-  }
+  if (!result.ok) return result;
 
   const expectedExtension = EXTENSIONS.get(contentType);
   const lowerKey = result.key.toLowerCase();
@@ -249,28 +228,24 @@ function validateUploadKey(rawKey, contentType) {
 
 function contentTypeIsAllowed(contentType) {
   return IMAGE_TYPES.has(
-    typeof contentType === "string"
-      ? contentType.toLowerCase()
-      : ""
+    typeof contentType === "string" ? contentType.toLowerCase() : ""
   );
 }
 
 function isValidImageMagicBytes(bytes, contentType) {
-  if (!bytes || bytes.length < 12) {
-    return false;
-  }
+  if (!bytes || bytes.length < 12) return false;
 
   const b = bytes;
 
-  if (contentType === "image/jpeg") {
-    return (
-      b[0] === 0xff &&
-      b[1] === 0xd8 &&
-      b[2] === 0xff
-    );
+  if (
+    contentType === "image/jpeg"
+  ) {
+    return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
   }
 
-  if (contentType === "image/png") {
+  if (
+    contentType === "image/png"
+  ) {
     return (
       b[0] === 0x89 &&
       b[1] === 0x50 &&
@@ -317,44 +292,30 @@ function contentDispositionFilename(key) {
 
 async function handleGet({ env, request }) {
   if (!env?.R2_IMAGES) {
-    return json(
-      { error: "R2 binding R2_IMAGES is not configured." },
-      500
-    );
+    return json({ error: "R2 binding R2_IMAGES is not configured." }, 500);
   }
 
   const url = new URL(request.url);
-  const validation = sanitizeKey(
-    url.searchParams.get("key")
-  );
+  const validation = sanitizeKey(url.searchParams.get("key"));
 
   if (!validation.ok) {
     return json({ error: validation.error }, 400);
   }
 
   try {
-    const object = await env.R2_IMAGES.get(
-      validation.key
-    );
+    const object = await env.R2_IMAGES.get(validation.key);
 
     if (!object) {
       return json({ error: "Image not found." }, 404);
     }
 
     const headers = new Headers();
-
     object.writeHttpMetadata(headers);
-
     headers.set("ETag", object.httpEtag);
-    headers.set(
-      "Cache-Control",
-      "private, max-age=3600"
-    );
+    headers.set("Cache-Control", "private, max-age=3600");
     headers.set(
       "Content-Disposition",
-      `inline; filename="${contentDispositionFilename(
-        validation.key
-      )}"`
+      `inline; filename="${contentDispositionFilename(validation.key)}"`
     );
 
     return new Response(object.body, {
@@ -362,43 +323,24 @@ async function handleGet({ env, request }) {
       headers,
     });
   } catch (error) {
-    console.error(
-      "GET /api/r2-image failed:",
-      error
-    );
-
-    return json(
-      { error: "R2 image read failed." },
-      500
-    );
+    console.error("GET /api/r2-image failed:", error);
+    return json({ error: "R2 image read failed." }, 500);
   }
 }
 
 async function handlePost({ env, request }) {
   if (!env?.R2_IMAGES) {
-    return json(
-      { error: "R2 binding R2_IMAGES is not configured." },
-      500
-    );
+    return json({ error: "R2 binding R2_IMAGES is not configured." }, 500);
   }
 
-  const authorization = authorizeUpload(
-    env,
-    request
-  );
-
+  const authorization = await authorizeUpload(env, request);
   if (!authorization.ok) {
     return authorization.response;
   }
 
-  const contentTypeHeader =
-    request.headers.get("Content-Type") || "";
+  const contentTypeHeader = request.headers.get("Content-Type") || "";
 
-  if (
-    !contentTypeHeader
-      .toLowerCase()
-      .startsWith("multipart/form-data")
-  ) {
+  if (!contentTypeHeader.toLowerCase().startsWith("multipart/form-data")) {
     return json(
       { error: "Upload must use multipart/form-data." },
       415
@@ -406,38 +348,24 @@ async function handlePost({ env, request }) {
   }
 
   let form;
-
   try {
     form = await request.formData();
   } catch {
-    return json(
-      { error: "Invalid multipart/form-data request." },
-      400
-    );
+    return json({ error: "Invalid multipart/form-data request." }, 400);
   }
 
   const file = form.get("file");
-
   if (!(file instanceof File)) {
-    return json(
-      { error: 'Multipart field "file" is required.' },
-      400
-    );
+    return json({ error: 'Multipart field "file" is required.' }, 400);
   }
 
   if (file.size <= 0) {
-    return json(
-      { error: "Image file is empty." },
-      400
-    );
+    return json({ error: "Image file is empty." }, 400);
   }
 
   if (file.size > MAX_IMAGE_BYTES) {
     return json(
-      {
-        error:
-          "Image file is too large. Maximum size is 10 MB.",
-      },
+      { error: "Image file is too large. Maximum size is 10 MB." },
       413
     );
   }
@@ -455,19 +383,13 @@ async function handlePost({ env, request }) {
   }
 
   const requestedKey = form.get("key");
-
   const keyValidation = validateUploadKey(
-    typeof requestedKey === "string"
-      ? requestedKey
-      : null,
+    typeof requestedKey === "string" ? requestedKey : null,
     imageType
   );
 
   if (!keyValidation.ok) {
-    return json(
-      { error: keyValidation.error },
-      400
-    );
+    return json({ error: keyValidation.error }, 400);
   }
 
   const body = await file.arrayBuffer();
@@ -475,54 +397,32 @@ async function handlePost({ env, request }) {
 
   if (!isValidImageMagicBytes(bytes, imageType)) {
     return json(
-      {
-        error:
-          "File contents do not match the declared image type.",
-      },
+      { error: "File contents do not match the declared image type." },
       415
     );
   }
 
   try {
-    const existing = await env.R2_IMAGES.head(
-      keyValidation.key
-    );
+    const existingObject = await env.R2_IMAGES.head(keyValidation.key);
 
-    if (existing) {
-      return json(
-        {
-          error:
-            "An image already exists with this key.",
-        },
-        409
-      );
+    if (existingObject) {
+      return json({ error: "Image key already exists." }, 409);
     }
 
-    const result = await env.R2_IMAGES.put(
-      keyValidation.key,
-      body,
-      {
-        onlyIf: {
-          etagDoesNotMatch: "*",
-        },
-        httpMetadata: {
-          contentType: imageType,
-          contentDisposition:
-            `inline; filename="${contentDispositionFilename(
-              keyValidation.key
-            )}"`,
-        },
-      }
-    );
+    const uploadedObject = await env.R2_IMAGES.put(keyValidation.key, body, {
+      onlyIf: {
+        etagDoesNotMatch: "*",
+      },
+      httpMetadata: {
+        contentType: imageType,
+        contentDisposition: `inline; filename="${contentDispositionFilename(
+          keyValidation.key
+        )}"`,
+      },
+    });
 
-    if (!result) {
-      return json(
-        {
-          error:
-            "An image already exists with this key.",
-        },
-        409
-      );
+    if (!uploadedObject) {
+      return json({ error: "Image key already exists." }, 409);
     }
 
     return json(
@@ -535,26 +435,15 @@ async function handlePost({ env, request }) {
       201
     );
   } catch (error) {
-    console.error(
-      "POST /api/r2-image failed:",
-      error
-    );
-
-    return json(
-      { error: "R2 image upload failed." },
-      500
-    );
+    console.error("POST /api/r2-image failed:", error);
+    return json({ error: "R2 image upload failed." }, 500);
   }
 }
 
 export async function onRequest(context) {
-  const method =
-    context.request.method.toUpperCase();
+  const method = context.request.method.toUpperCase();
 
-  const originValidation = validateOrigin(
-    context.request
-  );
-
+  const originValidation = validateOrigin(context.request);
   if (!originValidation.ok) {
     return originValidation.response;
   }
