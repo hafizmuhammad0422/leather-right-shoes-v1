@@ -2847,11 +2847,12 @@ function pageDistributeUpper(){
     <div class="card"><h3 style="margin-top:0;">Upper Distribution</h3>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">1 Item = 12 pairs.</div>
       <label>Select Worker</label>
-      <div class="pick-grid">
-        ${upperWorkers.length?upperWorkers.map(w=>`<button type="button" class="pick-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" title="${esc(w.name||'')}"><div class="entity-photo ${w.photo?'zoomable':''}" style="width:86px;height:86px;margin:auto;font-size:24px;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div></button>`).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
+      <div class="pick-grid" id="upperWorkerCards">
+        ${upperWorkers.length?upperWorkers.map(w=>{const completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id));return `<button type="button" class="pick-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="width:86px;height:86px;margin:auto;font-size:24px;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div style="position:absolute;top:4px;right:4px;background:#1f9d55;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:800;line-height:1.2;">✓ Completed</div>`:''}<div style="font-size:12px;font-weight:700;margin-top:6px;line-height:1.2;">${esc(w.name||'')}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
       <div id="upperWorkerInfo" style="font-size:12px;color:var(--muted);margin-top:10px;">${selectedWorker?`Selected Worker: <strong>${esc(selectedWorker.name||'')}</strong><br>Worker Type: <strong>${esc(selectedWorker.category||'')}</strong>`:''}</div>
     </div>
+    <div style="margin-bottom:8px;"><input type="text" id="upperWorkerSearch" placeholder="Search Worker" autocomplete="off" style="width:100%;max-width:320px;"></div>
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><h3 style="margin:0;">Upper Distribution Details</h3><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost small" id="btnAddUpperArticleRow" ${articles.length?'':'disabled'}>+ Add Article</button><button type="button" class="btn ghost small" id="btnAddUpperMaterialRow" ${materials.length?'':'disabled'}>+ Add Material</button></div></div>
       <div id="upperDistributionRows" style="margin-top:12px;">${articles.length||materials.length?`<div class="upper-distribution-row" data-upper-row><div class="upper-search-wrap"><label>Search Upper Article</label><input type="text" class="upper-article-search" placeholder="Type article name..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div><div class="upper-search-wrap"><label>Select Upper Material</label><input type="text" class="upper-material-search" placeholder="Type material name..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div><div><label>Quantity (Atoms)</label><input class="upper-qty" type="number" min="1" step="1" placeholder="Atoms"></div><div><label>Labour Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div><div class="upper-remove-row"><button type="button" class="btn red small upper-remove" style="width:100%;">✕</button></div><div class="upper-row-stock-info" style="grid-column:1/-1;font-size:12px;color:var(--muted);"></div></div>`:`<div class="empty">Add an Article or Material row.</div>`}</div>
       <div class="upper-summary"><button type="button" class="upper-summary-item" id="upperTodayTotalItems" style="text-align:left;cursor:pointer;"><div class="label">TODAY TOTAL ATOMS</div><div class="value" id="upperTotalItems">0</div><div style="font-size:11px;color:var(--muted);margin-top:3px;">Atoms = 12 pairs each</div></button><button type="button" class="upper-summary-item" id="upperTotalLabour" style="text-align:left;cursor:pointer;"><div class="label">TOTAL WEEKLY LABOUR KHARCHA</div><div class="value" id="upperTotalAmount">Rs. 0</div></button></div>
@@ -7482,6 +7483,13 @@ function attachPageHandlers(){
   document.getElementById('upperTodayTotalItems')?.addEventListener('click',openUpperTodayItemsDetail);
   document.getElementById('upperTotalLabour')?.addEventListener('click',openUpperWeeklyLabourDetail);
   document.querySelectorAll('[data-upper-pickworker]').forEach(b=>b.addEventListener('click',()=>setUpperWorkerSelection(b.dataset.upperPickworker)));
+  document.getElementById('upperWorkerSearch')?.addEventListener('input',e=>{
+    const q=String(e.target.value||'').trim().toLowerCase();
+    document.querySelectorAll('[data-upper-pickworker]').forEach(card=>{
+      const name=String(card.dataset.upperWorkerName||'').toLowerCase();
+      card.style.display=!q||name.includes(q)?'':'none';
+    });
+  });
 
   // Shoe Box Suppliers
   document.querySelectorAll('[data-opensbs]').forEach(card=>card.addEventListener('click',()=>goto(parseInt(card.dataset.opensbs)===0?'shoeBoxSupplier1':'shoeBoxSupplier2')));
