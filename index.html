@@ -1072,6 +1072,32 @@ function saveDB(key, val){
 
 /* Compress photos before putting them into localStorage. Camera photos can be
    several MB, while localStorage is usually limited to a few MB. */
+async function ensureR2ImageSession(){
+  const status=await fetch('./api/r2-auth',{method:'GET',credentials:'same-origin',cache:'no-store'});
+  if(status.ok){const data=await status.json().catch(()=>({}));if(data.authenticated)return true;}
+  const password=prompt('Image upload password درج کریں:');
+  if(password===null||password==='') throw new Error('Image upload authorization cancelled');
+  const login=await fetch('./api/r2-auth',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});
+  if(!login.ok){const e=await login.json().catch(()=>({}));throw new Error(e.error||'Image upload authorization failed');}
+  return true;
+}
+function dataUrlToR2File(dataUrl){
+  const parts=String(dataUrl||'').split(',');
+  const m=/^data:([^;]+);base64$/i.exec(parts[0]||'');
+  if(!m||!parts[1]) throw new Error('Invalid image data');
+  const bin=atob(parts[1]);const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  const ext=m[1]==='image/png'?'png':m[1]==='image/webp'?'webp':m[1]==='image/gif'?'gif':'jpg';
+  return new File([bytes],`image.${ext}`,{type:m[1]});
+}
+async function uploadImageDataUrlToR2(dataUrl){
+  await ensureR2ImageSession();
+  const form=new FormData();form.append('file',dataUrlToR2File(dataUrl));
+  const res=await fetch('./api/r2-image',{method:'POST',credentials:'same-origin',body:form});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||'R2 image upload failed');}
+  const out=await res.json();if(!out.key)throw new Error('R2 image key missing');
+  return `./api/r2-image?key=${encodeURIComponent(out.key)}`;
+}
+
 function compressImageFile(file, maxSide=800, startQuality=.72){
   return new Promise((resolve,reject)=>{
     if(!file || !file.type || !file.type.startsWith('image/')){ reject(new Error('Invalid image')); return; }
@@ -1094,7 +1120,7 @@ function compressImageFile(file, maxSide=800, startQuality=.72){
           quality-=0.08;
           dataUrl=canvas.toDataURL('image/jpeg',quality);
         }
-        resolve(dataUrl);
+        uploadImageDataUrlToR2(dataUrl).then(resolve,reject);
       };
       img.src=ev.target.result;
     };
@@ -2285,7 +2311,7 @@ function compressMaterialImage(file,maxSize=700,quality=.72){
         w=Math.max(1,Math.round(w*s));h=Math.max(1,Math.round(h*s));
         const c=document.createElement('canvas');c.width=w;c.height=h;
         c.getContext('2d').drawImage(img,0,0,w,h);
-        resolve(c.toDataURL('image/jpeg',quality));
+        uploadImageDataUrlToR2(c.toDataURL('image/jpeg',quality)).then(resolve,reject);
       };
       img.onerror=reject;img.src=r.result;
     };
@@ -2300,7 +2326,7 @@ function compressImageDataUrl(dataUrl,maxSize=800,quality=.78){
       let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
       const scale=Math.min(1,maxSize/Math.max(w,h)); w=Math.max(1,Math.round(w*scale)); h=Math.max(1,Math.round(h*scale));
       const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
-      resolve(c.toDataURL('image/jpeg',quality));
+      uploadImageDataUrlToR2(c.toDataURL('image/jpeg',quality)).then(resolve,reject);
     };
     img.onerror=reject; img.src=dataUrl;
   });
