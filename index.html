@@ -890,7 +890,7 @@ function getCurrentState(){
   return {
     settings, materials, workers, transactions, stockMovements,
     articles, shopkeepers, bills, auditLog, gasVouchers,
-    backups: loadDB(DB_KEYS.backups, [])
+    backups: backupVersions
   };
 }
 
@@ -923,7 +923,7 @@ function applyCloudState(state){
   if(Array.isArray(state.bills)) bills = state.bills;
   if(Array.isArray(state.auditLog)) auditLog = state.auditLog;
   if(Array.isArray(state.gasVouchers)) gasVouchers = state.gasVouchers;
-  if(Array.isArray(state.backups)) localStorage.setItem(DB_KEYS.backups, JSON.stringify(state.backups));
+  if(Array.isArray(state.backups)) backupVersions = state.backups;
   settings.ownerPin = settings.ownerPin || '1234';
   settings.nextBillNo = Number(settings.nextBillNo)||1001;
   settings.nextReceiptNo = Number(settings.nextReceiptNo)||1001;
@@ -958,7 +958,7 @@ async function syncCloudNow(){
     if(!res.ok) throw new Error('Cloud save failed: '+res.status);
   }catch(e){
     console.error('Cloud sync failed',e);
-    toast('Cloud sync failed — local copy is still saved.');
+    toast('Cloud save failed. Your current screen data is still open; please retry before closing the app.');
   }finally{
     cloudSyncInFlight=false;
     if(cloudSyncQueued){
@@ -983,7 +983,7 @@ function isCompleteCloudState(state){
 
 async function hydrateCloud(startupLocalSignature){
   let cloudStateApplied=false;
-  let localChangesNeedCloudSave=false;
+  let cloudConnectionVerified=false;
   try{
     const res=await fetch(CLOUD_API,{cache:'no-store'});
     if(!res.ok) throw new Error('Cloud load failed: '+res.status);
@@ -995,18 +995,18 @@ async function hydrateCloud(startupLocalSignature){
       }
 
       const localChangedDuringCloudLoad = JSON.stringify(getCurrentState()) !== startupLocalSignature;
-
       if(localChangedDuringCloudLoad){
-        console.warn('Local data changed while cloud data was loading. Cloud state was not applied to avoid overwriting local changes.');
-        localChangesNeedCloudSave=true;
-      }else{
-        applyCloudState(payload.state);
-        persistLocalOnly();
-        cloudStateApplied=true;
+        console.warn('A local change occurred before D1 finished loading. D1 remains authoritative; the startup-local change was not uploaded.');
       }
+      // D1 is authoritative whenever a valid cloud state exists. This prevents
+      // stale LocalStorage/RAM state from overwriting production during startup.
+      applyCloudState(payload.state);
+      cloudStateApplied=true;
+      cloudConnectionVerified=true;
     }
 
     else if(payload && payload.empty){
+      cloudConnectionVerified=true;
       if(hasMeaningfulLocalData()){
         const useLocal=confirm(
           'Cloud database is empty. This device has existing factory data.\n\n' +
@@ -1026,13 +1026,11 @@ async function hydrateCloud(startupLocalSignature){
     }
   }catch(e){
     console.error('Cloud database unavailable',e);
-    toast('Cloud database is not reachable. Local copy is being used.');
+    toast('Cloud database is not reachable. Changes will not be saved until D1 reconnects.');
   }finally{
-    cloudReady=true;
-  }
-
-  if(localChangesNeedCloudSave){
-    await syncCloudNow();
+    // Never enable writes merely because the load attempt finished. Writes are
+    // enabled only after D1 returned a valid state (or explicitly reported empty).
+    cloudReady=cloudConnectionVerified;
   }
 
   return cloudStateApplied;
@@ -1068,9 +1066,10 @@ function saveDBLocal(key, val){
 }
 
 function saveDB(key, val){
-  const ok=saveDBLocal(key,val);
+  // D1 is the primary store. Keep the existing function signature so all
+  // current features continue to call saveDB() without UI/logic changes.
   scheduleCloudSync();
-  return ok;
+  return true;
 }
 
 /* Compress photos before putting them into localStorage. Camera photos can be
@@ -1608,6 +1607,7 @@ if(localStorage.getItem('fac_owner_pin_default_v2')!=='1'){
   settings.ownerPin = settings.ownerPin || '1234';
 }
 settings.nextBillNo = Number(settings.nextBillNo)||1001;
+let backupVersions = loadDB(DB_KEYS.backups, []);
 let materials = loadDB(DB_KEYS.materials, []);
 let workers = loadDB(DB_KEYS.workers, []);
 let workerCategoryFilter = null;
@@ -1624,12 +1624,11 @@ let bills = loadDB(DB_KEYS.bills, []);
 let auditLog = loadDB(DB_KEYS.audit, []);
 
 function persistAll(){
-  const saved=persistLocalOnly();
-  if(saved){
-    scheduleCloudSync();
-    cleanupReplacedR2ImagesAfterSave();
-  }
-  return saved;
+  // D1 is primary; do not mirror the full application state back into
+  // localStorage. Images are already stored in R2 by compressImageFile().
+  scheduleCloudSync();
+  cleanupReplacedR2ImagesAfterSave();
+  return true;
 }
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -7880,22 +7879,19 @@ function attachPageHandlers(){
 /* ============ VERSIONED BACKUPS (in addition to manual Export/Import) ============ */
 function saveBackupVersion(){
   const data = {settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
-  let versions = loadDB(DB_KEYS.backups, []);
-  versions.push({id:uid(), timestamp:data.savedAt, data});
-  if(versions.length>10) versions = versions.slice(versions.length-10);
-  saveDB(DB_KEYS.backups, versions);
+  backupVersions.push({id:uid(), timestamp:data.savedAt, data});
+  if(backupVersions.length>10) backupVersions = backupVersions.slice(backupVersions.length-10);
+  saveDB(DB_KEYS.backups, backupVersions);
 }
 function maybeAutoSnapshot(){
-  const versions = loadDB(DB_KEYS.backups, []);
   const todayStr = new Date().toISOString().slice(0,10);
-  const hasToday = versions.some(v=>v.timestamp.slice(0,10)===todayStr);
+  const hasToday = backupVersions.some(v=>v.timestamp.slice(0,10)===todayStr);
   if(!hasToday) saveBackupVersion();
 }
 function restoreBackupVersion(versionId){
   if(!confirm('Restore this version? Your current data will first be saved as a new backup version so nothing is lost.')) return;
   saveBackupVersion();
-  const versions = loadDB(DB_KEYS.backups, []);
-  const v = versions.find(x=>x.id===versionId);
+  const v = backupVersions.find(x=>x.id===versionId);
   if(!v){ toast('Version not found'); return; }
   settings = v.data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = v.data.materials || []; workers = v.data.workers || [];
   transactions = v.data.transactions || []; stockMovements = v.data.stockMovements || [];
@@ -7928,9 +7924,8 @@ document.getElementById('topLogoInput')?.addEventListener('change', async(e)=>{
   }catch(err){ toast('Could not read logo'); }
 });
 async function initApp(){
-  try{ maybeAutoSnapshot(); }catch(e){ console.error('Auto-snapshot skipped:', e); }
-
-  // Render the local state immediately so startup never waits for Cloudflare.
+  // Legacy localStorage is read only as a startup fallback. D1 is authoritative.
+  // Do not create/write snapshots before the cloud state has been loaded.
   const startupLocalSignature = JSON.stringify(getCurrentState());
   render();
 
