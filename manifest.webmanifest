@@ -1,0 +1,10 @@
+{
+  "name": "Factory Material Stock & Issue Management",
+  "short_name": "Factory Stock",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#9c7a3c",
+  "prefer_related_applications": false
+}
