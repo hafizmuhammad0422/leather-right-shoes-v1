@@ -3534,7 +3534,7 @@ function openWorkerModal(id){
       <button class="btn ghost" id="wCancel">Cancel</button>
     </div>
   `);
-  const applyWorkerCrop=async cropped=>{if(!cropped)return;try{const compressed=await compressImageDataUrl(cropped,800,.78);const uploadedUrl=await uploadImageDataUrlToR2(compressed);pendingPhoto=uploadedUrl;const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
+  const applyWorkerCrop=async cropped=>{if(!cropped)return;try{pendingPhoto=await compressImageDataUrl(cropped,700,.78);const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview zoomable" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
   const cropWorkerPhoto=()=>{if(pendingPhoto)openImageCropper(pendingPhoto,applyWorkerCrop);else{const file=document.getElementById('wPhoto').files?.[0];if(file)openImageCropper(file,applyWorkerCrop);else toast('پہلے Worker کی تصویر منتخب کریں');}};
   // Worker-name autocomplete: search the existing Workers data directly.
   // This is only a suggestion UI; it does not create a second worker list or database.
@@ -3566,7 +3566,8 @@ function openWorkerModal(id){
   document.getElementById('wCropPhoto').onclick=cropWorkerPhoto;
   document.getElementById('wCancel').onclick=closeModal;
   document.getElementById('wPhotoPreviewWrap').addEventListener('click', ()=>{ if(pendingPhoto) openImageLightbox(pendingPhoto); });
-  document.getElementById('wSave').onclick=()=>{
+  document.getElementById('wSave').onclick=async()=>{
+    const saveBtn=document.getElementById('wSave');
     const nameEl=document.getElementById('wName');
     if(!nameEl){
       toast('Worker Name field is required. Please enable Worker Name in Manage Columns.');
@@ -3582,9 +3583,18 @@ function openWorkerModal(id){
     if(!name){ toast('Please enter a name'); return; }
     const customFields = {};
     document.querySelectorAll('.wCustomField').forEach(inp=>{ customFields[inp.dataset.colid] = inp.value.trim(); });
+    const beforeWorkerSave=captureCloudState();
+    if(saveBtn) saveBtn.disabled=true;
     if(w){ w.name=name; w.category=category; w.phone=phone; w.whatsapp=whatsapp; w.photo=pendingPhoto; w.customFields=customFields; }
     else { workers.push({id:uid(), name, category, phone, whatsapp, photo:pendingPhoto, customFields}); }
-    persistAll(); audit(w?'Worker Updated':'Worker Created',name); closeModal(); render(); toast('Saved successfully');
+    const workerSaved=await saveCriticalCloudState();
+    if(!workerSaved){
+      applyCloudState(beforeWorkerSave);
+      if(saveBtn) saveBtn.disabled=false;
+      toast('Worker could not be saved. Please try again.');
+      return;
+    }
+    audit(w?'Worker Updated':'Worker Created',name); closeModal(); render(); toast('Saved successfully');
   };
 }
 
