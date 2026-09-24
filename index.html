@@ -856,6 +856,7 @@ const NAV_KEYS = [
   ['dashboard','📊','Dashboard'],
   ['materials','📦','Materials / Stock'],
   ['workers','👷','Workers'],
+  ['batamMansProduction','✅','Batam Mans Production'],
   ['issue','📤','Material Distribution'],
   ['articles','👞','Shoe Articles'],
   ['bills','🧾','Sales Bills'],
@@ -904,6 +905,9 @@ function applyCloudState(state){
     const localUpperMaterials = settings && Array.isArray(settings.upperMaterials) ? settings.upperMaterials : null;
     const localUpperDistributions = settings && Array.isArray(settings.upperDistributions) ? settings.upperDistributions : null;
     const localNextUpperVoucherNo = settings && settings.nextUpperVoucherNo ? settings.nextUpperVoucherNo : null;
+    const localBatamMansProduction = settings && Array.isArray(settings.batamMansProduction) ? settings.batamMansProduction : null;
+    const localBatamMansVerificationSlips = settings && Array.isArray(settings.batamMansVerificationSlips) ? settings.batamMansVerificationSlips : null;
+    const localNextBatamMansSlipNo = settings && settings.nextBatamMansSlipNo ? settings.nextBatamMansSlipNo : null;
     settings = state.settings;
     // Preserve locally stored supplier data when an older cloud state predates either supplier module.
     if(!Object.prototype.hasOwnProperty.call(state.settings,'shoeBoxSuppliers') && localShoeBoxSuppliers){ settings.shoeBoxSuppliers = localShoeBoxSuppliers; }
@@ -913,6 +917,9 @@ function applyCloudState(state){
     if(!Object.prototype.hasOwnProperty.call(state.settings,'upperMaterials') && localUpperMaterials){ settings.upperMaterials = localUpperMaterials; }
     if(!Object.prototype.hasOwnProperty.call(state.settings,'upperDistributions') && localUpperDistributions){ settings.upperDistributions = localUpperDistributions; }
     if(!Object.prototype.hasOwnProperty.call(state.settings,'nextUpperVoucherNo') && localNextUpperVoucherNo){ settings.nextUpperVoucherNo = localNextUpperVoucherNo; }
+    if(!Object.prototype.hasOwnProperty.call(state.settings,'batamMansProduction') && localBatamMansProduction){ settings.batamMansProduction = localBatamMansProduction; }
+    if(!Object.prototype.hasOwnProperty.call(state.settings,'batamMansVerificationSlips') && localBatamMansVerificationSlips){ settings.batamMansVerificationSlips = localBatamMansVerificationSlips; }
+    if(!Object.prototype.hasOwnProperty.call(state.settings,'nextBatamMansSlipNo') && localNextBatamMansSlipNo){ settings.nextBatamMansSlipNo = localNextBatamMansSlipNo; }
   }
   if(Array.isArray(state.materials)) materials = state.materials;
   if(Array.isArray(state.workers)) workers = state.workers;
@@ -2059,7 +2066,12 @@ function render(){
   applyWallpaper();
   renderNav();
   const main = document.getElementById('mainArea');
-  if(currentPage==='dashboard') main.innerHTML = pageDashboard();
+  if(currentPage==='batamMansProduction') main.innerHTML = pageBatamMansProduction();
+  else if(currentPage==='batamMansSlips') main.innerHTML = pageBatamMansSlips();
+  else if(currentPage==='batamMansVerification') main.innerHTML = pageBatamMansVerification();
+  else if(currentPage==='batamMansHistory') main.innerHTML = pageBatamMansHistory();
+  else if(currentPage==='batamMansReports') main.innerHTML = pageBatamMansReports();
+  else if(currentPage==='dashboard') main.innerHTML = pageDashboard();
   else if(currentPage==='materials') main.innerHTML = pageMaterials();
   else if(currentPage==='workers') main.innerHTML = pageWorkers();
   else if(currentPage==='workerHistory') main.innerHTML = pageWorkerHistory(selectedWorkerId);
@@ -3054,6 +3066,7 @@ function pageDistributeUpper(){
       <button type="button" class="btn brass" id="btnAddUpperMaterial" style="min-height:48px;">+ Add Upper Material</button>
       <button type="button" class="btn ghost" id="btnUpperMaterialList" style="min-height:48px;">📦 Upper Materials</button>
     </div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;">
     <div class="card"><h3 style="margin-top:0;">Upper Distribution</h3>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">1 Atom = 12 pairs.</div>
       <label>Select Worker</label>
@@ -3061,6 +3074,18 @@ function pageDistributeUpper(){
         ${upperWorkers.length?upperWorkers.map(w=>{const todayKey=new Date().toISOString().slice(0,10),completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id)&&String(d.date||'').slice(0,10)===todayKey);return `<button type="button" class="pick-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="width:86px;height:86px;margin:auto;font-size:24px;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div style="position:absolute;top:4px;right:4px;background:#1f9d55;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:800;line-height:1.2;">✓ Completed</div>`:''}<div style="font-size:12px;font-weight:700;margin-top:6px;line-height:1.2;">${esc(w.name||'')}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
       <div id="upperWorkerInfo" style="font-size:12px;color:var(--muted);margin-top:10px;">${selectedWorker?`Selected Worker: <strong>${esc(selectedWorker.name||'')}</strong><br>Worker Type: <strong>${esc(selectedWorker.category||'')}</strong>`:''}</div>
+    </div>
+    <div class="card" style="cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;" onclick="goto('batamMansProduction')">
+      <div>
+        <h3 style="margin-top:0;">Batam Mans Production</h3>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Reported Production → Physical Verification → Verified Production</div>
+        <div style="padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.45);">
+          <div style="font-weight:900;margin-bottom:5px;">Production & Verification</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.6;">Enter reported pairs, print a verification slip, then confirm only the physically verified quantity.</div>
+        </div>
+      </div>
+      <button type="button" class="btn brass" style="width:100%;margin-top:14px;" onclick="event.stopPropagation();goto('batamMansProduction')">Open Batam Mans Production</button>
+    </div>
     </div>
     <div style="margin-bottom:8px;"><input type="text" id="upperWorkerSearch" placeholder="Search Worker" autocomplete="off" style="width:100%;max-width:320px;"></div>
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><h3 style="margin:0;">Upper Distribution Details</h3><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost small" id="btnAddUpperArticleRow" ${articles.length?'':'disabled'}>+ Add Article</button><button type="button" class="btn ghost small" id="btnAddUpperMaterialRow" ${materials.length?'':'disabled'}>+ Add Material</button></div></div>
@@ -7885,6 +7910,133 @@ async function saveUpperPending(){
   if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
   const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
+
+/* ============ BATAM MANS PRODUCTION & VERIFICATION (ISOLATED MODULE) ============ */
+function normalizeBatamMansState(){
+  settings.batamMansProduction=Array.isArray(settings.batamMansProduction)?settings.batamMansProduction:[];
+  settings.batamMansVerificationSlips=Array.isArray(settings.batamMansVerificationSlips)?settings.batamMansVerificationSlips:[];
+  settings.nextBatamMansSlipNo=Math.max(1,Number(settings.nextBatamMansSlipNo)||1);
+}
+function batamMansEntries(){normalizeBatamMansState();return settings.batamMansProduction;}
+function batamMansSlips(){normalizeBatamMansState();return settings.batamMansVerificationSlips;}
+function batamMansWorkerOptions(){
+  return workers.filter(w=>!w.archived).map(w=>`<option value="${esc(w.id)}">${esc(w.name)}${w.category?` — ${esc(w.category)}`:''}</option>`).join('');
+}
+function batamMansArticleOptions(){
+  return (articles||[]).filter(a=>!a.archived).map(a=>`<option value="${esc(a.id)}">${esc(a.articleNo||a.name||a.id)}</option>`).join('');
+}
+function batamMansWorkerName(id){return workers.find(w=>String(w.id)===String(id))?.name||'Worker';}
+function batamMansArticleName(id){const a=(articles||[]).find(x=>String(x.id)===String(id));return a?.articleNo||a?.name||String(id||'Article');}
+function batamMansDateKey(v){const d=new Date(v);return Number.isFinite(d.getTime())?d.toISOString().slice(0,10):String(v||'').slice(0,10);}
+function batamMansStatus(entry){
+  if(entry.verifiedQty===null||entry.verifiedQty===undefined||entry.verifiedQty==='')return 'Pending Verification';
+  return Number(entry.verifiedQty)===Number(entry.reportedQty)?'Verified':'Short / Not Fully Verified';
+}
+function batamMansBadge(status){
+  const bg=status==='Verified'?'#dcfce7':status==='Pending Verification'?'#ffedd5':'#fee2e2';
+  const fg=status==='Verified'?'#166534':status==='Pending Verification'?'#9a3412':'#991b1b';
+  return `<span style="display:inline-block;padding:4px 8px;border-radius:999px;background:${bg};color:${fg};font-size:11px;font-weight:900;">${esc(status==='Pending Verification'?'Pending':status)}</span>`;
+}
+function batamMansUniqueSlipNo(){
+  normalizeBatamMansState();const used=new Set(batamMansSlips().map(s=>String(s.slipNo||'')));let n=settings.nextBatamMansSlipNo;
+  while(used.has(`BMV-${String(n).padStart(6,'0')}`))n++;
+  settings.nextBatamMansSlipNo=n+1;return `BMV-${String(n).padStart(6,'0')}`;
+}
+function batamMansSelectedDate(){return window.__batamMansDate||new Date().toISOString().slice(0,10);}
+function batamMansSetDate(v){window.__batamMansDate=v||new Date().toISOString().slice(0,10);render();}
+function batamMansSummary(date){
+  const rows=batamMansEntries().filter(e=>batamMansDateKey(e.date)===date);
+  const workersCount=new Set(rows.map(e=>String(e.workerId))).size;
+  return {rows,workersCount,verified:rows.filter(e=>batamMansStatus(e)==='Verified').length,pending:rows.filter(e=>batamMansStatus(e)==='Pending Verification').length,short:rows.filter(e=>batamMansStatus(e)==='Short / Not Fully Verified').length,reported:rows.reduce((s,e)=>s+(Number(e.reportedQty)||0),0),verifiedQty:rows.reduce((s,e)=>s+(Number(e.verifiedQty)||0),0)};
+}
+function batamMansSummaryCards(date){
+  const s=batamMansSummary(date);
+  const card=(label,val)=>`<div class="card" style="padding:12px;min-width:130px;flex:1;"><div class="label">${esc(label)}</div><div style="font-size:22px;font-weight:900;">${val}</div></div>`;
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">${card('Total Batam Mans',s.workersCount)}${card('Verified',s.verified)}${card('Pending Verification',s.pending)}${card('Short / Not Fully Verified',s.short)}${card("Today's Reported Production",s.reported+' Pairs')}${card("Today's Verified Production",s.verifiedQty+' Pairs')}</div>`;
+}
+function pageBatamMansProduction(){
+  normalizeBatamMansState();const date=batamMansSelectedDate(),s=batamMansSummary(date);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><div><h2 class="page-title" style="margin-bottom:3px;">Batam Mans Production & Verification</h2><div style="font-size:12px;color:var(--muted);">Reported production remains pending until physical verification.</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn brass" onclick="goto('batamMansProduction')">Enter Production</button><button class="btn ghost" onclick="goto('batamMansSlips')">Verification Slips</button><button class="btn ghost" onclick="goto('batamMansVerification')">Verification</button><button class="btn ghost" onclick="goto('batamMansHistory')">Production History</button><button class="btn ghost" onclick="goto('batamMansReports')">Reports</button></div></div>
+  <div class="card" style="margin-bottom:12px;"><label>Selected Date</label><input type="date" value="${esc(date)}" onchange="batamMansSetDate(this.value)"></div>
+  ${batamMansSummaryCards(date)}
+  <div style="display:grid;grid-template-columns:minmax(310px,.85fr) minmax(520px,1.5fr);gap:12px;align-items:start;">
+   <div class="card"><h3 style="margin-top:0;">Enter Batam Mans Production</h3><label>Date</label><input id="bmDate" type="date" value="${esc(date)}"><label>Batam Man / Worker</label><select id="bmWorker"><option value="">Select Worker</option>${batamMansWorkerOptions()}</select><label>Article</label><select id="bmArticle"><option value="">Select Article</option>${batamMansArticleOptions()}</select><label>Reported Quantity (Pairs)</label><input id="bmReported" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="bmNotes" rows="2"></textarea><button class="btn brass" id="bmAdd" style="width:100%;margin-top:10px;">Add to List</button></div>
+   <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;">Today's Reported List</h3><button class="btn brass" id="bmPrintSlip">Print Verification Slip</button></div>
+   <div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>#</th><th>Worker</th><th>Article</th><th>Reported Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>${s.rows.length?s.rows.map((e,i)=>`<tr><td>${i+1}</td><td>${esc(batamMansWorkerName(e.workerId))}</td><td>${esc(batamMansArticleName(e.articleId))}</td><td>${e.reportedQty}</td><td>${batamMansBadge(batamMansStatus(e))}</td><td>${batamMansStatus(e)==='Pending Verification'?`<button class="btn blue small" onclick="editBatamMansEntry('${e.id}')">Edit</button> <button class="btn red small" onclick="deleteBatamMansEntry('${e.id}')">Delete</button>`:`<button class="btn ghost small" onclick="viewBatamMansEntry('${e.id}')">View</button>`}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">No reported production for this date.</td></tr>'}</tbody></table></div></div>
+  </div>`;
+}
+async function saveBatamMansEntry(){
+  const date=document.getElementById('bmDate')?.value,workerId=document.getElementById('bmWorker')?.value,articleId=document.getElementById('bmArticle')?.value,reportedQty=Number(document.getElementById('bmReported')?.value),notes=document.getElementById('bmNotes')?.value.trim()||'';
+  if(!date||!workerId||!articleId||!Number.isInteger(reportedQty)||reportedQty<=0){toast('Select Date, Worker, Article and enter positive whole Pairs.');return;}
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
+  batamMansEntries().push({id:uid(),date,workerId,articleId,reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
+  audit('Batam Mans Production Reported',`${batamMansWorkerName(workerId)} — ${batamMansArticleName(articleId)} — ${reportedQty} Pairs`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
+  window.__batamMansDate=date;render();toast('Reported production saved as Pending Verification');
+}
+async function editBatamMansEntry(id){
+  const e=batamMansEntries().find(x=>String(x.id)===String(id));if(!e||batamMansStatus(e)!=='Pending Verification')return;
+  const raw=prompt(`Reported Quantity for ${batamMansWorkerName(e.workerId)} / ${batamMansArticleName(e.articleId)}`,e.reportedQty);if(raw===null)return;const q=Number(raw);
+  if(!Number.isInteger(q)||q<=0){toast('Enter positive whole Pairs only');return;}if(!confirm(`Change Reported Quantity ${e.reportedQty} → ${q} Pairs?`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),old=e.reportedQty;e.reportedQty=q;e.editedAt=new Date().toISOString();audit('Batam Mans Reported Entry Edited',`${old} → ${q} Pairs`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Edit was not saved. Original entry restored.');return;}render();
+}
+async function deleteBatamMansEntry(id){
+  const e=batamMansEntries().find(x=>String(x.id)===String(id));if(!e||batamMansStatus(e)!=='Pending Verification')return;
+  if(!confirm(`Delete Pending entry?\n${batamMansWorkerName(e.workerId)} — ${batamMansArticleName(e.articleId)} — ${e.reportedQty} Pairs`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.batamMansProduction=batamMansEntries().filter(x=>String(x.id)!==String(id));audit('Batam Mans Reported Entry Deleted',`${batamMansWorkerName(e.workerId)} — ${e.reportedQty} Pairs`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Delete was not saved. Entry restored.');return;}render();
+}
+function batamMansSlipHtml(slip){
+  const rows=slip.entryIds.map(id=>batamMansEntries().find(e=>String(e.id)===String(id))).filter(Boolean);
+  return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div style="text-align:center;">${settings.logo?`<img src="${esc(settings.logo)}" style="max-width:54px;max-height:54px;">`:''}<h3 style="margin:3px 0;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3><div style="font-weight:900;">BATAM MANS PRODUCTION VERIFICATION SLIP</div><div class="sub">${esc(slip.slipNo)} | ${esc(slip.date)}</div></div><hr><table style="width:100%;font-size:9px;border-collapse:collapse;"><thead><tr><th>No.</th><th>Worker</th><th>Article</th><th>Reported</th><th>Verify Qty</th><th>✓/✕</th></tr></thead><tbody>${rows.map((e,i)=>`<tr><td>${i+1}</td><td>${esc(batamMansWorkerName(e.workerId))}</td><td>${esc(batamMansArticleName(e.articleId))}</td><td>${e.reportedQty}</td><td>______</td><td>___</td></tr>`).join('')}</tbody></table><hr><div style="font-size:10px;line-height:1.9;">Verified By: ____________________<br>Signature: ______________________<br>Verification Time: ______________</div></div>`;
+}
+async function createBatamMansSlip(){
+  const date=batamMansSelectedDate(),pending=batamMansEntries().filter(e=>batamMansDateKey(e.date)===date&&batamMansStatus(e)==='Pending Verification');
+  if(!pending.length){toast('No Pending Verification entries for selected date.');return;}
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),slipNo=batamMansUniqueSlipNo(),id=uid(),now=new Date().toISOString();
+  const slip={id,slipNo,date,entryIds:pending.map(e=>e.id),createdAt:now,createdBy:'Admin'};batamMansSlips().push(slip);pending.forEach(e=>e.slipId=id);audit('Batam Mans Verification Slip Created',`${slipNo} — ${pending.length} entries`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Slip was not saved.');return;}
+  modal(`${batamMansSlipHtml(slip)}<div class="modal-actions"><button class="btn brass" id="bmDoPrint">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('bmDoPrint').onclick=()=>printHtml(batamMansSlipHtml(slip));
+}
+function pageBatamMansSlips(){
+  const rows=batamMansSlips().slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  return `<h2 class="page-title">Batam Mans Verification Slips</h2><div class="card"><table><thead><tr><th>Slip No.</th><th>Date</th><th>Entries</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(s=>`<tr><td><strong>${esc(s.slipNo)}</strong></td><td>${esc(s.date)}</td><td>${s.entryIds.length}</td><td><button class="btn blue small" onclick="openBatamMansSlip('${s.id}')">Open</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty">No verification slips.</td></tr>'}</tbody></table></div>`;
+}
+function openBatamMansSlip(id){
+  const s=batamMansSlips().find(x=>String(x.id)===String(id));if(!s)return;modal(`${batamMansSlipHtml(s)}<div class="modal-actions"><button class="btn brass" onclick="printHtml(batamMansSlipHtml(batamMansSlips().find(x=>String(x.id)==='${id}')))">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+function pageBatamMansVerification(){
+  const pending=batamMansEntries().filter(e=>batamMansStatus(e)==='Pending Verification').sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return `<h2 class="page-title">Batam Mans Physical Verification</h2><div class="card"><div style="overflow:auto;"><table><thead><tr><th>Date</th><th>Worker</th><th>Article</th><th>Reported</th><th>Verified Qty</th><th>Notes</th><th>Action</th></tr></thead><tbody>${pending.length?pending.map(e=>`<tr><td>${esc(batamMansDateKey(e.date))}</td><td>${esc(batamMansWorkerName(e.workerId))}</td><td>${esc(batamMansArticleName(e.articleId))}</td><td>${e.reportedQty}</td><td><input type="number" min="0" step="1" id="bmvq-${e.id}" style="width:90px;"></td><td><input id="bmvn-${e.id}" placeholder="Verification notes"></td><td><button class="btn brass small" onclick="verifyBatamMansEntry('${e.id}')">Verify</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No Pending Verification entries.</td></tr>'}</tbody></table></div></div>`;
+}
+async function verifyBatamMansEntry(id){
+  const e=batamMansEntries().find(x=>String(x.id)===String(id));if(!e||batamMansStatus(e)!=='Pending Verification')return;
+  const q=Number(document.getElementById(`bmvq-${id}`)?.value),notes=document.getElementById(`bmvn-${id}`)?.value.trim()||'';
+  if(!Number.isInteger(q)||q<0){toast('Enter verified whole Pairs (0 or more).');return;}
+  const diff=q-Number(e.reportedQty);const status=diff===0?'Verified':'Short / Not Fully Verified';
+  if(!confirm(`Reported: ${e.reportedQty}\nVerified: ${q}\nDifference: ${diff}\nStatus: ${status}\n\nConfirm physical verification?`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);e.verifiedQty=q;e.difference=diff;e.status=status;e.verificationNotes=notes;e.verificationAt=new Date().toISOString();e.verifiedBy='Admin';audit('Batam Mans Production Verified',`${batamMansWorkerName(e.workerId)} — Reported ${e.reportedQty}, Verified ${q}, Difference ${diff}`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Verification was not saved. Entry remains Pending.');return;}render();toast(status);
+}
+function batamMansFilteredRows(){
+  const q=String(window.__bmSearch||'').toLowerCase(),status=window.__bmStatus||'all',worker=window.__bmWorker||'',article=window.__bmArticle||'',date=window.__bmHistoryDate||'';
+  return batamMansEntries().filter(e=>(!date||batamMansDateKey(e.date)===date)&&(!worker||String(e.workerId)===worker)&&(!article||String(e.articleId)===article)&&(status==='all'||batamMansStatus(e)===status)&&(!q||batamMansWorkerName(e.workerId).toLowerCase().includes(q)||batamMansArticleName(e.articleId).toLowerCase().includes(q)));
+}
+function pageBatamMansHistory(){
+  const rows=batamMansFilteredRows(),reported=rows.reduce((s,e)=>s+(Number(e.reportedQty)||0),0),verified=rows.reduce((s,e)=>s+(Number(e.verifiedQty)||0),0),diff=rows.reduce((s,e)=>s+(Number(e.difference)||0),0),pending=rows.filter(e=>batamMansStatus(e)==='Pending Verification').length;
+  return `<h2 class="page-title">Batam Mans Production History</h2><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><div class="card"><b>Total Reported</b><div>${reported}</div></div><div class="card"><b>Total Verified</b><div>${verified}</div></div><div class="card"><b>Total Difference</b><div>${diff}</div></div><div class="card"><b>Pending Verification</b><div>${pending}</div></div></div><div class="card"><div style="display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:8px;"><input type="date" value="${esc(window.__bmHistoryDate||'')}" onchange="window.__bmHistoryDate=this.value;render()"><select onchange="window.__bmWorker=this.value;render()"><option value="">All Workers</option>${batamMansWorkerOptions()}</select><select onchange="window.__bmArticle=this.value;render()"><option value="">All Articles</option>${batamMansArticleOptions()}</select><select onchange="window.__bmStatus=this.value;render()"><option value="all">All Status</option><option>Verified</option><option>Pending Verification</option><option>Short / Not Fully Verified</option></select><input placeholder="Search Worker / Article" value="${esc(window.__bmSearch||'')}" oninput="window.__bmSearch=this.value;render()"></div><div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>Date</th><th>Worker</th><th>Article</th><th>Reported</th><th>Verified</th><th>Difference</th><th>Status</th><th>View</th></tr></thead><tbody>${rows.length?rows.map(e=>`<tr><td>${esc(batamMansDateKey(e.date))}</td><td>${esc(batamMansWorkerName(e.workerId))}</td><td>${esc(batamMansArticleName(e.articleId))}</td><td>${e.reportedQty}</td><td>${e.verifiedQty??'—'}</td><td>${e.difference??'—'}</td><td>${batamMansBadge(batamMansStatus(e))}</td><td><button class="btn ghost small" onclick="viewBatamMansEntry('${e.id}')">View</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No production history.</td></tr>'}</tbody></table></div></div>`;
+}
+function viewBatamMansEntry(id){
+  const e=batamMansEntries().find(x=>String(x.id)===String(id));if(!e)return;modal(`<h3>Batam Mans Production Detail</h3><div class="card"><div class="rline"><span>Date</span><b>${esc(batamMansDateKey(e.date))}</b></div><div class="rline"><span>Worker</span><b>${esc(batamMansWorkerName(e.workerId))}</b></div><div class="rline"><span>Article</span><b>${esc(batamMansArticleName(e.articleId))}</b></div><div class="rline"><span>Original Reported</span><b>${e.originalReportedQty}</b></div><div class="rline"><span>Reported</span><b>${e.reportedQty}</b></div><div class="rline"><span>Verified</span><b>${e.verifiedQty??'—'}</b></div><div class="rline"><span>Difference</span><b>${e.difference??'—'}</b></div><div class="rline"><span>Status</span>${batamMansBadge(batamMansStatus(e))}</div><div class="rline"><span>Created</span><b>${esc(e.createdAt||'')}</b></div><div class="rline"><span>Verified</span><b>${esc(e.verificationAt||'—')}</b></div></div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+function pageBatamMansReports(){
+  const verified=batamMansEntries().filter(e=>e.verifiedQty!==null&&e.verifiedQty!==undefined),map=new Map();
+  verified.forEach(e=>{const k=String(e.articleId);map.set(k,(map.get(k)||0)+(Number(e.verifiedQty)||0));});
+  const rows=Array.from(map.entries()).sort((a,b)=>batamMansArticleName(a[0]).localeCompare(batamMansArticleName(b[0])));
+  return `<h2 class="page-title">Batam Mans Reports</h2><div class="card"><h3 style="margin-top:0;">Article-wise Verified Production</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Only manually Verified Quantity is counted as final production.</div><table><thead><tr><th>Article</th><th>Verified Production</th></tr></thead><tbody>${rows.length?rows.map(([id,q])=>`<tr><td>${esc(batamMansArticleName(id))}</td><td><strong>${q} Pairs</strong></td></tr>`).join(''):'<tr><td colspan="2" class="empty">No verified production yet.</td></tr>'}</tbody></table></div>`;
+}
+
 /* ============ PAGE EVENT WIRING ============ */
 function attachPageHandlers(){
   document.getElementById('btnBackDashboard')?.addEventListener('click', ()=>goto('dashboard'));
@@ -8487,6 +8639,12 @@ initApp();
     });
   });
 })();
+
+document.addEventListener('click',e=>{
+  if(e.target?.id==='bmAdd') saveBatamMansEntry();
+  if(e.target?.id==='bmPrintSlip') createBatamMansSlip();
+});
+
 </script>
 
 </body></html>
