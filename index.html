@@ -1330,6 +1330,17 @@ body:has(#main .upper-compact-v15) .subpage-nav{display:none!important}
 /* Center Total BAQI heading for all three production worker selectors */
 .production-total-baqi-v18{text-align:center;font-size:11px;font-weight:800;white-space:nowrap}
 </style>
+<style id="upper-global-nav-hard-hide-v19">
+body.upper-mans-production-active #btnBackPageGlobal,
+body.upper-mans-production-active #btnBackDashboardGlobal,
+body.upper-mans-production-active .top-page-nav,
+body.upper-mans-production-active .page-nav-row,
+body.upper-mans-production-active .back-row,
+body.upper-mans-production-active .page-actions:has(#btnBackPage),
+body.upper-mans-production-active .page-actions:has(#btnBackDashboard),
+body.upper-mans-production-active #main > .row:first-child:has(#btnBackPage),
+body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard){display:none!important}
+</style>
 </head>
 <body>
 <div id="app">
@@ -2696,6 +2707,8 @@ function render(){
   }
   attachPageHandlers();
   wireDashboardSearch();
+
+  document.body.classList.toggle('upper-mans-production-active', currentPage==='distributeUpper');
 }
 
 function openWorkerHistory(workerId){
@@ -3629,7 +3642,14 @@ function pageDistributeUpper(){
   const articles=settings.upperArticles||[],materials=settings.upperMaterials||[];
   const selectedWorker=upperWorkers.find(w=>String(w.id)===String(upperSelWorker))||null;
   if(!selectedWorker) upperSelWorker=null;
-  const todayKey=new Date().toISOString().slice(0,10);
+  const upperNow=new Date(), todayKey=upperNow.toISOString().slice(0,10);
+  const upperIsFriday=upperNow.getDay()===5;
+  const upperWeekStart=new Date(upperNow);
+  const upperDay=upperNow.getDay();
+  const upperDaysSinceSaturday=(upperDay+1)%7;
+  upperWeekStart.setHours(0,0,0,0);
+  upperWeekStart.setDate(upperWeekStart.getDate()-upperDaysSinceSaturday);
+  const upperWeekStartKey=upperWeekStart.toISOString().slice(0,10);
   const allUpperRecords=(settings.upperDistributions||[]);
   let totalArticle=0,totalMaterial=0;
   allUpperRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)totalArticle+=q;if(l.materialId||l.materialName)totalMaterial+=q;}));
@@ -3652,7 +3672,7 @@ function pageDistributeUpper(){
     <div class="card bm-worker-card">
       <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
       <div class="bm-worker-grid" id="upperWorkerCards">
-        ${upperWorkers.length?upperWorkers.map(w=>{const completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id)&&String(d.date||d.createdAt||'').slice(0,10)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
+        ${upperWorkers.length?upperWorkers.map(w=>{const completed=!upperIsFriday&&(settings.upperDistributions||[]).some(d=>{const dk=String(d.date||d.createdAt||'').slice(0,10);return String(d.workerId)===String(w.id)&&dk>=upperWeekStartKey&&dk<=todayKey;});return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
       ${selectedWorker?`<div class="bm-selected-line">Selected: <strong>${esc(selectedWorker.name||'')}</strong></div>`:''}
     </div>
