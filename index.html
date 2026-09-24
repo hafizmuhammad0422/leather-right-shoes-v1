@@ -1262,6 +1262,9 @@
 @media(max-width:1100px){.bm-main-compact-row{grid-template-columns:repeat(8,minmax(86px,1fr))!important}.bm-top-stat strong{font-size:12px!important}}
 @media(max-width:899px){.bm-main-compact-row{display:flex!important;flex-wrap:nowrap!important}.bm-main-compact-row>*{flex:0 0 105px!important}.bm-account-page-grid{grid-template-columns:1fr 1fr}}
 </style>
+<style id="worker-card-baqi-v12">
+.bm-worker-baqi,.fm-worker-baqi{font-size:8.5px!important;font-weight:800!important;line-height:1.05!important;margin-top:2px!important;white-space:nowrap;color:var(--brass-dark)}
+</style>
 </head>
 <body>
 <div id="app">
@@ -1336,6 +1339,7 @@ const NAV_KEYS = [
   ['materials','📦','Materials / Stock'],
   ['workers','👷','Workers'],
   ['batamMansProduction','✅','Batam Mans Production'],
+  ['finishedMansProduction','✨','Finished Man Production'],
   ['issue','📤','Material Distribution'],
   ['articles','👞','Shoe Articles'],
   ['bills','🧾','Sales Bills'],
@@ -2557,6 +2561,17 @@ function render(){
   else if(currentPage==='batamMansVerification') main.innerHTML = pageBatamMansVerification();
   else if(currentPage==='batamMansHistory') main.innerHTML = pageBatamMansHistory();
   else if(currentPage==='batamMansReports') main.innerHTML = pageBatamMansReports();
+  else if(currentPage==='finishedMansProduction') main.innerHTML = pageFinishedMansProduction();
+  else if(currentPage==='finishedMansProductionArticles') main.innerHTML = pageFinishedMansProductionArticles();
+  else if(currentPage==='finishedMansProductionMaterials') main.innerHTML = pageFinishedMansProductionMaterials();
+  else if(currentPage==='finishedMansMaterialAccounts') main.innerHTML = pageFinishedMansMaterialAccounts();
+  else if(currentPage==='finishedMansProductionList') main.innerHTML = pageFinishedMansProductionList();
+  else if(currentPage==='finishedMansPending') main.innerHTML = pageFinishedMansPending();
+  else if(currentPage==='finishedMansDistributeMaterial') main.innerHTML = pageFinishedMansDistributeMaterial();
+  else if(currentPage==='finishedMansSlips') main.innerHTML = pageFinishedMansSlips();
+  else if(currentPage==='finishedMansVerification') main.innerHTML = pageFinishedMansVerification();
+  else if(currentPage==='finishedMansHistory') main.innerHTML = pageFinishedMansHistory();
+  else if(currentPage==='finishedMansReports') main.innerHTML = pageFinishedMansReports();
   else if(currentPage==='dashboard') main.innerHTML = pageDashboard();
   else if(currentPage==='materials') main.innerHTML = pageMaterials();
   else if(currentPage==='workers') main.innerHTML = pageWorkers();
@@ -2593,7 +2608,7 @@ function render(){
   else if(currentPage==='shoeSoleReceive1') main.innerHTML = pageShoeSoleReceiveDetail(0);
   else if(currentPage==='shoeSoleReceive2') main.innerHTML = pageShoeSoleReceiveDetail(1);
   if(currentPage!=='dashboard'){
-    if(['batamMansProduction','batamMansProductionArticles','batamMansProductionMaterials','batamMansProductionList','batamMansPending','batamMansDistributeMaterial'].includes(currentPage)){
+    if(['batamMansProduction','batamMansProductionArticles','batamMansProductionMaterials','batamMansProductionList','batamMansPending','batamMansDistributeMaterial','finishedMansProduction','finishedMansProductionArticles','finishedMansProductionMaterials','finishedMansProductionList','finishedMansPending','finishedMansDistributeMaterial','finishedMansMaterialAccounts'].includes(currentPage)){
       // Batam workflow pages own their single Back/navigation control.
     } else if(currentPage==='workerSummaryDetail'){
       // The detail page renders its own Back to Workers button.
@@ -8906,7 +8921,7 @@ function pageBatamMansMaterialAccounts(){
 
  <div class="card bm-material-worker-card">
    <div class="bm-worker-heading"><h3>Select Batam Man</h3><span>Total Batam Mans: <strong>${ws.length}</strong></span></div>
-   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(batamMaterialSelectedWorker)===String(w.id)?'selected':''}" data-bm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-bm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div></button>`).join(''):'<div class="empty">No active Batam Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(batamMaterialSelectedWorker)===String(w.id)?'selected':''}" data-bm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-bm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Batam Man worker found.</div>'}</div>
  </div>
 
  <div class="card bm-material-entry-card">
@@ -9053,7 +9068,7 @@ function pageBatamMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading"><h3>Select Batam Man</h3><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map(w=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map(w=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
@@ -9146,6 +9161,744 @@ function pageBatamMansReports(){
   return `<h2 class="page-title">Batam Mans Reports</h2><div class="card"><h3 style="margin-top:0;">Article-wise Verified Production</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Only manually Verified Quantity is counted as final production.</div><table><thead><tr><th>Article</th><th>Verified Production</th></tr></thead><tbody>${rows.length?rows.map(([id,q])=>`<tr><td>${esc(batamMansArticleName(id))}</td><td><strong>${q} Pairs</strong></td></tr>`).join(''):'<tr><td colspan="2" class="empty">No verified production yet.</td></tr>'}</tbody></table></div>`;
 }
 
+/* ============ FINISHED MAN PRODUCTION — DUPLICATE OF BATAM MODULE ============ */
+function normalizeFinishedMansState(){
+  settings.finishedMansProduction=Array.isArray(settings.finishedMansProduction)?settings.finishedMansProduction:[];
+  settings.finishedMansVerificationSlips=Array.isArray(settings.finishedMansVerificationSlips)?settings.finishedMansVerificationSlips:[];
+  settings.finishedMansProductionArticles=Array.isArray(settings.finishedMansProductionArticles)?settings.finishedMansProductionArticles:[];
+  settings.finishedMansProductionMaterials=Array.isArray(settings.finishedMansProductionMaterials)?settings.finishedMansProductionMaterials:[];
+  settings.finishedMansProductionVouchers=Array.isArray(settings.finishedMansProductionVouchers)?settings.finishedMansProductionVouchers:[];
+  settings.finishedMansMaterialDistributions=Array.isArray(settings.finishedMansMaterialDistributions)?settings.finishedMansMaterialDistributions:[];
+  settings.finishedMansExpenses=Array.isArray(settings.finishedMansExpenses)?settings.finishedMansExpenses:[];
+  settings.finishedMansPendingRecords=Array.isArray(settings.finishedMansPendingRecords)?settings.finishedMansPendingRecords:[];
+  settings.finishedMansVoucherPrint=settings.finishedMansVoucherPrint&&typeof settings.finishedMansVoucherPrint==='object'?settings.finishedMansVoucherPrint:{};
+  settings.nextFinishedMansVoucherNo=Math.max(1,Number(settings.nextFinishedMansVoucherNo)||1);
+  settings.nextFinishedMansSlipNo=Math.max(1,Number(settings.nextFinishedMansSlipNo)||1);
+}
+function finishedMansEntries(){normalizeFinishedMansState();return settings.finishedMansProduction;}
+function finishedMansSlips(){normalizeFinishedMansState();return settings.finishedMansVerificationSlips;}
+function finishedMansWorkerOptions(){
+  return workers.filter(w=>!w.archived).map(w=>`<option value="${esc(w.id)}">${esc(w.name)}${w.category?` — ${esc(w.category)}`:''}</option>`).join('');
+}
+function finishedMansArticleOptions(){
+  return (articles||[]).filter(a=>!a.archived).map(a=>`<option value="${esc(a.id)}">${esc(a.articleNo||a.name||a.id)}</option>`).join('');
+}
+function finishedMansWorkerName(id){return workers.find(w=>String(w.id)===String(id))?.name||'Worker';}
+function finishedMansArticleName(id){const a=(settings.finishedMansProductionArticles||[]).find(x=>String(x.id)===String(id))||(articles||[]).find(x=>String(x.id)===String(id));return a?.articleNo||a?.name||String(id||'Article');}
+function finishedMansDateKey(v){const d=new Date(v);return Number.isFinite(d.getTime())?d.toISOString().slice(0,10):String(v||'').slice(0,10);}
+function finishedMansStatus(entry){
+  if(entry.verifiedQty===null||entry.verifiedQty===undefined||entry.verifiedQty==='')return 'Pending Verification';
+  return Number(entry.verifiedQty)===Number(entry.reportedQty)?'Verified':'Short / Not Fully Verified';
+}
+function finishedMansBadge(status){
+  const bg=status==='Verified'?'#dcfce7':status==='Pending Verification'?'#ffedd5':'#fee2e2';
+  const fg=status==='Verified'?'#166534':status==='Pending Verification'?'#9a3412':'#991b1b';
+  return `<span style="display:inline-block;padding:4px 8px;border-radius:999px;background:${bg};color:${fg};font-size:11px;font-weight:900;">${esc(status==='Pending Verification'?'Pending':status)}</span>`;
+}
+function finishedMansUniqueSlipNo(){
+  normalizeFinishedMansState();const used=new Set(finishedMansSlips().map(s=>String(s.slipNo||'')));let n=settings.nextFinishedMansSlipNo;
+  while(used.has(`BMV-${String(n).padStart(6,'0')}`))n++;
+  settings.nextFinishedMansSlipNo=n+1;return `BMV-${String(n).padStart(6,'0')}`;
+}
+function finishedMansSelectedDate(){return window.__finishedMansDate||new Date().toISOString().slice(0,10);}
+function finishedMansSetDate(v){window.__finishedMansDate=v||new Date().toISOString().slice(0,10);render();}
+function finishedMansSummary(date){
+  const rows=finishedMansEntries().filter(e=>finishedMansDateKey(e.date)===date);
+  const workersCount=new Set(rows.map(e=>String(e.workerId))).size;
+  return {rows,workersCount,verified:rows.filter(e=>finishedMansStatus(e)==='Verified').length,pending:rows.filter(e=>finishedMansStatus(e)==='Pending Verification').length,short:rows.filter(e=>finishedMansStatus(e)==='Short / Not Fully Verified').length,reported:rows.reduce((s,e)=>s+(Number(e.reportedQty)||0),0),verifiedQty:rows.reduce((s,e)=>s+(Number(e.verifiedQty)||0),0)};
+}
+function finishedMansSummaryCards(date){
+  const s=finishedMansSummary(date);
+  const card=(label,val)=>`<div class="card" style="padding:12px;min-width:130px;flex:1;"><div class="label">${esc(label)}</div><div style="font-size:22px;font-weight:900;">${val}</div></div>`;
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">${card('Total Finished Mans',s.workersCount)}${card('Verified',s.verified)}${card('Pending Verification',s.pending)}${card('Short / Not Fully Verified',s.short)}${card("Today's Reported Production",s.reported+' Pairs')}${card("Today's Verified Production",s.verifiedQty+' Pairs')}</div>`;
+}
+
+let finishedMansSelectedWorker=null;
+function finishedMansProductionWorkers(){
+  return (workers||[]).filter(w=>{
+    if(w.archived)return false;
+    const hay=[w.category,...(Array.isArray(w.tags)?w.tags:[])].filter(Boolean).join(' ').toUpperCase();
+    return hay.includes('FINISHED MAN')||hay.includes('FINISH MAN')||hay.includes('FINISHING');
+  });
+}
+function getFinishedMansProductionArticle(id){normalizeFinishedMansState();return settings.finishedMansProductionArticles.find(x=>String(x.id)===String(id));}
+function getFinishedMansProductionMaterial(id){normalizeFinishedMansState();return settings.finishedMansProductionMaterials.find(x=>String(x.id)===String(id));}
+function openFinishedMansProductionArticleModal(id){
+  normalizeFinishedMansState();const existing=getFinishedMansProductionArticle(id),pending={photo:existing?.photo||''};
+  modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} Production Article</h3><label>Article Photo</label><input type="file" id="fmpaPhoto" accept="image/*"><div id="fmpaPreview" style="margin-top:8px;max-width:180px;">${pending.photo?`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div><label>Article Name</label><input id="fmpaName" value="${esc(existing?.name||'')}" placeholder="e.g. Article 308"><label>Labour Rate Per Atom</label><input id="fmpaRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}"><label>Stock (Atoms)</label><input id="fmpaStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}"><div style="font-size:12px;color:var(--muted);margin-top:5px;">1 Atom = 12 pairs.</div><div class="modal-actions"><button class="btn brass" id="fmpaSave">Save</button><button class="btn ghost" id="fmpaCancel">Cancel</button></div>`);
+  document.getElementById('fmpaPhoto').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{pending.photo=await compressImageFile(f,800,.78);document.getElementById('fmpaPreview').innerHTML=`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(_){toast('Could not read Production Article photo');}};
+  document.getElementById('fmpaCancel').onclick=closeModal;
+  document.getElementById('fmpaSave').onclick=()=>{const name=document.getElementById('fmpaName').value.trim(),rate=Math.max(0,Number(document.getElementById('fmpaRate').value)||0),stock=Math.max(0,parseInt(document.getElementById('fmpaStock').value,10)||0);if(!name){toast('Article Name is required');return;}const now=new Date().toISOString();if(existing)Object.assign(existing,{name,rate,stock,photo:pending.photo,updatedAt:now});else settings.finishedMansProductionArticles.push({id:uid(),name,rate,stock,photo:pending.photo,createdAt:now,updatedAt:now});persistAll();closeModal();render();toast('Production Article saved');};
+}
+function openFinishedMansProductionMaterialModal(id){
+  normalizeFinishedMansState();const existing=getFinishedMansProductionMaterial(id),pending={photo:existing?.photo||''};
+  modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} Production Material</h3><label>Material Photo (optional)</label><input type="file" id="fmpmPhoto" accept="image/*"><div id="fmpmPreview" style="margin-top:8px;max-width:180px;">${pending.photo?`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div><label>Material Name</label><input id="fmpmName" value="${esc(existing?.name||'')}"><label>Stock (Atoms)</label><input id="fmpmStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}"><div style="font-size:12px;color:var(--muted);margin-top:5px;">Production Material has stock only. No rate, price, amount or cost.</div><div class="modal-actions"><button class="btn brass" id="fmpmSave">Save</button><button class="btn ghost" id="fmpmCancel">Cancel</button></div>`);
+  document.getElementById('fmpmPhoto').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{pending.photo=await compressImageFile(f,800,.78);document.getElementById('fmpmPreview').innerHTML=`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(_){toast('Could not read Production Material photo');}};
+  document.getElementById('fmpmCancel').onclick=closeModal;
+  document.getElementById('fmpmSave').onclick=async()=>{const name=document.getElementById('fmpmName').value.trim(),stock=Math.max(0,parseInt(document.getElementById('fmpmStock').value,10)||0);if(!name){toast('Material Name is required');return;}const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();if(existing)Object.assign(existing,{name,stock,photo:pending.photo,updatedAt:now});else settings.finishedMansProductionMaterials.push({id:uid(),name,stock,photo:pending.photo,createdAt:now,updatedAt:now});audit(existing?'Finished Production Material Edited':'Finished Production Material Added',name);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material was NOT saved.');return;}closeModal();render();toast('Production Material saved');};
+}
+function openFinishedMansProductionArticlesList(){
+  normalizeFinishedMansState();const list=settings.finishedMansProductionArticles;
+  modal(`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;"><h3 style="margin:0;">Production Articles</h3><button class="btn brass small" id="fmArticleHubAdd">+ Add Production Article</button></div>${list.length?`<div class="upper-article-grid">${list.map(a=>`<div class="upper-article-card"><div class="upper-article-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name)}">`:'<span style="font-size:28px;">👞</span>'}</div><div style="font-weight:800;">${esc(a.name)}</div><div style="font-size:16px;font-weight:800;color:var(--brass-dark);margin-top:8px;">${upperMoney(a.rate)} / Atom</div><div style="font-size:13px;margin-top:5px;">Stock: <strong>${a.stock} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-fmpa-edit="${esc(a.id)}" style="flex:1;">Edit</button><button class="btn red small" data-fmpa-delete="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Production Articles saved yet.</div>'}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  document.getElementById('fmArticleHubAdd')?.addEventListener('click',()=>openFinishedMansProductionArticleModal());
+  document.querySelectorAll('[data-fmpa-edit]').forEach(b=>b.onclick=()=>openFinishedMansProductionArticleModal(b.dataset.fmpaEdit));
+  document.querySelectorAll('[data-fmpa-delete]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this Production Article?'))return;settings.finishedMansProductionArticles=settings.finishedMansProductionArticles.filter(x=>String(x.id)!==String(b.dataset.fmpaDelete));persistAll();openFinishedMansProductionArticlesList();});
+}
+function openFinishedMansProductionMaterialsList(){
+  normalizeFinishedMansState();const list=settings.finishedMansProductionMaterials;
+  modal(`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><h3 style="margin:0;">Production Materials</h3><div style="display:flex;gap:6px;"><button class="btn brass small" id="fmMaterialHubAdd">+ Add Production Material</button><button class="btn ghost small" id="fmMaterialHubDistribute">📤 Material Distribution</button></div></div>${list.length?`<div class="upper-material-grid">${list.map(m=>`<div class="upper-material-card"><div class="upper-material-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}">`:'<span style="font-size:28px;">📦</span>'}</div><div style="font-weight:800;">${esc(m.name)}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${m.stock} Atoms</strong></div><div style="font-size:11px;color:var(--muted);margin-top:4px;">No rate / no price</div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-fmpm-edit="${esc(m.id)}" style="flex:1;">Edit</button><button class="btn red small" data-fmpm-delete="${esc(m.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Production Materials saved yet.</div>'}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  document.getElementById('fmMaterialHubAdd')?.addEventListener('click',()=>openFinishedMansProductionMaterialModal());
+  document.getElementById('fmMaterialHubDistribute')?.addEventListener('click',()=>{closeModal();goto('finishedMansDistributeMaterial');});
+  document.querySelectorAll('[data-fmpm-edit]').forEach(b=>b.onclick=()=>openFinishedMansProductionMaterialModal(b.dataset.fmpmEdit));
+  document.querySelectorAll('[data-fmpm-delete]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this Production Material?'))return;settings.finishedMansProductionMaterials=settings.finishedMansProductionMaterials.filter(x=>String(x.id)!==String(b.dataset.fmpmDelete));persistAll();openFinishedMansProductionMaterialsList();});
+}
+
+
+async function deleteFinishedProductionMaterial(id){
+ normalizeFinishedMansState();const m=getFinishedMansProductionMaterial(id);if(!m)return;
+ if(!confirm(`Delete Production Material "${m.name}"?\n\nExisting distribution history will remain saved.`))return;
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
+ settings.finishedMansProductionMaterials=settings.finishedMansProductionMaterials.filter(x=>String(x.id)!==String(id));
+ audit('Finished Production Material Deleted',`${m.name}`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material delete was NOT saved.');return;}
+ render();toast('Production Material deleted');
+}
+let finishedMansDraftItems=[];
+let finishedMansDraftMaterials=[];
+let finishedMansProductionFilter='today';
+let finishedMansProductionSearch='';
+let finishedMansProductionCustomFrom='';
+let finishedMansProductionCustomTo='';
+function finishedMansVouchers(){normalizeFinishedMansState();return settings.finishedMansProductionVouchers;}
+function finishedMansVoucherNo(){const n=settings.nextFinishedMansVoucherNo++;return 'BMP-'+String(n).padStart(6,'0');}
+function finishedLocalDateKey(value){const d=value?new Date(value):new Date();if(Number.isNaN(d.getTime()))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function finishedWeekStart(d){const x=new Date(d);x.setHours(0,0,0,0);const day=x.getDay(),daysSinceSaturday=(day+1)%7;x.setDate(x.getDate()-daysSinceSaturday);return x;}
+function finishedFilteredVouchers(){
+ const now=new Date(),today=finishedLocalDateKey(now),ws=finishedWeekStart(now),we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(0,0,0,0);
+ const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(finishedMansProductionSearch||'').trim().toLowerCase();
+ return finishedMansVouchers().filter(v=>{
+   const d=new Date(v.createdAt||v.date||0),key=finishedLocalDateKey(d);let ok=true;
+   if(finishedMansProductionFilter==='today')ok=key===today;
+   else if(finishedMansProductionFilter==='week')ok=d>=ws&&d<we&&d.getDay()!==5;
+   else if(finishedMansProductionFilter==='month')ok=key.startsWith(month);
+   else if(finishedMansProductionFilter==='custom'){
+     const from=finishedMansProductionCustomFrom||'',to=finishedMansProductionCustomTo||finishedMansProductionCustomFrom||'';
+     ok=(!from||key>=from)&&(!to||key<=to);
+   }
+   const worker=finishedMansWorkerName(v.workerId),arts=(v.items||[]).map(i=>finishedMansArticleName(i.articleId)).join(' ');
+   return ok&&(!q||`${v.voucherNo} ${worker} ${arts}`.toLowerCase().includes(q));
+ });
+}
+function finishedVoucherStatus(v){const items=v.items||[];if(items.some(i=>i.verifiedQty===null||i.verifiedQty===undefined||i.verifiedQty===''))return 'Pending Verification';return items.every(i=>Number(i.verifiedQty)===Number(i.reportedQty))?'Verified':'Short / Not Fully Verified';}
+function finishedVoucherBadge(s){return finishedMansBadge(s);}
+function finishedProductionListHtml(){
+ const rows=finishedFilteredVouchers(),articleTotals={};
+ rows.forEach(v=>(v.items||[]).forEach(i=>{const id=String(i.articleId);articleTotals[id]=(articleTotals[id]||0)+(Number(i.reportedQty)||0);}));
+ const articleCards=(settings.finishedMansProductionArticles||[]).map(a=>({name:a.name||'Article',total:articleTotals[String(a.id)]||0})),periodTotal=articleCards.reduce((s,a)=>s+a.total,0);
+ return `<div class="card fm-production-list-card"><div class="fm-production-list-head"><div><h3>Production List</h3><div>Reported production vouchers & worker production history</div></div><div><button class="btn brass small" id="fmPrintVerificationList">🖨 Verification Slip</button> <button class="btn ghost small" id="fmPrintProductionReport">🖨 Print Report</button> <button class="btn ghost small" id="fmCustomizeVoucher">⚙️ Voucher</button></div></div>
+ <div class="fm-production-control-row">
+   <button class="btn ${finishedMansProductionFilter==='today'?'brass':'ghost'} small" data-fm-filter="today">Today</button>
+   <button class="btn ${finishedMansProductionFilter==='week'?'brass':'ghost'} small" data-fm-filter="week">This Week</button>
+   <button class="btn ${finishedMansProductionFilter==='month'?'brass':'ghost'} small" data-fm-filter="month">This Month</button>
+   <button class="btn ${finishedMansProductionFilter==='custom'?'brass':'ghost'} small" id="fmCustomDateToggle">Custom Date</button>
+   <button class="btn ${finishedMansProductionFilter==='all'?'brass':'ghost'} small" data-fm-filter="all">All Production</button>
+   <input id="fmProductionSearch" value="${esc(finishedMansProductionSearch)}" placeholder="Search worker, article or voucher...">
+   ${articleCards.map(a=>`<div class="fm-inline-total"><span>${esc(a.name)}</span><strong>${a.total}</strong></div>`).join('')}
+   <div class="fm-inline-total fm-grand-total"><span>Total Items</span><strong>${periodTotal}</strong></div>
+ </div>
+ ${finishedMansProductionFilter==='custom'?`<div class="fm-custom-date-row"><label>From <input type="date" id="fmCustomFrom" value="${esc(finishedMansProductionCustomFrom)}"></label><label>To <input type="date" id="fmCustomTo" value="${esc(finishedMansProductionCustomTo)}"></label></div>`:''}
+ <div class="fm-production-history"><table><thead><tr><th>Voucher</th><th>Date / Time</th><th>Worker</th><th>Articles</th><th>Total Atoms</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(v=>{const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);return `<tr><td>${esc(v.voucherNo)}</td><td>${esc(new Date(v.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(v.workerId))}</td><td>${esc((v.items||[]).map(i=>finishedMansArticleName(i.articleId)).join(', '))}</td><td>${total}</td><td>${finishedVoucherBadge(finishedVoucherStatus(v))}</td><td><button class="btn ghost small" data-fm-view-voucher="${esc(v.id)}">View</button> <button class="btn ghost small" data-fm-print-voucher="${esc(v.id)}">Print</button> <button class="btn blue small" data-fm-edit-voucher="${esc(v.id)}">Edit</button> <button class="btn red small" data-fm-delete-voucher="${esc(v.id)}">Delete</button></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">No production vouchers in this view.</td></tr>'}</tbody></table></div>
+ </div>`;
+}
+
+const FINISHED_VOUCHER_PRINT_FIELDS=[
+ ['factory','Factory Name',16,true],['title','Voucher Title',13,true],['voucherNo','Voucher No.',10,true],
+ ['date','Date / Time',10,false],['worker','Worker Name',12,true],['articles','Production Articles',10,false],
+ ['materials','Distributed Material',10,false],['expense','Expense / Kharcha',10,true],['notes','Notes',10,false],['status','Status',10,false]
+];
+function normalizeFinishedVoucherPrint(){
+ normalizeFinishedMansState();const s=settings.finishedMansVoucherPrint;
+ FINISHED_VOUCHER_PRINT_FIELDS.forEach(([id,label,size,bold])=>{if(!s[id])s[id]={show:true,size,bold};});
+}
+function finishedVoucherField(id,html){normalizeFinishedVoucherPrint();const x=settings.finishedMansVoucherPrint[id]||{};if(x.show===false)return '';return `<div style="font-size:${Math.max(7,Math.min(28,Number(x.size)||10))}px;font-weight:${x.bold?'800':'400'};">${html}</div>`;}
+function openFinishedVoucherCustomize(){
+ normalizeFinishedVoucherPrint();
+ modal(`<h3 style="margin-top:0;">⚙️ Customize Finished Mans Voucher</h3><div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Choose what appears on the printed voucher, font size and boldness. This changes print design only; saved voucher data stays unchanged.</div>${FINISHED_VOUCHER_PRINT_FIELDS.map(([id,label])=>{const x=settings.finishedMansVoucherPrint[id];return `<div style="display:grid;grid-template-columns:1fr 90px 80px 80px;gap:8px;align-items:center;border-top:1px solid var(--line);padding:8px 0;"><strong>${esc(label)}</strong><label style="margin:0;"><input type="checkbox" data-fmvc-show="${id}" ${x.show!==false?'checked':''}> Show</label><input type="number" min="7" max="28" data-fmvc-size="${id}" value="${Number(x.size)||10}" title="Font size"><label style="margin:0;"><input type="checkbox" data-fmvc-bold="${id}" ${x.bold?'checked':''}> Bold</label></div>`}).join('')}<div class="modal-actions"><button class="btn brass" id="fmvcSave">Save</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
+ document.getElementById('fmvcSave').onclick=()=>{FINISHED_VOUCHER_PRINT_FIELDS.forEach(([id])=>{settings.finishedMansVoucherPrint[id]={show:document.querySelector(`[data-fmvc-show="${id}"]`).checked,size:Math.max(7,Math.min(28,Number(document.querySelector(`[data-fmvc-size="${id}"]`).value)||10)),bold:document.querySelector(`[data-fmvc-bold="${id}"]`).checked};});persistAll();closeModal();toast('Finished voucher print design saved');};
+}
+
+function finishedWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
+ const range=getUpperWorkWeekRange(baseDate),through=throughDate?new Date(throughDate):null;
+ const vouchers=finishedMansVouchers().filter(v=>{if(v.deletedAt||String(v.workerId)!==String(workerId))return false;const d=new Date(v.createdAt);return d>=range.start&&d<range.end&&d.getDay()!==5&&(!through||d<=through);});
+ let articleAtoms=0,materialAtoms=0,kharcha=0;
+ vouchers.forEach(v=>{articleAtoms+=(v.items||[]).reduce((s,i)=>s+(Number(i.reportedQty)||0),0);materialAtoms+=(v.materials||[]).reduce((s,m)=>s+(Number(m.qty)||0),0);kharcha+=Number(v.expenseAmount)||0;});
+ return {vouchers,articleAtoms,materialAtoms,totalAtoms:articleAtoms,kharcha};
+}
+function finishedVoucherHtml(v){
+ normalizeFinishedVoucherPrint();
+ const workerObj=workers.find(w=>String(w.id)===String(v.workerId))||{},week=finishedWorkerWeekSummary(v.workerId,new Date(v.createdAt),v.createdAt);
+ const items=v.items||[],materials=v.materials||[];
+ const pendingAtVoucher=Number(v.pendingQty)||0;
+ const rows=[
+   ...items.map(i=>`<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;">${esc(finishedMansArticleName(i.articleId))}</td><td style="padding:6px 4px;text-align:right;border-bottom:1px solid #ddd;">${Number(i.reportedQty)||0} ATOMS</td></tr>`),
+   ...materials.map(m=>`<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;">${esc(getFinishedMansProductionMaterial(m.materialId)?.name||m.materialName||'Material')}</td><td style="padding:6px 4px;text-align:right;border-bottom:1px solid #ddd;">${Number(m.qty)||0} ATOMS</td></tr>`)
+ ].join('');
+ return `<div class="receipt-paper" style="width:80mm;margin:auto;">
+ <div class="brand-head"><h3 style="font-size:18px;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div>
+ ${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}${settings.phone?`<div class="sub">Ph: ${esc(settings.phone)}</div>`:''}
+ <div class="sub" style="font-weight:800;letter-spacing:1px;">FINISHED MAN PRODUCTION VOUCHER</div><hr>
+ <div class="rline"><span>Voucher #:</span><span>${esc(v.voucherNo||'')}</span></div>
+ <div class="rline"><span>Date:</span><span>${esc(String(v.createdAt||'').slice(0,10))}</span></div>
+ <div class="rline"><span>Time:</span><span>${fmtTime(new Date(v.createdAt))}</span></div>
+ <div class="rline"><span>Worker:</span><span>${esc(finishedMansWorkerName(v.workerId))}</span></div>
+ <div class="rline"><span>Worker Type:</span><span>${esc(workerObj.category||'BOTTOM MAN')}</span></div><hr>
+ <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;padding:6px 4px;">PRODUCTION ARTICLE & MATERIAL</th><th style="text-align:right;padding:6px 4px;">QUANTITY</th></tr></thead><tbody>${rows}</tbody></table><hr>
+ <div class="rline"><b>CURRENT KHARCHA:</b><b>${upperMoney(Number(v.expenseAmount)||0)}</b></div>
+ <div class="rline"><b>LABOUR WEEKLY KHARCHA:</b><b>${upperMoney(week.kharcha)}</b></div>
+ ${pendingAtVoucher>0?`<div class="rline" style="margin-top:8px;font-weight:900;"><strong>PENDING:</strong><strong>${pendingAtVoucher} ATOMS</strong></div>`:''}
+ <div style="margin-top:8px;font-weight:800;">RECEIVING SUMMARY</div>
+ <div class="rline" style="font-weight:800;"><span>WEEKLY TOTAL PRODUCTION:</span><span>${week.articleAtoms} ATOMS</span></div>
+ ${v.notes?`<div style="margin-top:7px;">Notes: ${esc(v.notes)}</div>`:''}
+ ${settings.receiptFooter?`<div class="footer">${esc(settings.receiptFooter)}</div>`:''}${settings.thankYou?`<div class="footer">${esc(settings.thankYou)}</div>`:''}
+ </div>`;
+}
+function printFinishedMansHtml(html,title='Finished Mans Production'){
+ const w=window.open('','_blank','width=420,height=720');
+ if(!w){toast('Print window was blocked. Please allow pop-ups for this site and try again.');return;}
+ w.document.open();
+ w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><style>
+ @page{size:80mm auto;margin:0}html,body{margin:0;padding:0;width:80mm}
+ body{font-family:Arial,sans-serif;padding:4mm;box-sizing:border-box}.receipt-paper{width:100%!important;margin:auto}
+ .sub{font-size:10px;text-align:center}table{width:100%;border-collapse:collapse;font-size:9px}
+ th,td{padding:2px 1px;border-bottom:1px solid #ddd;text-align:left}hr{border:0;border-top:1px dashed #777;margin:6px 0}
+ @media print{html,body{width:80mm}.receipt-paper{width:100%!important}}
+ </style><style>
+
+/* ============================================================
+   DESKTOP ONE-SCREEN LAYOUT STANDARD — 2026-09-24
+   Layout-only override. No business/data/transaction logic changed.
+   Target: laptop/desktop viewport; keep page controls compact and visible.
+   ============================================================ */
+@media (min-width:901px){
+  html,body{height:100%;overflow:hidden;}
+  #app{height:100vh;min-height:0;overflow:hidden;}
+  #topbar{padding:8px 18px;gap:10px;flex:0 0 auto;}
+  #topLogo,.logo-placeholder{width:38px;height:38px;max-width:38px;max-height:38px;}
+  #topFactoryName{font-size:18px!important;line-height:1.1;}
+  #appBody{flex:1;min-height:0;height:auto;overflow:hidden;}
+  nav{width:210px;padding:8px 0;min-height:0;overflow-y:auto;overflow-x:hidden;}
+  nav .brand{padding:0 14px 7px;margin-bottom:4px;}
+  nav button.nav-item{font-size:13px;padding:7px 14px;line-height:1.15;}
+  main{
+    flex:1;min-width:0;max-width:none;width:auto;height:100%;
+    box-sizing:border-box;padding:10px 14px;overflow:hidden;
+  }
+  h2.page-title{font-size:18px;margin:0 0 8px;padding-bottom:6px;line-height:1.15;}
+  h3{margin-top:0;margin-bottom:7px;line-height:1.15;}
+  .card{padding:10px 12px;margin-bottom:8px;border-radius:7px;box-sizing:border-box;}
+  .grid{gap:8px;}.grid-2,.grid-4,.grid-6{gap:8px;}
+  .dashboard-stats-grid{gap:7px;margin-bottom:7px;}
+  .dashboard-financial-row{gap:8px;margin-bottom:8px;}
+  .financial-card{padding:10px;min-height:90px;max-height:112px;}
+  .financial-card .icon{font-size:20px;margin-bottom:3px;}
+  .financial-card .amount{font-size:21px;margin-bottom:2px;}
+  .financial-card .label,.financial-card .desc{font-size:10px;}
+  label{font-size:11px;margin-bottom:3px;line-height:1.15;}
+  input,select,textarea{min-height:32px!important;padding:5px 7px!important;font-size:12px!important;line-height:1.15;box-sizing:border-box;}
+  textarea{min-height:44px!important;max-height:64px;resize:vertical;}
+  button,.btn{min-height:32px!important;padding:5px 9px!important;font-size:12px!important;line-height:1.15;}
+  .btn.small{min-height:27px!important;padding:3px 7px!important;font-size:11px!important;}
+  table{font-size:11px;line-height:1.15;}
+  th,td{padding:5px 6px!important;}
+  .row{gap:7px;}
+  .pick-grid{gap:7px!important;}
+  .pick-box{padding:6px!important;min-height:0!important;}
+  .entity-photo{max-width:62px!important;max-height:62px!important;}
+  .modal{max-height:88vh!important;overflow:auto;}
+
+  /* Long histories stay inside their card instead of making the whole page long. */
+  .table-wrap,.worker-table-wrap,.worker-distribute-history{max-height:48vh;overflow:auto;}
+  .card table{max-width:100%;}
+}
+</style>
+</head><body>${html}</body></html>`);
+ w.document.close();w.focus();w.print();
+}
+function openFinishedVoucher(id,printNow=false){const v=finishedMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(printNow){printFinishedMansHtml(finishedVoucherHtml(v));return;}modal(`${finishedVoucherHtml(v)}<div class="modal-actions"><button class="btn brass" id="fmModalPrintVoucher">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('fmModalPrintVoucher').onclick=()=>printFinishedMansHtml(finishedVoucherHtml(v));}
+function addFinishedDraftItem(){
+ if(!finishedMansSelectedWorker){toast('Select Finished Man first.');return;}
+ const host=document.getElementById('fmExtraItemRows');if(!host)return;
+ const row=document.createElement('div');row.className='fm-extra-item-row';
+ row.innerHTML=`<div class="fm-field"><label>Production Article</label><select data-fm-extra-article><option value="">Select Article</option>${(settings.finishedMansProductionArticles||[]).map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div><div class="fm-field"><label>Quantity / Items</label><input data-fm-extra-qty type="number" min="1" step="1" placeholder="Atoms"></div><div class="fm-entry-action"><label>&nbsp;</label><button type="button" class="btn red small" data-fm-extra-remove>✕ Remove</button></div>`;
+ row.querySelector('[data-fm-extra-remove]')?.addEventListener('click',()=>row.remove());
+ host.appendChild(row);
+}
+function removeFinishedDraftItem(id){finishedMansDraftItems=finishedMansDraftItems.filter(i=>String(i.id)!==String(id));render();}
+
+function addFinishedDraftMaterial(){
+ const materialId=document.getElementById('fmMaterial')?.value,qty=Number(document.getElementById('fmMaterialQty')?.value),m=getFinishedMansProductionMaterial(materialId);
+ if(!m||!Number.isInteger(qty)||qty<=0){toast('Select Production Material and enter positive whole Atoms.');return;}
+ const already=finishedMansDraftMaterials.filter(x=>String(x.materialId)===String(materialId)).reduce((s,x)=>s+Number(x.qty),0);
+ if(already+qty>Number(m.stock)){toast(`Available ${m.stock} Atoms only.`);return;}
+ finishedMansDraftMaterials.push({id:uid(),materialId,qty});render();
+}
+function removeFinishedDraftMaterial(id){finishedMansDraftMaterials=finishedMansDraftMaterials.filter(x=>String(x.id)!==String(id));render();}
+async function createFinishedProductionVoucher(){
+ if(!finishedMansSelectedWorker){toast('Select Finished Man first.');return;}
+ const currentArticle=document.getElementById('fmArticle')?.value||'',currentQty=Number(document.getElementById('fmReported')?.value);
+ if(currentArticle||document.getElementById('fmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole Atoms.');return;}finishedMansDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
+ const extraRows=[...document.querySelectorAll('#fmExtraItemRows .fm-extra-item-row')];
+ for(const row of extraRows){const articleId=row.querySelector('[data-fm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-fm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole Atoms.');return;}finishedMansDraftItems.push({id:uid(),articleId,reportedQty:qty});}
+ if(!finishedMansDraftItems.length){toast('Select Production Article and enter positive whole Atoms.');return;}
+ const notes=document.getElementById('fmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('fmExpenseAmount')?.value)||0),pendingQty=Math.max(0,Number(document.getElementById('fmPendingQtyEntry')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=finishedMansVoucherNo(),voucherId=uid();if(!Number.isInteger(pendingQty)){toast('Pending must be a positive whole Atom quantity.');return;}
+ for(const dm of finishedMansDraftMaterials){const mat=getFinishedMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
+ const items=finishedMansDraftItems.map(i=>({id:uid(),articleId:i.articleId,reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
+ const materials=finishedMansDraftMaterials.map(dm=>({id:uid(),materialId:dm.materialId,materialName:getFinishedMansProductionMaterial(dm.materialId)?.name||'',qty:Number(dm.qty)}));
+ materials.forEach(dm=>{const mat=getFinishedMansProductionMaterial(dm.materialId);mat.stock=Number(mat.stock)-dm.qty;});
+ const previousWorkerTotal=finishedMansVouchers().filter(x=>String(x.workerId)===String(finishedMansSelectedWorker)&&!x.deletedAt).reduce((s,x)=>s+(x.items||[]).reduce((q,i)=>q+(Number(i.reportedQty)||0),0),0);
+ const voucherTotal=items.reduce((a,i)=>a+i.reportedQty,0);
+ const v={id:voucherId,voucherNo,workerId:finishedMansSelectedWorker,items,materials,expenseAmount,pendingQty,notes,createdAt:now,createdBy:'Admin',workerProductionBeforeSnapshot:previousWorkerTotal,workerProductionAfterSnapshot:previousWorkerTotal+voucherTotal};
+ finishedMansVouchers().push(v);
+ items.forEach(i=>finishedMansEntries().push({id:i.id,voucherId,date:now,workerId:v.workerId,articleId:i.articleId,reportedQty:i.reportedQty,originalReportedQty:i.reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''}));
+ if(expenseAmount>0)finishedMansExpenses().push({id:uid(),voucherId,workerId:String(v.workerId),workerName:finishedMansWorkerName(v.workerId),amount:expenseAmount,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'});if(pendingQty>0){const w=workers.find(x=>String(x.id)===String(v.workerId))||{};finishedPendingRecords().push({id:uid(),date:now,voucherId,workerId:String(v.workerId),workerName:finishedMansWorkerName(v.workerId),workerCategory:String(w.category||''),qty:pendingQty,delta:pendingQty,action:'add',source:'productionVoucher'});}
+ materials.forEach(dm=>finishedMaterialDistributions().push({id:uid(),voucherId,workerId:v.workerId,materialId:dm.materialId,qty:dm.qty,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'}));
+ audit('Finished Mans Production Voucher Created',`${voucherNo} — ${finishedMansWorkerName(v.workerId)} — ${voucherTotal} Atoms`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher was not saved.');return;}
+ finishedMansDraftItems=[];finishedMansDraftMaterials=[];render();openFinishedVoucher(voucherId,false);toast('Production voucher saved as Pending Verification');
+}
+
+function openEditFinishedVoucher(id){
+ const v=finishedMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;
+ modal(`<h3 style="margin-top:0;">Edit ${esc(v.voucherNo)}</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Voucher number/date and historical snapshots remain unchanged.</div>${(v.items||[]).map((i,n)=>`<div style="display:grid;grid-template-columns:1fr 130px;gap:8px;margin-bottom:6px;"><div>${esc(finishedMansArticleName(i.articleId))}</div><input type="number" min="1" step="1" data-fm-edit-item="${esc(i.id)}" value="${Number(i.reportedQty)||0}"></div>`).join('')}<label>Expense / Kharcha (Rs.)</label><input id="fmEditExpense" type="number" min="0" step="0.01" value="${Number(v.expenseAmount)||0}"><label>Notes</label><textarea id="fmEditNotes" rows="2">${esc(v.notes||'')}</textarea><div class="modal-actions"><button class="btn brass" id="fmSaveVoucherEdit">Save Changes</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);
+ document.getElementById('fmSaveVoucherEdit').onclick=()=>saveEditFinishedVoucher(id);
+}
+async function saveEditFinishedVoucher(id){
+ const v=finishedMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
+ for(const i of (v.items||[])){const q=Number(document.querySelector(`[data-fm-edit-item="${i.id}"]`)?.value);if(!Number.isInteger(q)||q<=0){toast('Production Atoms must be positive whole numbers.');return;}i.reportedQty=q;const e=finishedMansEntries().find(x=>String(x.id)===String(i.id));if(e&&finishedMansStatus(e)==='Pending Verification'){e.reportedQty=q;e.originalReportedQty=q;}}
+ v.expenseAmount=Math.max(0,Number(document.getElementById('fmEditExpense')?.value)||0);v.notes=document.getElementById('fmEditNotes')?.value.trim()||'';v.editedAt=new Date().toISOString();
+ let ex=finishedMansExpenses().find(x=>String(x.voucherId)===String(v.id));if(v.expenseAmount>0){if(ex){ex.amount=v.expenseAmount;ex.editedAt=v.editedAt;}else finishedMansExpenses().push({id:uid(),voucherId:v.id,workerId:v.workerId,workerName:finishedMansWorkerName(v.workerId),amount:v.expenseAmount,notes:`Voucher ${v.voucherNo}`,createdAt:v.editedAt,createdBy:'Admin'});}else if(ex)settings.finishedMansExpenses=settings.finishedMansExpenses.filter(x=>String(x.id)!==String(ex.id));
+ audit('Finished Mans Voucher Edited',v.voucherNo);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher edit was NOT saved.');return;}closeModal();render();toast('Voucher updated');
+}
+async function deleteFinishedVoucher(id){
+ const v=finishedMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(!confirm(`Delete ${v.voucherNo}?\n\nIts linked Finished material distribution and expense will also be reversed/removed. Other modules will not be changed.`))return;
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
+ (v.materials||[]).forEach(dm=>{const m=getFinishedMansProductionMaterial(dm.materialId);if(m)m.stock=Number(m.stock)+(Number(dm.qty)||0);});
+ settings.finishedMansMaterialDistributions=finishedMaterialDistributions().filter(x=>String(x.voucherId)!==String(v.id));
+ settings.finishedMansExpenses=finishedMansExpenses().filter(x=>String(x.voucherId)!==String(v.id));
+ settings.finishedMansProduction=finishedMansEntries().filter(x=>String(x.voucherId)!==String(v.id));
+ settings.finishedMansProductionVouchers=finishedMansVouchers().filter(x=>String(x.id)!==String(v.id));
+ audit('Finished Mans Voucher Deleted',v.voucherNo);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher delete was NOT saved.');return;}render();toast('Voucher deleted');
+}
+function finishedVerificationSlipHtml(vouchers){
+ const flat=[];vouchers.forEach(v=>(v.items||[]).forEach(i=>flat.push({v,i})));const total=flat.reduce((s,x)=>s+(Number(x.i.reportedQty)||0),0);
+ const slipNo='BMV-'+String(settings.nextFinishedMansSlipNo||1).padStart(6,'0');
+ return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div class="brand-head"><h3 style="font-size:18px;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}${settings.phone?`<div class="sub">Ph: ${esc(settings.phone)}</div>`:''}<div class="sub" style="font-weight:800;letter-spacing:1px;">FINISHED MAN PRODUCTION VERIFICATION SLIP</div><hr>
+ <div class="rline"><span>Slip #:</span><span>${esc(slipNo)}</span></div><div class="rline"><span>Date / Time:</span><span>${esc(new Date().toLocaleString())}</span></div><hr>
+ <table style="width:100%;border-collapse:collapse;font-size:10px;"><thead><tr><th style="text-align:left;">Worker</th><th style="text-align:left;">Article</th><th style="text-align:right;">Items</th><th>Verified</th></tr></thead><tbody>${flat.map(x=>`<tr><td>${esc(finishedMansWorkerName(x.v.workerId))}</td><td>${esc(finishedMansArticleName(x.i.articleId))}</td><td style="text-align:right;">${Number(x.i.reportedQty)||0}</td><td>_____</td></tr>`).join('')}</tbody></table><hr>
+ <div class="rline" style="font-weight:900;font-size:13px;"><span>TOTAL ITEMS:</span><span>${total} ATOMS</span></div><div style="font-size:10px;line-height:1.9;margin-top:8px;">Verified By: ____________________<br>Signature: ______________________</div>${settings.receiptFooter?`<div class="footer">${esc(settings.receiptFooter)}</div>`:''}</div>`;
+}
+
+function finishedProductionReportHtml(){
+ const rows=finishedFilteredVouchers(),map=new Map();let grand=0;
+ rows.forEach(v=>(v.items||[]).forEach(i=>{const wid=String(v.workerId),worker=finishedMansWorkerName(wid),article=finishedMansArticleName(i.articleId),qty=Number(i.reportedQty)||0;grand+=qty;if(!map.has(wid))map.set(wid,{worker,articles:new Map(),total:0});const a=map.get(wid);a.articles.set(article,(a.articles.get(article)||0)+qty);a.total+=qty;}));
+ return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div class="brand-head"><h3 style="font-size:18px;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}${settings.phone?`<div class="sub">Ph: ${esc(settings.phone)}</div>`:''}<div class="sub" style="font-weight:800;letter-spacing:1px;">FINISHED MAN PRODUCTION REPORT</div><hr>
+ ${Array.from(map.values()).map(a=>`<div style="margin:7px 0;"><strong>${esc(a.worker)}</strong>${Array.from(a.articles.entries()).map(([n,q])=>`<div class="rline"><span>${esc(n)}</span><span>${q} ATOMS</span></div>`).join('')}<div class="rline" style="font-weight:800;"><span>Worker Total</span><span>${a.total} ATOMS</span></div></div><hr>`).join('')}
+ <div class="rline" style="font-weight:900;font-size:13px;"><span>GRAND TOTAL ITEMS:</span><span>${grand} ATOMS</span></div>${settings.receiptFooter?`<div class="footer">${esc(settings.receiptFooter)}</div>`:''}</div>`;
+}
+function printFinishedProductionReport(){const rows=finishedFilteredVouchers();if(!rows.length){toast('No production records in this view.');return;}printFinishedMansHtml(finishedProductionReportHtml(),'Production Report');}
+function printFinishedCurrentVerificationList(){const vs=finishedFilteredVouchers().filter(v=>finishedVoucherStatus(v)==='Pending Verification');if(!vs.length){toast('No pending production in this view.');return;}printFinishedMansHtml(finishedVerificationSlipHtml(vs));}
+
+function finishedMansExpenses(){normalizeFinishedMansState();return settings.finishedMansExpenses;}
+function finishedExpensePanelHtml(){
+ const rows=finishedMansExpenses().slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),total=rows.reduce((s,r)=>s+(Number(r.amount)||0),0),ws=finishedMansProductionWorkers();
+ return `<div class="card"><h3 style="margin-top:0;">💰 Kharcha / Expense</h3><div style="display:grid;grid-template-columns:minmax(180px,1fr) minmax(130px,.5fr);gap:10px;"><div><label>Worker</label><select id="fmExpenseWorker"><option value="">Select Worker</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select></div><div><label>Expense Amount (Rs.)</label><input id="fmExpenseAmount" type="number" min="0.01" step="0.01"></div></div><label>Notes (Optional)</label><input id="fmExpenseNotes" type="text"><button class="btn brass" id="fmSaveExpense" style="margin-top:10px;">Save Expense</button><div style="margin-top:10px;font-size:13px;"><strong>Total Saved Expense: ${upperMoney(total)}</strong></div>${rows.length?`<div style="overflow:auto;margin-top:8px;max-height:230px;"><table><thead><tr><th>Date/Time</th><th>Worker</th><th>Amount</th><th>Notes</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(r.workerId))}</td><td>${upperMoney(r.amount)}</td><td>${esc(r.notes||'')}</td></tr>`).join('')}</tbody></table></div>`:''}</div>`;
+}
+async function saveFinishedExpense(){
+ const workerId=document.getElementById('fmExpenseWorker')?.value,amount=Number(document.getElementById('fmExpenseAmount')?.value),notes=document.getElementById('fmExpenseNotes')?.value.trim()||'',w=finishedMansProductionWorkers().find(x=>String(x.id)===String(workerId));
+ if(!w||!Number.isFinite(amount)||amount<=0){toast('Select Worker and enter valid Expense Amount.');return;}
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
+ finishedMansExpenses().push({id:uid(),workerId:String(w.id),workerName:String(w.name||''),amount,notes,createdAt:now,createdBy:'Admin'});
+ audit('Finished Mans Expense Added',`${w.name} — ${upperMoney(amount)}`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Expense was NOT saved.');return;}
+ render();toast('Expense saved successfully');
+}
+
+function pageFinishedMansProductionArticles(){
+ normalizeFinishedMansState();const list=settings.finishedMansProductionArticles||[];
+ return `<div class="fm-subpage-head"><button class="btn ghost" id="fmBackArticlesPage">← Back</button><h2 class="page-title">Production Articles</h2><button class="btn brass" id="fmPageAddArticle">+ Add Production Article</button></div>
+ <div class="card"><div class="upper-material-grid">${list.length?list.map(a=>`<div class="upper-material-card"><div class="upper-material-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name||'')}">`:'<span style="font-size:28px;">👞</span>'}</div><div style="font-weight:800;">${esc(a.name||'')}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${Number(a.stock)||0} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-fmpa-edit="${esc(a.id)}" style="flex:1;">Edit</button><button class="btn red small" data-fmpa-delete="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join(''):'<div class="empty">No Production Articles saved yet.</div>'}</div></div>`;
+}
+
+let finishedMaterialFilter='today';
+let finishedMaterialSearch='';
+let finishedMaterialSelectedWorker=null;
+let finishedMaterialCustomFrom='';
+let finishedMaterialCustomTo='';
+function finishedMaterialFilteredRows(){
+ const now=new Date(),today=finishedLocalDateKey(now),ws=finishedWeekStart(now),we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(0,0,0,0);
+ const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(finishedMaterialSearch||'').trim().toLowerCase();
+ return finishedMaterialDistributions().filter(r=>{const d=new Date(r.createdAt),key=finishedLocalDateKey(d);let ok=true;
+  if(finishedMaterialFilter==='today')ok=key===today;
+  else if(finishedMaterialFilter==='week')ok=d>=ws&&d<we&&d.getDay()!==5;
+  else if(finishedMaterialFilter==='month')ok=key.startsWith(month);
+  else if(finishedMaterialFilter==='custom'){const from=finishedMaterialCustomFrom||'',to=finishedMaterialCustomTo||from;ok=(!from||key>=from)&&(!to||key<=to);}
+  const worker=finishedMansWorkerName(r.workerId),mat=getFinishedMansProductionMaterial(r.materialId)?.name||'Material';
+  return ok&&(!q||`${worker} ${mat}`.toLowerCase().includes(q));
+ });
+}
+function finishedMaterialWorkerAccounts(){
+ const map=new Map();
+ finishedMaterialFilteredRows().forEach(r=>{const id=String(r.workerId),workerName=finishedMansWorkerName(id);
+  if(!map.has(id))map.set(id,{workerId:id,workerName,materials:new Map(),total:0,rows:[]});
+  const a=map.get(id),mid=String(r.materialId),name=getFinishedMansProductionMaterial(mid)?.name||'Material',qty=Number(r.qty)||0;
+  if(!a.materials.has(mid))a.materials.set(mid,{name,qty:0});a.materials.get(mid).qty+=qty;a.total+=qty;a.rows.push(r);
+ });
+ return Array.from(map.values()).sort((a,b)=>a.workerName.localeCompare(b.workerName));
+}
+function openFinishedMaterialAccount(workerId){
+ const a=finishedMaterialWorkerAccounts().find(x=>String(x.workerId)===String(workerId));if(!a)return;
+ modal(`<div class="fm-account-modal-head"><h3>${esc(a.workerName)} — Material Account</h3><button class="btn red small" id="fmClearMaterialAccount">Clear Account</button></div>
+ <div style="display:flex;gap:6px;flex-wrap:wrap;margin:9px 0;">${Array.from(a.materials.values()).map(m=>`<div class="fm-inline-total"><span>${esc(m.name)}</span><strong>${m.qty} ATOMS</strong></div>`).join('')}<div class="fm-inline-total fm-grand-total"><span>Total</span><strong>${a.total} ATOMS</strong></div></div>
+ <div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Material</th><th>Atoms</th><th>Notes</th><th>Action</th></tr></thead><tbody>${a.rows.slice().sort((x,y)=>String(y.createdAt).localeCompare(String(x.createdAt))).map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(getFinishedMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${Number(r.qty)||0}</td><td>${esc(r.notes||'')}</td><td><button class="btn blue small" data-fm-mat-entry-edit="${esc(r.id)}">Edit</button> <button class="btn red small" data-fm-mat-entry-delete="${esc(r.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>
+ <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+ document.querySelectorAll('[data-fm-mat-entry-edit]').forEach(b=>b.onclick=()=>editFinishedMaterialDistribution(b.dataset.fmMatEntryEdit));
+ document.querySelectorAll('[data-fm-mat-entry-delete]').forEach(b=>b.onclick=()=>deleteFinishedMaterialDistribution(b.dataset.fmMatEntryDelete));
+ document.getElementById('fmClearMaterialAccount')?.addEventListener('click',()=>clearFinishedMaterialAccount(workerId));
+}
+
+
+function syncFinishedVoucherMaterialFromDistribution(r,newQty=null,remove=false){
+ if(!r?.voucherId)return;const v=finishedMansVouchers().find(x=>String(x.id)===String(r.voucherId));if(!v)return;
+ const candidates=(v.materials||[]).filter(m=>String(m.materialId)===String(r.materialId));
+ if(remove){if(candidates.length){const target=candidates.find(m=>Number(m.qty)===Number(r.qty))||candidates[0];v.materials=(v.materials||[]).filter(m=>m!==target);}}
+ else if(candidates.length){const target=candidates.find(m=>Number(m.qty)===Number(r.qty))||candidates[0];target.qty=Number(newQty)||0;}
+}
+async function editFinishedMaterialDistribution(id){
+ const r=finishedMaterialDistributions().find(x=>String(x.id)===String(id));if(!r)return;
+ const oldQty=Number(r.qty)||0,raw=prompt(`Current Quantity: ${oldQty} Atoms\nEnter new whole Atoms:`,oldQty);if(raw===null)return;
+ const qty=Number(raw);if(!Number.isInteger(qty)||qty<=0){toast('Enter positive whole Atoms only.');return;}
+ const m=getFinishedMansProductionMaterial(r.materialId);if(!m)return;const diff=qty-oldQty;
+ if(diff>0&&Number(m.stock)<diff){toast(`Available ${m.stock} extra Atoms only.`);return;}
+ if(!confirm(`Change ${m.name}: ${oldQty} → ${qty} Atoms?`))return;
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
+ m.stock=Number(m.stock)-diff;syncFinishedVoucherMaterialFromDistribution(r,qty,false);r.qty=qty;r.editedAt=new Date().toISOString();
+ audit('Finished Material Distribution Edited',`${finishedMansWorkerName(r.workerId)} — ${m.name}: ${oldQty} → ${qty} ATOMS`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material edit was NOT saved.');return;}
+ closeModal();render();toast('Material distribution updated');
+}
+async function deleteFinishedMaterialDistribution(id){
+ const r=finishedMaterialDistributions().find(x=>String(x.id)===String(id));if(!r)return;const m=getFinishedMansProductionMaterial(r.materialId);
+ if(!confirm(`Delete ${m?.name||'Material'} — ${Number(r.qty)||0} Atoms from ${finishedMansWorkerName(r.workerId)}?\n\nQuantity will return to Production Material stock.`))return;
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
+ if(m)m.stock=Number(m.stock)+(Number(r.qty)||0);syncFinishedVoucherMaterialFromDistribution(r,null,true);
+ settings.finishedMansMaterialDistributions=finishedMaterialDistributions().filter(x=>String(x.id)!==String(id));
+ audit('Finished Material Distribution Deleted',`${finishedMansWorkerName(r.workerId)} — ${m?.name||'Material'} — ${Number(r.qty)||0} ATOMS`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material delete was NOT saved.');return;}
+ closeModal();render();toast('Material distribution deleted');
+}
+async function clearFinishedMaterialAccount(workerId){
+ const rows=finishedMaterialFilteredRows().filter(r=>String(r.workerId)===String(workerId));if(!rows.length)return;
+ if(!confirm(`Clear ${finishedMansWorkerName(workerId)} material account for the CURRENT selected filter?\n\n${rows.length} entries will be removed and quantities returned to stock.`))return;
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),ids=new Set(rows.map(r=>String(r.id)));
+ rows.forEach(r=>{const m=getFinishedMansProductionMaterial(r.materialId);if(m)m.stock=Number(m.stock)+(Number(r.qty)||0);syncFinishedVoucherMaterialFromDistribution(r,null,true);});
+ settings.finishedMansMaterialDistributions=finishedMaterialDistributions().filter(r=>!ids.has(String(r.id)));
+ audit('Finished Worker Material Account Cleared',`${finishedMansWorkerName(workerId)} — ${rows.length} entries`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Account clear was NOT saved.');return;}
+ closeModal();render();toast('Worker material account cleared');
+}
+function finishedMaterialAccountsReportHtml(){
+ const accounts=finishedMaterialWorkerAccounts(),label=finishedMaterialFilter==='today'?'Today':finishedMaterialFilter==='week'?'This Week':finishedMaterialFilter==='month'?'This Month':finishedMaterialFilter==='custom'?'Custom Date':'All Time';
+ return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div class="brand-head"><h3>${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div><div class="sub" style="font-weight:800;">FINISHED MAN MATERIAL ACCOUNTS — ${esc(label)}</div><hr>${accounts.length?accounts.map(a=>`<div style="margin:7px 0;"><strong>${esc(a.workerName)}</strong>${Array.from(a.materials.values()).map(m=>`<div class="rline"><span>${esc(m.name)}</span><span>${m.qty} ATOMS</span></div>`).join('')}<div class="rline" style="font-weight:800;"><span>Total</span><span>${a.total} ATOMS</span></div></div><hr>`).join(''):'<div>No material distributions.</div>'}</div>`;
+}
+function openFinishedMaterialAccounts(){
+ const accounts=finishedMaterialWorkerAccounts();
+ modal(`<div class="fm-account-modal-head"><h3>Worker Material Accounts</h3><button class="btn brass small" id="fmPrintMaterialAccounts">🖨 Print</button></div>
+ <div class="fm-account-filter-row"><button class="btn ${finishedMaterialFilter==='today'?'brass':'ghost'} small" data-fm-account-filter="today">Today</button><button class="btn ${finishedMaterialFilter==='week'?'brass':'ghost'} small" data-fm-account-filter="week">This Week</button><button class="btn ${finishedMaterialFilter==='month'?'brass':'ghost'} small" data-fm-account-filter="month">This Month</button><button class="btn ${finishedMaterialFilter==='custom'?'brass':'ghost'} small" data-fm-account-filter="custom">Custom Date</button><button class="btn ${finishedMaterialFilter==='all'?'brass':'ghost'} small" data-fm-account-filter="all">All Time</button><input id="fmAccountSearch" value="${esc(finishedMaterialSearch)}" placeholder="Search Worker / Material"></div>
+ ${finishedMaterialFilter==='custom'?`<div class="fm-custom-date-row"><label>From <input type="date" id="fmMatCustomFrom" value="${esc(finishedMaterialCustomFrom)}"></label><label>To <input type="date" id="fmMatCustomTo" value="${esc(finishedMaterialCustomTo)}"></label></div>`:''}
+ <div class="fm-material-account-grid" style="margin-top:8px;">${accounts.length?accounts.map(a=>`<button class="fm-material-account" data-fm-material-account="${esc(a.workerId)}"><strong>${esc(a.workerName)}</strong><span>${Array.from(a.materials.values()).map(m=>`${esc(m.name)} ${m.qty}`).join(' • ')}</span><b>Total ${a.total} ATOMS</b></button>`).join(''):'<div class="empty">No material distribution in this view.</div>'}</div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+ document.querySelectorAll('[data-fm-account-filter]').forEach(b=>b.onclick=()=>{finishedMaterialFilter=b.dataset.fmAccountFilter;openFinishedMaterialAccounts();});
+ document.getElementById('fmAccountSearch')?.addEventListener('input',e=>{finishedMaterialSearch=e.target.value||'';openFinishedMaterialAccounts();});
+ document.getElementById('fmMatCustomFrom')?.addEventListener('change',e=>{finishedMaterialCustomFrom=e.target.value||'';openFinishedMaterialAccounts();});
+ document.getElementById('fmMatCustomTo')?.addEventListener('change',e=>{finishedMaterialCustomTo=e.target.value||'';openFinishedMaterialAccounts();});
+ document.getElementById('fmPrintMaterialAccounts')?.addEventListener('click',()=>printFinishedMansHtml(finishedMaterialAccountsReportHtml(),'Worker Material Accounts'));
+ document.querySelectorAll('[data-fm-material-account]').forEach(b=>b.onclick=()=>openFinishedMaterialAccount(b.dataset.fmMaterialAccount));
+}
+function pageFinishedMansMaterialAccounts(){
+ const accounts=finishedMaterialWorkerAccounts();
+ return `<div class="fm-subpage-head"><button class="btn ghost" id="fmBackMaterialAccounts">← Back</button><h2 class="page-title">Worker Material Accounts</h2><button class="btn brass small" id="fmPrintMaterialAccountsPage">🖨 Print</button></div>
+ <div class="card fm-material-accounts-page">
+  <div class="fm-account-filter-row">
+   <button class="btn ${finishedMaterialFilter==='today'?'brass':'ghost'} small" data-fm-account-page-filter="today">Today</button>
+   <button class="btn ${finishedMaterialFilter==='week'?'brass':'ghost'} small" data-fm-account-page-filter="week">This Week</button>
+   <button class="btn ${finishedMaterialFilter==='month'?'brass':'ghost'} small" data-fm-account-page-filter="month">This Month</button>
+   <button class="btn ${finishedMaterialFilter==='custom'?'brass':'ghost'} small" data-fm-account-page-filter="custom">Custom Date</button>
+   <button class="btn ${finishedMaterialFilter==='all'?'brass':'ghost'} small" data-fm-account-page-filter="all">All Time</button>
+   <input id="fmAccountPageSearch" value="${esc(finishedMaterialSearch)}" placeholder="Search Worker / Material">
+  </div>
+  ${finishedMaterialFilter==='custom'?`<div class="fm-custom-date-row"><label>From <input type="date" id="fmMatPageCustomFrom" value="${esc(finishedMaterialCustomFrom)}"></label><label>To <input type="date" id="fmMatPageCustomTo" value="${esc(finishedMaterialCustomTo)}"></label></div>`:''}
+  <div class="fm-material-account-grid fm-account-page-grid">${accounts.length?accounts.map(a=>`<button class="fm-material-account" data-fm-material-account="${esc(a.workerId)}"><strong>${esc(a.workerName)}</strong><span>${Array.from(a.materials.values()).map(m=>`${esc(m.name)} ${m.qty}`).join(' • ')}</span><b>Total ${a.total} ATOMS</b></button>`).join(''):'<div class="empty">No material distribution in this view.</div>'}</div>
+ </div>`;
+}function pageFinishedMansProductionMaterials(){
+ normalizeFinishedMansState();const list=settings.finishedMansProductionMaterials||[],ws=finishedMansProductionWorkers(),accounts=finishedMaterialWorkerAccounts();
+ const selected=ws.find(w=>String(w.id)===String(finishedMaterialSelectedWorker))||null;if(!selected)finishedMaterialSelectedWorker=null;
+ return `<div class="fm-subpage-head"><button class="btn ghost" id="fmBackMaterialsPage">← Back</button><h2 class="page-title">Production Materials</h2></div>
+ <div class="card fm-material-main-card">
+   <div class="fm-material-control-row">
+    <button class="btn brass small" id="fmPageAddMaterial">+ Add Production Material</button>
+    <button class="btn ${finishedMaterialFilter==='today'?'brass':'ghost'} small" data-fm-material-filter="today">Today</button>
+    <button class="btn ${finishedMaterialFilter==='week'?'brass':'ghost'} small" data-fm-material-filter="week">This Week</button>
+    <button class="btn ${finishedMaterialFilter==='month'?'brass':'ghost'} small" data-fm-material-filter="month">This Month</button>
+    <button class="btn ${finishedMaterialFilter==='all'?'brass':'ghost'} small" data-fm-material-filter="all">All</button>
+    <input id="fmMaterialSearch" value="${esc(finishedMaterialSearch)}" placeholder="Search Worker / Material">
+   </div>
+   <div class="fm-material-grid">${list.length?list.map(m=>`<div class="fm-material-mini"><div class="fm-material-mini-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name||'')}">`:'📦'}</div><strong title="${esc(m.name||'')}">${esc(m.name||'')}</strong><span>${Number(m.stock)||0} ATOMS</span><div><button class="btn ghost small" data-fmpm-edit="${esc(m.id)}">Edit</button><button class="btn red small" data-fmpm-delete="${esc(m.id)}">Delete</button></div></div>`).join(''):'<div class="empty">No Production Materials saved yet.</div>'}</div>
+ </div>
+
+ <div class="card fm-material-worker-card">
+   <div class="fm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${ws.length}</strong></span></div>
+   <div class="fm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box fm-worker-box ${String(finishedMaterialSelectedWorker)===String(w.id)?'selected':''}" data-fm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-fm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="fm-worker-name">${esc(w.name||'')}</div><div class="fm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Finished Man worker found.</div>'}</div>
+ </div>
+
+ <div class="card fm-material-entry-card">
+   <div class="fm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Finished Man above first</span>'}</div>
+   <div class="fm-material-entry-row">
+    <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"></div>
+    <div><label>Notes (Optional)</label><input id="fmDistNotes" placeholder="Notes"></div>
+    <button class="btn brass" id="fmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
+    <button class="btn ghost fm-worker-account-open" id="fmOpenMaterialAccounts">👥 Worker Material Accounts</button>
+   </div>
+ </div>`;
+}
+function pageFinishedMansProductionList(){
+ return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="fmBackProduction">← Back</button><h2 class="page-title" style="margin:0;">Finished Mans Production List</h2></div>${finishedProductionListHtml()}`;
+}
+function finishedMaterialDistributions(){normalizeFinishedMansState();return settings.finishedMansMaterialDistributions;}
+function pageFinishedMansDistributeMaterial(){
+ const ws=finishedMansProductionWorkers(),ms=settings.finishedMansProductionMaterials||[],rows=finishedMaterialDistributions().slice().reverse();
+ return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="fmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Finished Man</label><select id="fmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${ms.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="fmDistNotes" rows="2"></textarea><button class="btn brass" id="fmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(r.workerId))}</td><td>${esc(getFinishedMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
+}
+async function saveFinishedMaterialDistribution(){
+ const workerId=finishedMaterialSelectedWorker||document.getElementById('fmDistWorker')?.value,materialId=document.getElementById('fmDistMaterial')?.value,qty=Number(document.getElementById('fmDistQty')?.value),notes=document.getElementById('fmDistNotes')?.value.trim()||'',m=getFinishedMansProductionMaterial(materialId);
+ if(!workerId||!m||!Number.isInteger(qty)||qty<=0){toast('Select Employee, Material and enter positive whole Atoms.');return;}
+ if(Number(m.stock)<qty){toast('Not enough Production Material stock.');return;}
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
+ m.stock=Number(m.stock)-qty;finishedMaterialDistributions().push({id:uid(),workerId:String(workerId),materialId:String(materialId),qty,notes,createdAt:now,createdBy:'Admin'});
+ audit('Finished Mans Material Distributed',`${finishedMansWorkerName(workerId)} — ${m.name} — ${qty} Atoms`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material distribution was not saved.');return;}
+ render();toast('Material distribution saved successfully');
+}
+
+function finishedPendingRecords(){normalizeFinishedMansState();return settings.finishedMansPendingRecords;}
+function getFinishedPendingForWorker(workerId){
+ const list=finishedPendingRecords().filter(p=>String(p.workerId)===String(workerId));if(!list.length)return null;
+ const qty=Math.max(0,list.reduce((sum,p)=>sum+(Number.isFinite(Number(p.delta))?Number(p.delta):(Number(p.qty)||0)),0));
+ const last=list.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).pop();
+ return {workerId:String(workerId),workerName:last?.workerName||'',workerCategory:last?.workerCategory||'',qty};
+}
+function finishedPendingWorkerAccounts(query=''){
+ const q=String(query||'').trim().toLowerCase(),map=new Map();
+ finishedPendingRecords().forEach(p=>{const id=String(p.workerId||'');if(!id)return;if(!map.has(id))map.set(id,{workerId:id,workerName:p.workerName||'',workerCategory:p.workerCategory||'',qty:0,lastDate:p.date||''});const a=map.get(id);a.workerName=p.workerName||a.workerName;a.workerCategory=p.workerCategory||a.workerCategory;a.qty+=Number.isFinite(Number(p.delta))?Number(p.delta):(Number(p.qty)||0);if(String(p.date||'')>String(a.lastDate||''))a.lastDate=p.date||'';});
+ return Array.from(map.values()).map(a=>({...a,qty:Math.max(0,a.qty)})).filter(a=>!q||String(a.workerName).toLowerCase().includes(q)).sort((a,b)=>String(a.workerName).localeCompare(String(b.workerName)));
+}
+function finishedPendingMiniCard(){
+ const accounts=finishedPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0);
+ return `<button type="button" class="card" id="fmOpenPending" style="width:100%;text-align:left;cursor:pointer;border:1px solid var(--line);"><div style="display:flex;justify-content:space-between;align-items:center;"><div><h3 style="margin:0;">⏳ Pending</h3><div style="font-size:12px;color:var(--muted);margin-top:4px;">Manual Pending only — same workflow as Distribute Upper</div></div><div style="text-align:right;"><strong>${total} ATOMS</strong><div style="font-size:22px;">›</div></div></div></button>`;
+}
+
+let finishedPendingFilter='today';
+let finishedPendingSearch='';
+function finishedPendingFilteredRows(){
+ const now=new Date(),today=finishedLocalDateKey(now),month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(finishedPendingSearch||'').trim().toLowerCase();
+ return finishedPendingRecords().filter(r=>{const key=finishedLocalDateKey(r.date),ok=finishedPendingFilter==='today'?key===today:finishedPendingFilter==='month'?key.startsWith(month):true;return ok&&(!q||`${r.workerName||''} ${r.voucherId||''}`.toLowerCase().includes(q));}).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+}
+function finishedPendingVoucherForRecord(r){return r?.voucherId?finishedMansVouchers().find(v=>String(v.id)===String(r.voucherId)):null;}
+function openFinishedPendingRecord(id){
+ const r=finishedPendingRecords().find(x=>String(x.id)===String(id));if(!r)return;const v=finishedPendingVoucherForRecord(r);
+ if(v){openFinishedVoucher(v.id,false);return;}
+ const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0);
+ modal(`<h3>Pending Transaction</h3><div class="rline"><span>Worker:</span><strong>${esc(r.workerName||'')}</strong></div><div class="rline"><span>Date:</span><span>${esc(fmtDate(r.date))}</span></div><div class="rline"><span>Pending:</span><strong>${d>=0?'+':''}${d} ATOMS</strong></div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+function printFinishedPendingRecord(id){
+ const r=finishedPendingRecords().find(x=>String(x.id)===String(id));if(!r)return;const v=finishedPendingVoucherForRecord(r);
+ if(v){printFinishedMansHtml(finishedVoucherHtml(v));return;}
+ const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0);
+ printFinishedMansHtml(`<div class="receipt-paper" style="width:80mm;margin:auto;"><div class="brand-head"><h3>${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div><div class="sub" style="font-weight:800;">FINISHED MAN PENDING</div><hr><div class="rline"><span>Worker:</span><strong>${esc(r.workerName||'')}</strong></div><div class="rline"><span>Date:</span><span>${esc(fmtDate(r.date))}</span></div><div class="rline"><span>Pending:</span><strong>${d>=0?'+':''}${d} ATOMS</strong></div></div>`);
+}
+
+function finishedPendingReportHtml(){
+ const rows=finishedPendingFilteredRows(),map=new Map();let grand=0;
+ rows.forEach(r=>{const wid=String(r.workerId||''),worker=r.workerName||finishedMansWorkerName(wid),delta=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0);if(!map.has(wid))map.set(wid,{worker,pending:0,articles:new Set()});const a=map.get(wid);a.pending+=delta;const v=finishedPendingVoucherForRecord(r);(v?.items||[]).forEach(i=>a.articles.add(finishedMansArticleName(i.articleId)));});
+ const accounts=Array.from(map.values()).map(a=>({...a,pending:Math.max(0,a.pending)}));grand=accounts.reduce((s,a)=>s+a.pending,0);
+ return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div class="brand-head"><h3 style="font-size:18px;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}${settings.phone?`<div class="sub">Ph: ${esc(settings.phone)}</div>`:''}<div class="sub" style="font-weight:800;letter-spacing:1px;">FINISHED MAN PENDING REPORT</div><hr>
+ ${accounts.map(a=>`<div style="margin:7px 0;"><div class="rline"><strong>${esc(a.worker)}</strong><strong>${a.pending} ATOMS</strong></div><div style="font-size:10px;">Articles: ${a.articles.size?esc(Array.from(a.articles).join(', ')):'—'}</div></div><hr>`).join('')}
+ <div class="rline" style="font-weight:900;font-size:13px;"><span>GRAND TOTAL PENDING:</span><span>${grand} ATOMS</span></div>${settings.receiptFooter?`<div class="footer">${esc(settings.receiptFooter)}</div>`:''}</div>`;
+}
+function printFinishedPendingReport(){printFinishedMansHtml(finishedPendingReportHtml(),'Pending Report');}
+function pageFinishedMansPending(){
+ const accounts=finishedPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0);
+ return `<div class="fm-pending-head"><h2 class="page-title">Finished Mans Pending</h2><button class="btn ghost" id="fmBackPending">← Back</button></div>
+ <div class="card fm-pending-compact">
+   <div class="fm-pending-filter-row">
+    <button class="btn ${finishedPendingFilter==='today'?'brass':'ghost'} small" data-fm-pending-filter="today">Today</button>
+    <button class="btn ${finishedPendingFilter==='month'?'brass':'ghost'} small" data-fm-pending-filter="month">Monthly</button>
+    <button class="btn ${finishedPendingFilter==='all'?'brass':'ghost'} small" data-fm-pending-filter="all">All Time</button>
+    <input id="fmPendingSearch" value="${esc(finishedPendingSearch)}" placeholder="Search Worker / Voucher">
+    <div class="fm-pending-total">Current Pending: <strong>${total} ATOMS</strong></div><button class="btn ghost small" id="fmPrintPendingReport">🖨 Print Report</button>
+   </div>
+   <div id="fmPendingPageList" class="fm-pending-history"></div>
+ </div>`;
+}
+function renderFinishedPendingPageList(){
+ const host=document.getElementById('fmPendingPageList');if(!host)return;const rows=finishedPendingFilteredRows();
+ host.innerHTML=rows.length?`<div style="overflow:auto;"><table><thead><tr><th>Date / Time</th><th>Worker</th><th>Voucher</th><th>Pending</th><th>Action</th></tr></thead><tbody>${rows.map(r=>{const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0),v=finishedPendingVoucherForRecord(r);return `<tr><td>${esc(new Date(r.date).toLocaleString())}</td><td>${esc(r.workerName||'')}</td><td>${esc(v?.voucherNo||r.voucherId||'—')}</td><td>${d>=0?'+':''}${d} ATOMS</td><td><button class="btn ghost small" data-fm-pending-view="${esc(r.id)}">View</button> <button class="btn ghost small" data-fm-pending-print="${esc(r.id)}">Print</button> <button class="btn blue small" data-fm-pending-edit="${esc(r.id)}">Edit</button> <button class="btn red small" data-fm-pending-delete="${esc(r.id)}">Delete</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No Pending transactions in this view.</div>';
+ document.querySelectorAll('[data-fm-pending-view]').forEach(b=>b.onclick=()=>openFinishedPendingRecord(b.dataset.fmPendingView));
+ document.querySelectorAll('[data-fm-pending-print]').forEach(b=>b.onclick=()=>printFinishedPendingRecord(b.dataset.fmPendingPrint));
+ document.querySelectorAll('[data-fm-pending-edit]').forEach(b=>b.onclick=()=>editFinishedPendingEntry(b.dataset.fmPendingEdit));
+ document.querySelectorAll('[data-fm-pending-delete]').forEach(b=>b.onclick=()=>deleteFinishedPendingEntry(b.dataset.fmPendingDelete));
+}
+function openFinishedPendingWorkerDetail(workerId){
+ const rows=finishedPendingRecords().filter(p=>String(p.workerId)===String(workerId)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))),account=getFinishedPendingForWorker(workerId),name=account?.workerName||rows[0]?.workerName||'Worker';
+ modal(`<h3>${esc(name)} — Pending</h3><div class="card" style="margin:0 0 10px;"><div class="label">CURRENT PENDING</div><div style="font-size:26px;font-weight:900;">${account?.qty||0} ATOMS</div></div>${rows.length?rows.map(r=>{const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0);return `<div style="border-top:1px solid var(--line);padding:9px 0;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><strong>${d>=0?'+':''}${d} ATOMS</strong><div><button class="btn blue small" data-fm-pending-edit="${esc(r.id)}">Edit</button> <button class="btn red small" data-fm-pending-delete="${esc(r.id)}">Delete</button></div></div><div style="font-size:12px;color:var(--muted);">${esc(fmtDate(r.date))}</div></div>`}).join(''):'<div class="empty">No Pending history.</div>'}<div class="modal-actions"><button class="btn ghost" id="fmPendingDetailClose">Close</button></div>`);
+ document.getElementById('fmPendingDetailClose').onclick=closeModal;document.querySelectorAll('[data-fm-pending-edit]').forEach(b=>b.onclick=()=>editFinishedPendingEntry(b.dataset.fmPendingEdit));document.querySelectorAll('[data-fm-pending-delete]').forEach(b=>b.onclick=()=>deleteFinishedPendingEntry(b.dataset.fmPendingDelete));
+}
+async function saveFinishedPending(){
+ const workerId=String(document.getElementById('fmPendingWorker')?.value||''),qty=Number(document.getElementById('fmPendingQty')?.value),action=String(document.getElementById('fmPendingAction')?.value||'add'),worker=finishedMansProductionWorkers().find(w=>String(w.id)===workerId);
+ if(!worker){toast('Please select a Finished Man Worker');return;}if(!Number.isInteger(qty)||qty<=0){toast('Please enter positive whole Pending Atoms');return;}
+ const current=getFinishedPendingForWorker(workerId)?.qty||0,delta=action==='minus'?-qty:qty;if(delta<0&&qty>current){toast(`Current Pending is ${current} Atoms. You cannot minus ${qty}.`);return;}const next=current+delta;
+ if(!confirm(`${worker.name}\nCurrent Pending: ${current} Atoms\n${delta>0?'Add':'Minus'}: ${qty} Atoms\nNew Pending: ${next} Atoms\n\nOnly Pending balance will change. Confirm?`))return;
+ const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();finishedPendingRecords().push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});audit(delta<0?'Finished Pending Reduced':'Finished Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
+ if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved.');return;}render();toast(`${worker.name} Current Pending: ${next} ATOMS`);
+}
+async function editFinishedPendingEntry(id){
+ const rec=finishedPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const old=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0),sign=old<0?-1:1,raw=prompt(`Old Pending Entry: ${old>=0?'+':''}${old} Atoms\nEnter new whole Atoms for this entry:`,Math.abs(old));if(raw===null)return;const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}const next=sign*qty;if(!confirm(`Change Pending entry ${old>=0?'+':''}${old} → ${next>=0?'+':''}${next} Atoms?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);rec.delta=next;rec.qty=Math.abs(next);rec.action=next<0?'minus':'add';rec.editedAt=new Date().toISOString();audit('Finished Pending Edited',`${rec.workerName}: ${old} → ${next} ATOMS`);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved.');return;}closeModal();render();toast('Pending entry updated');
+}
+async function deleteFinishedPendingEntry(id){
+ const rec=finishedPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.finishedMansPendingRecords=settings.finishedMansPendingRecords.filter(p=>String(p.id)!==String(id));audit('Finished Pending Deleted',`${rec.workerName}: ${d} ATOMS`);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved.');return;}closeModal();render();toast('Pending entry deleted');
+}
+function pageFinishedMansProduction(){
+ normalizeFinishedMansState();
+ const finishedWorkers=finishedMansProductionWorkers(),
+ selected=finishedWorkers.find(w=>String(w.id)===String(finishedMansSelectedWorker))||null;
+ if(!selected)finishedMansSelectedWorker=null;
+ const prodArticles=settings.finishedMansProductionArticles||[];
+ const todayKey=finishedLocalDateKey(new Date()),todayVouchers=finishedMansVouchers().filter(v=>!v.deletedAt&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);
+ const todayKharcha=todayVouchers.reduce((s,v)=>s+(Number(v.expenseAmount)||0),0);
+ const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
+ const backDisabled=navHistory.length?'':'disabled';
+
+ return `<div class="fm-compact-page">
+ <h2 class="page-title fm-page-title">Finished Mans Production</h2>
+
+ <div class="card fm-main-compact-row">
+   <button type="button" class="btn ghost small fm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
+   <button type="button" class="btn ghost small fm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
+   <button type="button" class="btn brass small fm-top-card" id="fmOpenArticlesHub">👞 Production Articles</button>
+   <button type="button" class="btn brass small fm-top-card" id="fmOpenMaterialsHub">📦 Production Materials</button>
+   <button type="button" class="btn blue small fm-top-card" id="fmOpenProductionList">📋 Production List</button>
+   <button type="button" class="btn ghost small fm-top-card" id="fmOpenPending">⏳ Pending</button>
+   <div class="fm-top-stat"><span>Today Kharcha</span><strong>${upperMoney(todayKharcha)}</strong></div>
+   <div class="fm-top-stat"><span>Today Production</span><strong>${todayProduction} ATOMS</strong></div>
+ </div>
+
+ <div class="card fm-worker-card">
+   <div class="fm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
+   <div class="fm-worker-grid">${finishedWorkers.length?finishedWorkers.map(w=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box fm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="fm-completed-badge">✓ Completed</div>`:''}<div class="fm-worker-name">${esc(w.name||'')}</div><div class="fm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
+   ${selected?`<div class="fm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
+ </div>
+
+ <div class="card fm-entry-card">
+   <div class="fm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Finished Man above first</span>'}</div>
+   <div class="fm-entry-row">
+     <div class="fm-field fm-article-field"><label>Production Article</label><select id="fmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div>
+     <div class="fm-field fm-qty-field"><label>Quantity / Items</label><input id="fmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
+     <div class="fm-field fm-expense-field"><label>Kharcha / Expense</label><input id="fmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
+     <div class="fm-field fm-pending-field"><label>Pending</label><input id="fmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
+     <div class="fm-field fm-notes-field"><label>Notes (Optional)</label><input id="fmNotes" placeholder="Notes"></div>
+     <div class="fm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="fmAddDraft">+ Add Item</button></div>
+     <div class="fm-entry-action"><label>&nbsp;</label><button class="btn brass" id="fmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
+   </div>
+   <div id="fmExtraItemRows" class="fm-extra-item-rows"></div>
+
+   ${finishedMansDraftItems.length?`<div class="fm-added-items">${finishedMansDraftItems.map((i,n)=>`<div class="fm-added-item"><span>${n+1}. <strong>${esc(finishedMansArticleName(i.articleId))}</strong></span><span>${i.reportedQty} Atoms</span><button class="btn red small" data-fm-remove-draft="${esc(i.id)}">✕</button></div>`).join('')}</div>`:''}
+ </div>
+ </div>`;
+}
+async function saveFinishedMansEntry(){
+  const date=document.getElementById('fmDate')?.value,workerId=document.getElementById('fmWorker')?.value,articleId=document.getElementById('fmArticle')?.value,reportedQty=Number(document.getElementById('fmReported')?.value),notes=document.getElementById('fmNotes')?.value.trim()||'';
+  if(!date||!workerId||!articleId||!Number.isInteger(reportedQty)||reportedQty<=0){toast('Select Date, Worker, Article and enter positive whole Pairs.');return;}
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
+  finishedMansEntries().push({id:uid(),date,workerId,articleId,reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
+  audit('Finished Mans Production Reported',`${finishedMansWorkerName(workerId)} — ${finishedMansArticleName(articleId)} — ${reportedQty} Pairs`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
+  window.__finishedMansDate=date;render();toast('Reported production saved as Pending Verification');
+}
+async function editFinishedMansEntry(id){
+  const e=finishedMansEntries().find(x=>String(x.id)===String(id));if(!e||finishedMansStatus(e)!=='Pending Verification')return;
+  const raw=prompt(`Reported Quantity for ${finishedMansWorkerName(e.workerId)} / ${finishedMansArticleName(e.articleId)}`,e.reportedQty);if(raw===null)return;const q=Number(raw);
+  if(!Number.isInteger(q)||q<=0){toast('Enter positive whole Pairs only');return;}if(!confirm(`Change Reported Quantity ${e.reportedQty} → ${q} Pairs?`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),old=e.reportedQty;e.reportedQty=q;e.editedAt=new Date().toISOString();audit('Finished Mans Reported Entry Edited',`${old} → ${q} Pairs`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Edit was not saved. Original entry restored.');return;}render();
+}
+async function deleteFinishedMansEntry(id){
+  const e=finishedMansEntries().find(x=>String(x.id)===String(id));if(!e||finishedMansStatus(e)!=='Pending Verification')return;
+  if(!confirm(`Delete Pending entry?\n${finishedMansWorkerName(e.workerId)} — ${finishedMansArticleName(e.articleId)} — ${e.reportedQty} Pairs`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.finishedMansProduction=finishedMansEntries().filter(x=>String(x.id)!==String(id));audit('Finished Mans Reported Entry Deleted',`${finishedMansWorkerName(e.workerId)} — ${e.reportedQty} Pairs`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Delete was not saved. Entry restored.');return;}render();
+}
+function finishedMansSlipHtml(slip){
+  const rows=slip.entryIds.map(id=>finishedMansEntries().find(e=>String(e.id)===String(id))).filter(Boolean);
+  return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div style="text-align:center;">${settings.logo?`<img src="${esc(settings.logo)}" style="max-width:54px;max-height:54px;">`:''}<h3 style="margin:3px 0;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3><div style="font-weight:900;">FINISHED MANS PRODUCTION VERIFICATION SLIP</div><div class="sub">${esc(slip.slipNo)} | ${esc(slip.date)}</div></div><hr><table style="width:100%;font-size:9px;border-collapse:collapse;"><thead><tr><th>No.</th><th>Worker</th><th>Article</th><th>Reported</th><th>Verify Qty</th><th>✓/✕</th></tr></thead><tbody>${rows.map((e,i)=>`<tr><td>${i+1}</td><td>${esc(finishedMansWorkerName(e.workerId))}</td><td>${esc(finishedMansArticleName(e.articleId))}</td><td>${e.reportedQty}</td><td>______</td><td>___</td></tr>`).join('')}</tbody></table><hr><div style="font-size:10px;line-height:1.9;">Verified By: ____________________<br>Signature: ______________________<br>Verification Time: ______________</div></div>`;
+}
+async function createFinishedMansSlip(){
+  const date=finishedMansSelectedDate(),pending=finishedMansEntries().filter(e=>finishedMansDateKey(e.date)===date&&finishedMansStatus(e)==='Pending Verification');
+  if(!pending.length){toast('No Pending Verification entries for selected date.');return;}
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),slipNo=finishedMansUniqueSlipNo(),id=uid(),now=new Date().toISOString();
+  const slip={id,slipNo,date,entryIds:pending.map(e=>e.id),createdAt:now,createdBy:'Admin'};finishedMansSlips().push(slip);pending.forEach(e=>e.slipId=id);audit('Finished Mans Verification Slip Created',`${slipNo} — ${pending.length} entries`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Slip was not saved.');return;}
+  modal(`${finishedMansSlipHtml(slip)}<div class="modal-actions"><button class="btn brass" id="fmDoPrint">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('fmDoPrint').onclick=()=>printFinishedMansHtml(finishedMansSlipHtml(slip),'Finished Mans Verification Slip');
+}
+function pageFinishedMansSlips(){
+  const rows=finishedMansSlips().slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  return `<h2 class="page-title">Finished Mans Verification Slips</h2><div class="card"><table><thead><tr><th>Slip No.</th><th>Date</th><th>Entries</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(s=>`<tr><td><strong>${esc(s.slipNo)}</strong></td><td>${esc(s.date)}</td><td>${s.entryIds.length}</td><td><button class="btn blue small" onclick="openFinishedMansSlip('${s.id}')">Open</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty">No verification slips.</td></tr>'}</tbody></table></div>`;
+}
+function openFinishedMansSlip(id){
+  const s=finishedMansSlips().find(x=>String(x.id)===String(id));if(!s)return;modal(`${finishedMansSlipHtml(s)}<div class="modal-actions"><button class="btn brass" onclick="printFinishedMansHtml(finishedMansSlipHtml(finishedMansSlips().find(x=>String(x.id)==='${id}')),'Finished Mans Verification Slip')">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+function pageFinishedMansVerification(){
+  const pending=finishedMansEntries().filter(e=>finishedMansStatus(e)==='Pending Verification').sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return `<h2 class="page-title">Finished Mans Physical Verification</h2><div class="card"><div style="overflow:auto;"><table><thead><tr><th>Date</th><th>Worker</th><th>Article</th><th>Reported</th><th>Verified Qty</th><th>Notes</th><th>Action</th></tr></thead><tbody>${pending.length?pending.map(e=>`<tr><td>${esc(finishedMansDateKey(e.date))}</td><td>${esc(finishedMansWorkerName(e.workerId))}</td><td>${esc(finishedMansArticleName(e.articleId))}</td><td>${e.reportedQty}</td><td><input type="number" min="0" step="1" id="fmvq-${e.id}" style="width:90px;"></td><td><input id="fmvn-${e.id}" placeholder="Verification notes"></td><td><button class="btn brass small" onclick="verifyFinishedMansEntry('${e.id}')">Verify</button></td></tr>`).join(''):'<tr><td colspan="7" class="empty">No Pending Verification entries.</td></tr>'}</tbody></table></div></div>`;
+}
+async function verifyFinishedMansEntry(id){
+  const e=finishedMansEntries().find(x=>String(x.id)===String(id));if(!e||finishedMansStatus(e)!=='Pending Verification')return;
+  const q=Number(document.getElementById(`fmvq-${id}`)?.value),notes=document.getElementById(`fmvn-${id}`)?.value.trim()||'';
+  if(!Number.isInteger(q)||q<0){toast('Enter verified whole Pairs (0 or more).');return;}
+  const diff=q-Number(e.reportedQty);const status=diff===0?'Verified':'Short / Not Fully Verified';
+  if(!confirm(`Reported: ${e.reportedQty}\nVerified: ${q}\nDifference: ${diff}\nStatus: ${status}\n\nConfirm physical verification?`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);e.verifiedQty=q;e.difference=diff;e.status=status;e.verificationNotes=notes;e.verificationAt=new Date().toISOString();e.verifiedBy='Admin';audit('Finished Mans Production Verified',`${finishedMansWorkerName(e.workerId)} — Reported ${e.reportedQty}, Verified ${q}, Difference ${diff}`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Verification was not saved. Entry remains Pending.');return;}render();toast(status);
+}
+function finishedMansFilteredRows(){
+  const q=String(window.__fmSearch||'').toLowerCase(),status=window.__fmStatus||'all',worker=window.__fmWorker||'',article=window.__fmArticle||'',date=window.__fmHistoryDate||'';
+  return finishedMansEntries().filter(e=>(!date||finishedMansDateKey(e.date)===date)&&(!worker||String(e.workerId)===worker)&&(!article||String(e.articleId)===article)&&(status==='all'||finishedMansStatus(e)===status)&&(!q||finishedMansWorkerName(e.workerId).toLowerCase().includes(q)||finishedMansArticleName(e.articleId).toLowerCase().includes(q)));
+}
+function pageFinishedMansHistory(){
+  const rows=finishedMansFilteredRows(),reported=rows.reduce((s,e)=>s+(Number(e.reportedQty)||0),0),verified=rows.reduce((s,e)=>s+(Number(e.verifiedQty)||0),0),diff=rows.reduce((s,e)=>s+(Number(e.difference)||0),0),pending=rows.filter(e=>finishedMansStatus(e)==='Pending Verification').length;
+  return `<h2 class="page-title">Finished Mans Production History</h2><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><div class="card"><b>Total Reported</b><div>${reported}</div></div><div class="card"><b>Total Verified</b><div>${verified}</div></div><div class="card"><b>Total Difference</b><div>${diff}</div></div><div class="card"><b>Pending Verification</b><div>${pending}</div></div></div><div class="card"><div style="display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:8px;"><input type="date" value="${esc(window.__fmHistoryDate||'')}" onchange="window.__fmHistoryDate=this.value;render()"><select onchange="window.__fmWorker=this.value;render()"><option value="">All Workers</option>${finishedMansWorkerOptions()}</select><select onchange="window.__fmArticle=this.value;render()"><option value="">All Articles</option>${finishedMansArticleOptions()}</select><select onchange="window.__fmStatus=this.value;render()"><option value="all">All Status</option><option>Verified</option><option>Pending Verification</option><option>Short / Not Fully Verified</option></select><input placeholder="Search Worker / Article" value="${esc(window.__fmSearch||'')}" oninput="window.__fmSearch=this.value;render()"></div><div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>Date</th><th>Worker</th><th>Article</th><th>Reported</th><th>Verified</th><th>Difference</th><th>Status</th><th>View</th></tr></thead><tbody>${rows.length?rows.map(e=>`<tr><td>${esc(finishedMansDateKey(e.date))}</td><td>${esc(finishedMansWorkerName(e.workerId))}</td><td>${esc(finishedMansArticleName(e.articleId))}</td><td>${e.reportedQty}</td><td>${e.verifiedQty??'—'}</td><td>${e.difference??'—'}</td><td>${finishedMansBadge(finishedMansStatus(e))}</td><td><button class="btn ghost small" onclick="viewFinishedMansEntry('${e.id}')">View</button></td></tr>`).join(''):'<tr><td colspan="8" class="empty">No production history.</td></tr>'}</tbody></table></div></div>`;
+}
+function viewFinishedMansEntry(id){
+  const e=finishedMansEntries().find(x=>String(x.id)===String(id));if(!e)return;modal(`<h3>Finished Mans Production Detail</h3><div class="card"><div class="rline"><span>Date</span><b>${esc(finishedMansDateKey(e.date))}</b></div><div class="rline"><span>Worker</span><b>${esc(finishedMansWorkerName(e.workerId))}</b></div><div class="rline"><span>Article</span><b>${esc(finishedMansArticleName(e.articleId))}</b></div><div class="rline"><span>Original Reported</span><b>${e.originalReportedQty}</b></div><div class="rline"><span>Reported</span><b>${e.reportedQty}</b></div><div class="rline"><span>Verified</span><b>${e.verifiedQty??'—'}</b></div><div class="rline"><span>Difference</span><b>${e.difference??'—'}</b></div><div class="rline"><span>Status</span>${finishedMansBadge(finishedMansStatus(e))}</div><div class="rline"><span>Created</span><b>${esc(e.createdAt||'')}</b></div><div class="rline"><span>Verified</span><b>${esc(e.verificationAt||'—')}</b></div></div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+function pageFinishedMansReports(){
+  const verified=finishedMansEntries().filter(e=>e.verifiedQty!==null&&e.verifiedQty!==undefined),map=new Map();
+  verified.forEach(e=>{const k=String(e.articleId);map.set(k,(map.get(k)||0)+(Number(e.verifiedQty)||0));});
+  const rows=Array.from(map.entries()).sort((a,b)=>finishedMansArticleName(a[0]).localeCompare(finishedMansArticleName(b[0])));
+  return `<h2 class="page-title">Finished Mans Reports</h2><div class="card"><h3 style="margin-top:0;">Article-wise Verified Production</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Only manually Verified Quantity is counted as final production.</div><table><thead><tr><th>Article</th><th>Verified Production</th></tr></thead><tbody>${rows.length?rows.map(([id,q])=>`<tr><td>${esc(finishedMansArticleName(id))}</td><td><strong>${q} Pairs</strong></td></tr>`).join(''):'<tr><td colspan="2" class="empty">No verified production yet.</td></tr>'}</tbody></table></div>`;
+}
+
+
 /* ============ PAGE EVENT WIRING ============ */
 function attachPageHandlers(){
   document.getElementById('btnBackDashboard')?.addEventListener('click', ()=>goto('dashboard'));
@@ -9191,6 +9944,7 @@ function attachPageHandlers(){
   // Workers
   document.getElementById('btnDistributeUpper')?.addEventListener('click', ()=>goto('distributeUpper'));
   document.getElementById('btnBatamMansProduction')?.addEventListener('click',()=>goto('batamMansProduction'));
+  document.getElementById('btnFinishedMansProduction')?.addEventListener('click',()=>goto('finishedMansProduction'));
   document.querySelectorAll('[data-worker-summary]').forEach(b=>b.addEventListener('click', ()=>openWorkerSummaryDetail(b.dataset.workerSummary)));
   document.getElementById('btnBackWorkerSummary')?.addEventListener('click', ()=>goBack());
   document.getElementById('btnPrintWorkerSummary')?.addEventListener('click', ()=>printWorkerSummary(workerSummaryDetailType));
@@ -9378,6 +10132,70 @@ function attachPageHandlers(){
   document.getElementById('bmPrintVerificationList')?.addEventListener('click',printBatamCurrentVerificationList);
   document.getElementById('bmPrintProductionReport')?.addEventListener('click',printBatamProductionReport);
   document.getElementById('bmPrintPendingReport')?.addEventListener('click',printBatamPendingReport);
+
+  // Finished Man Production — scoped first-stage controls
+  // Finished Man Production — compact layout hubs (existing workflows)
+  document.getElementById('fmOpenArticlesHub')?.addEventListener('click',()=>goto('finishedMansProductionArticles'));
+  document.getElementById('fmOpenMaterialsHub')?.addEventListener('click',()=>goto('finishedMansProductionMaterials'));
+  document.getElementById('fmBackArticlesPage')?.addEventListener('click',()=>goto('finishedMansProduction',false,false,true));
+  document.getElementById('fmPageAddArticle')?.addEventListener('click',()=>openFinishedMansProductionArticleModal());
+  document.getElementById('fmBackMaterialsPage')?.addEventListener('click',()=>goto('finishedMansProduction',false,false,true));
+  document.getElementById('fmPageAddMaterial')?.addEventListener('click',()=>openFinishedMansProductionMaterialModal());
+  document.querySelectorAll('[data-fmpm-edit]').forEach(b=>b.addEventListener('click',()=>openFinishedMansProductionMaterialModal(b.dataset.fmpmEdit)));
+  document.querySelectorAll('[data-fmpm-delete]').forEach(b=>b.addEventListener('click',()=>deleteFinishedProductionMaterial(b.dataset.fmpmDelete)));
+  document.getElementById('fmOpenMaterialAccounts')?.addEventListener('click',()=>goto('finishedMansMaterialAccounts'));
+  document.getElementById('fmBackMaterialAccounts')?.addEventListener('click',()=>goto('finishedMansProductionMaterials',false,false,true));
+  document.getElementById('fmPrintMaterialAccountsPage')?.addEventListener('click',()=>printFinishedMansHtml(finishedMaterialAccountsReportHtml(),'Worker Material Accounts'));
+  document.querySelectorAll('[data-fm-account-page-filter]').forEach(b=>b.addEventListener('click',()=>{finishedMaterialFilter=b.dataset.fmAccountPageFilter;render();}));
+  document.getElementById('fmAccountPageSearch')?.addEventListener('input',e=>{finishedMaterialSearch=e.target.value||'';render();const x=document.getElementById('fmAccountPageSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
+  document.getElementById('fmMatPageCustomFrom')?.addEventListener('change',e=>{finishedMaterialCustomFrom=e.target.value||'';render();});
+  document.getElementById('fmMatPageCustomTo')?.addEventListener('change',e=>{finishedMaterialCustomTo=e.target.value||'';render();});
+  document.getElementById('fmPageDistributeMaterial')?.addEventListener('click',()=>goto('finishedMansDistributeMaterial'));
+  document.getElementById('btnAddProductionArticle')?.addEventListener('click',()=>openFinishedMansProductionArticleModal());
+  document.getElementById('btnProductionArticles')?.addEventListener('click',openFinishedMansProductionArticlesList);
+  document.getElementById('btnAddProductionMaterial')?.addEventListener('click',()=>openFinishedMansProductionMaterialModal());
+  document.getElementById('btnProductionMaterials')?.addEventListener('click',openFinishedMansProductionMaterialsList);
+  document.getElementById('fmOpenProductionList')?.addEventListener('click',()=>goto('finishedMansProductionList'));
+  document.getElementById('fmBackProduction')?.addEventListener('click',()=>goto('finishedMansProduction'));
+  document.getElementById('fmBackMaterialDist')?.addEventListener('click',()=>goto('finishedMansProduction'));
+  document.getElementById('fmSaveMaterialDist')?.addEventListener('click',saveFinishedMaterialDistribution);
+  document.getElementById('fmSaveExpense')?.addEventListener('click',saveFinishedExpense);
+  document.getElementById('fmOpenPending')?.addEventListener('click',()=>goto('finishedMansPending'));
+  document.getElementById('fmBackPending')?.addEventListener('click',()=>goto('finishedMansProduction'));
+  document.querySelectorAll('[data-fm-pending-filter]').forEach(b=>b.addEventListener('click',()=>{finishedPendingFilter=b.dataset.fmPendingFilter;render();}));
+  document.getElementById('fmPendingSearch')?.addEventListener('input',e=>{finishedPendingSearch=e.target.value||'';renderFinishedPendingPageList();});
+  if(currentPage==='finishedMansPending')renderFinishedPendingPageList();
+  document.querySelectorAll('[data-finished-pickworker]').forEach(card=>card.addEventListener('click',e=>{
+    if(e.target.closest('[data-finished-photo]'))return;
+    finishedMansSelectedWorker=card.dataset.finishedPickworker;render();
+  }));
+  document.querySelectorAll('[data-finished-photo]').forEach(photo=>photo.addEventListener('click',e=>{
+    e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.finishedPhoto));if(w?.photo)openImageLightbox(w.photo);
+  }));
+  document.getElementById('fmAddDraft')?.addEventListener('click',addFinishedDraftItem);
+  document.getElementById('fmAddMaterialDraft')?.addEventListener('click',addFinishedDraftMaterial);
+  document.querySelectorAll('[data-fm-remove-material]').forEach(b=>b.addEventListener('click',()=>removeFinishedDraftMaterial(b.dataset.fmRemoveMaterial)));
+  document.querySelectorAll('[data-fm-remove-draft]').forEach(b=>b.addEventListener('click',()=>removeFinishedDraftItem(b.dataset.fmRemoveDraft)));
+  document.getElementById('fmCreateVoucher')?.addEventListener('click',createFinishedProductionVoucher);
+  document.querySelectorAll('[data-fm-filter]').forEach(b=>b.addEventListener('click',()=>{finishedMansProductionFilter=b.dataset.fmFilter;render();}));
+  document.getElementById('fmCustomDateToggle')?.addEventListener('click',()=>{finishedMansProductionFilter='custom';render();});
+  document.getElementById('fmCustomFrom')?.addEventListener('change',e=>{finishedMansProductionCustomFrom=e.target.value||'';render();});
+  document.getElementById('fmCustomTo')?.addEventListener('change',e=>{finishedMansProductionCustomTo=e.target.value||'';render();});
+  document.querySelectorAll('[data-fm-material-filter]').forEach(b=>b.addEventListener('click',()=>{finishedMaterialFilter=b.dataset.fmMaterialFilter;render();}));
+  document.getElementById('fmMaterialSearch')?.addEventListener('input',e=>{finishedMaterialSearch=e.target.value||'';render();const x=document.getElementById('fmMaterialSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
+  document.querySelectorAll('[data-fm-material-worker]').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('[data-fm-material-worker-photo]'))return;finishedMaterialSelectedWorker=b.dataset.fmMaterialWorker;render();}));
+  document.querySelectorAll('[data-fm-material-worker-photo]').forEach(p=>p.addEventListener('click',e=>{e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(p.dataset.fmMaterialWorkerPhoto));if(w?.photo)openImageLightbox(w.photo);}));
+  document.querySelectorAll('[data-fm-material-account]').forEach(b=>b.addEventListener('click',()=>openFinishedMaterialAccount(b.dataset.fmMaterialAccount)));
+  document.getElementById('fmProductionSearch')?.addEventListener('input',e=>{finishedMansProductionSearch=e.target.value;render();const x=document.getElementById('fmProductionSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
+  document.querySelectorAll('[data-fm-view-voucher]').forEach(b=>b.addEventListener('click',()=>openFinishedVoucher(b.dataset.fmViewVoucher)));
+  document.querySelectorAll('[data-fm-print-voucher]').forEach(b=>b.addEventListener('click',()=>openFinishedVoucher(b.dataset.fmPrintVoucher,true)));
+  document.querySelectorAll('[data-fm-edit-voucher]').forEach(b=>b.addEventListener('click',()=>openEditFinishedVoucher(b.dataset.fmEditVoucher)));
+  document.querySelectorAll('[data-fm-delete-voucher]').forEach(b=>b.addEventListener('click',()=>deleteFinishedVoucher(b.dataset.fmDeleteVoucher)));
+  document.getElementById('fmCustomizeVoucher')?.addEventListener('click',openFinishedVoucherCustomize);
+  document.getElementById('fmPrintVerificationList')?.addEventListener('click',printFinishedCurrentVerificationList);
+  document.getElementById('fmPrintProductionReport')?.addEventListener('click',printFinishedProductionReport);
+  document.getElementById('fmPrintPendingReport')?.addEventListener('click',printFinishedPendingReport);
+
 
   // Approved Upper exception: photo preview only; selection/calculations remain unchanged.
   document.querySelectorAll('[data-upper-pickworker] .entity-photo.zoomable').forEach(photo=>photo.addEventListener('click',e=>{
