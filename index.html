@@ -1005,6 +1005,150 @@
  .bm-added-item .btn{min-height:23px!important;height:23px!important;padding:2px 6px!important;font-size:9.5px!important}
 }
 </style>
+
+<style id="app-full-width-and-batam-size-v3">
+/* All app pages: use the full available content width up to the right edge. */
+#mainArea{
+  width:100%!important;
+  max-width:none!important;
+  box-sizing:border-box!important;
+}
+#mainArea > *{
+  max-width:none!important;
+  box-sizing:border-box!important;
+}
+#mainArea > .card,
+#mainArea > .grid,
+#mainArea > .page,
+#mainArea > section{
+  width:100%!important;
+  max-width:none!important;
+}
+#mainArea .bm-compact-page{
+  width:100%!important;
+  max-width:none!important;
+}
+
+/* Batam Man Production: modestly larger than the previous compact version. */
+@media (min-width:900px){
+  .bm-main-compact-row{
+    width:100%!important;
+    max-width:none!important;
+    padding:8px 10px!important;
+    gap:7px!important;
+    min-height:52px!important;
+  }
+  .bm-top-card{
+    height:35px!important;
+    min-height:35px!important;
+    padding:5px 9px!important;
+    font-size:11.5px!important;
+  }
+
+  .bm-worker-card{
+    width:100%!important;
+    max-width:none!important;
+    padding:9px 11px!important;
+  }
+  .bm-worker-card>h3{
+    font-size:15px!important;
+    margin-bottom:7px!important;
+  }
+  .bm-worker-grid{
+    width:100%!important;
+    grid-template-columns:repeat(10,minmax(0,1fr))!important;
+    gap:6px!important;
+  }
+  .bm-worker-box{
+    height:82px!important;
+    min-height:82px!important;
+    max-height:82px!important;
+    padding:5px 3px!important;
+  }
+  .bm-worker-box .entity-photo{
+    width:49px!important;
+    height:49px!important;
+    min-width:49px!important;
+    min-height:49px!important;
+  }
+  .bm-worker-name{
+    font-size:10px!important;
+    margin-top:4px!important;
+  }
+
+  .bm-entry-card{
+    width:100%!important;
+    max-width:none!important;
+    padding:9px 11px!important;
+  }
+  .bm-entry-head{
+    margin-bottom:7px!important;
+  }
+  .bm-entry-head h3{
+    font-size:15px!important;
+  }
+  .bm-entry-head span{
+    font-size:11px!important;
+  }
+  .bm-entry-row{
+    gap:7px!important;
+  }
+  .bm-field label,.bm-entry-action label{
+    font-size:10.5px!important;
+    margin-bottom:3px!important;
+  }
+  .bm-entry-row input,
+  .bm-entry-row select,
+  .bm-entry-row .btn{
+    height:34px!important;
+    min-height:34px!important;
+    padding:5px 8px!important;
+    font-size:11.5px!important;
+  }
+  .bm-added-item{
+    min-height:31px!important;
+    padding:4px 7px!important;
+    font-size:11px!important;
+  }
+}
+</style>
+
+
+<style id="restore-main-page-scroll-v4">
+@media (min-width:900px){
+  /* App shell stays viewport-sized; the MAIN CONTENT scrolls normally. */
+  html,body{
+    height:100%!important;
+    max-height:none!important;
+    overflow:hidden!important;
+  }
+  #app{
+    height:100vh!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  #appBody{
+    flex:1!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  #mainArea{
+    height:100%!important;
+    max-height:none!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-gutter:stable;
+  }
+
+  /* Cancel old one-screen clipping rules that targeted obsolete #main/.main selectors. */
+  #mainArea > *{
+    flex-shrink:0;
+  }
+}
+</style>
+
 </head>
 <body>
 <div id="app">
