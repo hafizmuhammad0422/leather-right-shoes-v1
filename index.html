@@ -963,6 +963,49 @@
 }
 </style>
 
+<style id="page-layout-customizer-css">
+@media (min-width:900px){
+  #layoutCustomizeBar{
+    position:absolute;top:6px;right:10px;z-index:80;display:flex;gap:5px;align-items:center;
+  }
+  #layoutCustomizeBar button{
+    min-height:25px!important;padding:3px 8px!important;font-size:11px!important;
+    border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;
+  }
+  #layoutCustomizeBar .layout-save{background:#b88a2b;color:#fff;border-color:#b88a2b}
+  #layoutCustomizeBar .layout-danger{background:#8e3434;color:#fff;border-color:#8e3434}
+  body.layout-editing #main{outline:2px dashed rgba(184,138,43,.55);outline-offset:-3px}
+  body.layout-editing #main .card[data-layout-key]{
+    position:relative!important;
+    outline:1px dashed rgba(184,138,43,.85)!important;
+    resize:both!important;overflow:auto!important;
+    min-width:120px!important;min-height:55px!important;
+    max-width:100%!important;max-height:82vh!important;
+    cursor:grab!important;
+  }
+  body.layout-editing #main .card[data-layout-key]:active{cursor:grabbing!important}
+  body.layout-editing #main .card[data-layout-key]::after{
+    content:"↘";position:absolute;right:2px;bottom:0;font-size:13px;font-weight:900;
+    color:#b88a2b;pointer-events:none;
+  }
+  .layout-card-tools{
+    display:none;position:absolute;top:2px;right:3px;z-index:25;gap:3px;align-items:center;
+    background:rgba(20,20,20,.88);padding:2px 3px;border-radius:6px;
+  }
+  body.layout-editing .layout-card-tools{display:flex}
+  .layout-card-tools button{
+    width:22px;height:20px;min-height:20px!important;padding:0!important;border:0;border-radius:4px;
+    background:#fff;color:#111;font-size:11px!important;font-weight:800;cursor:pointer;
+  }
+  body.layout-editing #main .card.layout-dragging{opacity:.5!important}
+  body.layout-editing #main .card.layout-drop-target{outline:2px solid #b88a2b!important}
+  #layoutEditHint{
+    position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:9999;
+    background:rgba(20,20,20,.92);color:#fff;padding:6px 12px;border-radius:8px;font-size:11px;
+    box-shadow:0 4px 18px rgba(0,0,0,.25);
+  }
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -9184,4 +9227,185 @@ document.addEventListener('click',e=>{});
 
 </script>
 
+<script id="page-layout-customizer-js">
+(()=>{
+  const STORE='lr_page_layouts_v1';
+  let editing=false, originalSnapshot=null, observerBusy=false;
+
+  const pageName=()=>String(window.currentPage||document.body.dataset.page||'page');
+  const store=()=>{try{return JSON.parse(localStorage.getItem(STORE)||'{}')}catch(e){return {}}};
+  const putStore=o=>localStorage.setItem(STORE,JSON.stringify(o));
+
+  function directCards(){
+    const main=document.getElementById('main'); if(!main)return [];
+    return [...main.querySelectorAll('.card')].filter(c=>{
+      if(c.closest('.modal,.modal-card,.modal-content'))return false;
+      if(c.id==='layoutCustomizeBar'||c.closest('#layoutCustomizeBar'))return false;
+      return true;
+    });
+  }
+  function cleanText(s){return String(s||'').replace(/\s+/g,' ').trim().slice(0,60)}
+  function cardKey(card,index){
+    const heading=card.querySelector('h1,h2,h3,h4,.page-title,.label,strong');
+    const id=card.id||'';
+    const parent=card.parentElement;
+    const sameParent=[...parent.children].filter(x=>x.classList?.contains('card'));
+    const pos=Math.max(0,sameParent.indexOf(card));
+    return `${pageName()}|${id||cleanText(heading?.textContent)||'card'}|${pos}|${index}`;
+  }
+  function tagCards(){
+    directCards().forEach((c,i)=>{
+      if(!c.dataset.layoutKey)c.dataset.layoutKey=cardKey(c,i);
+      if(!c.querySelector(':scope > .layout-card-tools')){
+        const tools=document.createElement('div');tools.className='layout-card-tools';
+        tools.innerHTML='<button type="button" data-lay="smaller" title="Smaller content">−</button><button type="button" data-lay="bigger" title="Bigger content">+</button><button type="button" data-lay="auto" title="Auto size">↺</button>';
+        c.appendChild(tools);
+      }
+      c.draggable=editing;
+    });
+  }
+  function layoutData(){
+    const cards=directCards();
+    return cards.map((c,i)=>({
+      key:c.dataset.layoutKey||cardKey(c,i),
+      parentKey: parentKey(c.parentElement),
+      order:[...c.parentElement.children].indexOf(c),
+      width:c.style.width||'',
+      height:c.style.height||'',
+      scale:c.dataset.layoutScale||'1'
+    }));
+  }
+  function parentKey(el){
+    const main=document.getElementById('main');
+    if(el===main)return 'MAIN';
+    if(el.id)return '#'+el.id;
+    const cls=[...el.classList||[]].filter(x=>!x.startsWith('layout-')).slice(0,2).join('.');
+    const p=el.parentElement;
+    const ix=p?[...p.children].indexOf(el):0;
+    return `${el.tagName}.${cls}@${ix}`;
+  }
+  function applyScale(c,val){
+    const s=Math.max(.70,Math.min(1.30,Number(val)||1));
+    c.dataset.layoutScale=String(s);
+    c.style.setProperty('--layout-scale',s);
+    // Scale typography/controls without transform, so card geometry remains editable.
+    c.querySelectorAll('h1,h2,h3,h4,label,input,select,textarea,button,td,th,.label').forEach(el=>{
+      if(!el.dataset.layoutBaseFont){
+        const n=parseFloat(getComputedStyle(el).fontSize);
+        if(Number.isFinite(n))el.dataset.layoutBaseFont=String(n);
+      }
+      const b=Number(el.dataset.layoutBaseFont);
+      if(Number.isFinite(b))el.style.fontSize=(b*s)+'px';
+    });
+  }
+  function applySaved(){
+    if(editing)return;
+    tagCards();
+    const data=store()[pageName()]; if(!Array.isArray(data))return;
+    const map=new Map(directCards().map(c=>[c.dataset.layoutKey,c]));
+    data.forEach(x=>{
+      const c=map.get(x.key);if(!c)return;
+      if(x.width)c.style.width=x.width;
+      if(x.height)c.style.height=x.height;
+      applyScale(c,x.scale||1);
+    });
+    // Reorder only inside the card's existing parent. This cannot move controls across modules.
+    const groups=new Map();
+    data.forEach(x=>{const c=map.get(x.key);if(!c)return;const p=c.parentElement;if(!groups.has(p))groups.set(p,[]);groups.get(p).push([x.order,c]);});
+    groups.forEach(arr=>arr.sort((a,b)=>a[0]-b[0]).forEach(([,c])=>c.parentElement.appendChild(c)));
+  }
+  function ensureBar(){
+    const main=document.getElementById('main');if(!main)return;
+    if(getComputedStyle(main).position==='static')main.style.position='relative';
+    let bar=document.getElementById('layoutCustomizeBar');
+    if(!bar){
+      bar=document.createElement('div');bar.id='layoutCustomizeBar';
+      bar.innerHTML='<button type="button" id="layoutCustomizeBtn">⚙ Customize Page</button>';
+      main.prepend(bar);
+      bar.addEventListener('click',e=>{
+        const id=e.target.id;
+        if(id==='layoutCustomizeBtn')startEdit();
+        if(id==='layoutSaveBtn')saveEdit();
+        if(id==='layoutCancelBtn')cancelEdit();
+        if(id==='layoutResetBtn')resetPage();
+      });
+    }
+  }
+  function startEdit(){
+    if(editing)return;editing=true;
+    tagCards();originalSnapshot=layoutData();
+    document.body.classList.add('layout-editing');
+    const bar=document.getElementById('layoutCustomizeBar');
+    bar.innerHTML='<button type="button" class="layout-save" id="layoutSaveBtn">✓ Save Layout</button><button type="button" id="layoutCancelBtn">Cancel</button><button type="button" class="layout-danger" id="layoutResetBtn">Reset Default</button>';
+    directCards().forEach(c=>c.draggable=true);
+    const hint=document.createElement('div');hint.id='layoutEditHint';hint.textContent='Drag cards to reorder • drag ↘ corner to resize • −/+ changes content size • Save Layout when finished';document.body.appendChild(hint);
+  }
+  function saveEdit(){
+    const all=store();all[pageName()]=layoutData();putStore(all);
+    finishEdit();toastSafe('Page layout saved');
+  }
+  function cancelEdit(){
+    if(originalSnapshot){
+      const map=new Map(directCards().map(c=>[c.dataset.layoutKey,c]));
+      originalSnapshot.forEach(x=>{const c=map.get(x.key);if(c){c.style.width=x.width;c.style.height=x.height;applyScale(c,x.scale)}});
+    }
+    finishEdit();setTimeout(applySaved,0);
+  }
+  function resetPage(){
+    if(!confirm('Reset this page to its default layout? No data or features will be changed.'))return;
+    const all=store();delete all[pageName()];putStore(all);
+    directCards().forEach(c=>{c.style.width='';c.style.height='';applyScale(c,1)});
+    finishEdit();toastSafe('Default page layout restored');
+  }
+  function finishEdit(){
+    editing=false;document.body.classList.remove('layout-editing');
+    document.getElementById('layoutEditHint')?.remove();
+    directCards().forEach(c=>c.draggable=false);
+    const bar=document.getElementById('layoutCustomizeBar');
+    if(bar)bar.innerHTML='<button type="button" id="layoutCustomizeBtn">⚙ Customize Page</button>';
+  }
+  function toastSafe(msg){if(typeof window.toast==='function')window.toast(msg)}
+
+  document.addEventListener('click',e=>{
+    if(!editing)return;
+    const b=e.target.closest('[data-lay]');if(!b)return;
+    e.preventDefault();e.stopPropagation();
+    const c=b.closest('.card');if(!c)return;
+    if(b.dataset.lay==='smaller')applyScale(c,(Number(c.dataset.layoutScale)||1)-.05);
+    if(b.dataset.lay==='bigger')applyScale(c,(Number(c.dataset.layoutScale)||1)+.05);
+    if(b.dataset.lay==='auto'){c.style.width='';c.style.height='';applyScale(c,1)}
+  },true);
+
+  document.addEventListener('dragstart',e=>{
+    if(!editing)return;
+    const c=e.target.closest?.('.card[data-layout-key]');if(!c)return;
+    c.classList.add('layout-dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',c.dataset.layoutKey);
+  });
+  document.addEventListener('dragover',e=>{
+    if(!editing)return;
+    const target=e.target.closest?.('.card[data-layout-key]'),drag=document.querySelector('.layout-dragging');
+    if(!target||!drag||target===drag||target.parentElement!==drag.parentElement)return;
+    e.preventDefault();target.classList.add('layout-drop-target');
+  });
+  document.addEventListener('dragleave',e=>e.target.closest?.('.card[data-layout-key]')?.classList.remove('layout-drop-target'));
+  document.addEventListener('drop',e=>{
+    if(!editing)return;
+    const target=e.target.closest?.('.card[data-layout-key]'),drag=document.querySelector('.layout-dragging');
+    if(!target||!drag||target===drag||target.parentElement!==drag.parentElement)return;
+    e.preventDefault();target.classList.remove('layout-drop-target');
+    const rect=target.getBoundingClientRect();
+    const after=e.clientY>rect.top+rect.height/2;
+    target.parentElement.insertBefore(drag,after?target.nextSibling:target);
+  });
+  document.addEventListener('dragend',()=>document.querySelectorAll('.layout-dragging,.layout-drop-target').forEach(x=>x.classList.remove('layout-dragging','layout-drop-target')));
+
+  function refresh(){
+    if(observerBusy)return;observerBusy=true;
+    requestAnimationFrame(()=>{try{ensureBar();tagCards();if(!editing)applySaved()}finally{observerBusy=false}});
+  }
+  const mo=new MutationObserver(refresh);
+  window.addEventListener('DOMContentLoaded',()=>{const main=document.getElementById('main');if(main)mo.observe(main,{childList:true,subtree:true});refresh()});
+  if(document.readyState!=='loading'){const main=document.getElementById('main');if(main)mo.observe(main,{childList:true,subtree:true});refresh()}
+})();
+</script>
 </body></html>
