@@ -1282,6 +1282,20 @@
 .upper-one-row .upper-row-stock-info:empty{display:none}
 @media(max-width:1100px){.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(10,minmax(72px,1fr))!important;overflow-x:auto}.upper-one-row{grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) 70px 90px auto auto 115px!important;overflow-x:auto}}
 </style>
+<style id="upper-mans-production-v16">
+.upper-compact-v15>.bm-page-title{margin-bottom:4px!important}
+.upper-compact-v15>.upper-main-compact-row{margin-top:0!important}
+.upper-worker-heading-v16{display:grid!important;grid-template-columns:1fr 1fr 1fr!important;align-items:center!important}
+.upper-worker-heading-v16 .upper-total-baqi{text-align:center;font-size:11px;font-weight:800}
+.upper-worker-heading-v16>span{text-align:right}
+.upper-click-stat{appearance:none;background:var(--card);color:inherit;text-align:left;cursor:pointer;font-family:inherit}
+.upper-click-stat:hover{transform:translateY(-1px)}
+.upper-detail-top-v16{display:flex;gap:6px;align-items:center;padding:7px!important}
+.upper-detail-top-v16 input{height:30px!important;min-height:30px!important;max-width:230px;margin-left:auto}
+.upper-detail-list-v16{padding:7px!important}
+.upper-detail-row-v16{display:grid;grid-template-columns:1.4fr .8fr .7fr;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);font-size:10px}
+.upper-detail-row-v16 b{text-align:right}
+</style>
 </head>
 <body>
 <div id="app">
@@ -1355,6 +1369,7 @@ const NAV_KEYS = [
   ['dashboard','📊','Dashboard'],
   ['materials','📦','Materials / Stock'],
   ['workers','👷','Workers'],
+  ['distributeUpper','👞','Upper Mans Production'],
   ['batamMansProduction','✅','Batam Mans Production'],
   ['finishedMansProduction','✨','Finished Man Production'],
   ['issue','📤','Material Distribution'],
@@ -2598,6 +2613,7 @@ function render(){
   else if(currentPage==='upperArticles') main.innerHTML = pageUpperArticles();
   else if(currentPage==='upperMaterials') main.innerHTML = pageUpperMaterials();
   else if(currentPage==='upperPending') main.innerHTML = pageUpperPending();
+  else if(currentPage==='upperWeeklyKharcha') main.innerHTML = pageUpperWeeklyKharcha();
   else if(currentPage==='upperArticleSummary') main.innerHTML = pageUpperDistributionSummary('article');
   else if(currentPage==='upperMaterialSummary') main.innerHTML = pageUpperDistributionSummary('material');
   else if(currentPage==='upperLabourSummary') main.innerHTML = pageUpperWeeklyLabourSummary();
@@ -3585,9 +3601,10 @@ function pageDistributeUpper(){
   todayRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)todayArticle+=q;if(l.materialId||l.materialName)todayMaterial+=q;}));
   const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0);
   const pendingTotal=upperPendingWorkerAccounts().reduce((n,a)=>n+(Number(a.qty)||0),0);
+  const totalBaqi=upperWorkers.reduce((n,w)=>n+(Number(getWorkerSummaryAmount(w,'baqi'))||0),0);
   const backDisabled=navHistory.length?'':'disabled';
   return `<div class="bm-compact-page upper-compact-v15">
-    <h2 class="page-title bm-page-title">Distribute Upper</h2>
+    <h2 class="page-title bm-page-title">Upper Mans Production</h2>
 
     <div class="card bm-main-compact-row upper-main-compact-row">
       <button type="button" class="btn ghost small bm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
@@ -3595,13 +3612,13 @@ function pageDistributeUpper(){
       <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList">👞 Upper Articles</button>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperMaterialList">📦 Upper Materials</button>
       <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard">⏳ Pending</button>
-      <div class="bm-top-stat"><span>Weekly Kharcha</span><strong>${upperMoney(weeklyAmount)}</strong></div>
-      <div class="bm-top-stat"><span>Today Articles</span><strong>${todayArticle} ATOMS</strong></div>
-      <div class="bm-top-stat"><span>Today Materials</span><strong>${todayMaterial} ATOMS</strong></div>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>Weekly Kharcha</span><strong>${upperMoney(weeklyAmount)}</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>Today Articles</span><strong>${todayArticle} ATOMS</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayMaterialsCard"><span>Today Materials</span><strong>${todayMaterial} ATOMS</strong></button>
     </div>
 
     <div class="card bm-worker-card">
-      <div class="bm-worker-heading"><h3>Select Upper Man</h3><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
+      <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="upper-total-baqi">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
       <div style="margin-bottom:6px;"><input type="text" id="upperWorkerSearch" placeholder="Search Worker" autocomplete="off" class="upper-compact-search"></div>
       <div class="bm-worker-grid" id="upperWorkerCards">
         ${upperWorkers.length?upperWorkers.map(w=>{const completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id)&&String(d.date||d.createdAt||'').slice(0,10)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
@@ -3819,7 +3836,12 @@ function upperLabourFilteredRecords(){
   if(mode==='week'){({start,end}=getUpperWorkWeekRange(now));}else if(mode==='previousWeek'){const cur=getUpperWorkWeekRange(now);start=new Date(cur.start);start.setDate(start.getDate()-7);end=new Date(cur.start);}else if(mode==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);end=new Date(now.getFullYear(),now.getMonth()+1,1);}else if(mode==='custom'&&fromVal&&toVal){start=new Date(fromVal+'T00:00:00');end=new Date(toVal+'T00:00:00');end.setDate(end.getDate()+1);}
   return (settings.upperDistributions||[]).filter(r=>{const dt=new Date(r.date);if(start&&dt<start)return false;if(end&&dt>=end)return false;if((mode==='week'||mode==='previousWeek')&&dt.getDay()===5)return false;if(workerQ&&!String(r.workerName||'').toLowerCase().includes(workerQ))return false;return true;}).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 }
-function pageUpperWeeklyLabourSummary(){
+function pageUpperWeeklyKharcha(){
+ const records=upperWeeklyRecords(),total=records.reduce((s,r)=>s+(Number(r.totalAmount)||0),0);
+ return `<div class="bm-compact-page"><h2 class="page-title bm-page-title">Upper Mans — Weekly Kharcha</h2>
+ <div class="card upper-detail-top-v16"><button class="btn ghost small" id="upperWeeklyBack">← Back</button><div class="bm-top-stat"><span>Weekly Total</span><strong>${upperMoney(total)}</strong></div><input id="upperWeeklyPageSearch" placeholder="Search Worker"></div>
+ <div class="card upper-detail-list-v16">${records.length?records.map(r=>`<div class="upper-detail-row-v16"><strong>${esc(r.workerName||'Worker')}</strong><span>${esc(String(r.date||r.createdAt||'').slice(0,10))}</span><b>${upperMoney(Number(r.totalAmount)||0)}</b></div>`).join(''):'<div class="empty">No weekly kharcha records.</div>'}</div></div>`;
+}function pageUpperWeeklyLabourSummary(){
   const rows=upperLabourFilteredRecords(),mode=window.__upperLabourFilterMode||'week',total=rows.reduce((n,r)=>n+(Number(r.totalAmount)||0),0),grouped={};rows.forEach(r=>{const k=String(r.workerId||r.workerName||'');if(!grouped[k])grouped[k]={name:r.workerName||'Unknown',amount:0};grouped[k].amount+=Number(r.totalAmount)||0;});
   const workerBoxes=Object.values(grouped).sort((a,b)=>a.name.localeCompare(b.name)).map(x=>`<div class="card" style="margin:0;min-width:170px;flex:1 1 190px;"><div class="label">${esc(x.name)}</div><div style="font-size:24px;font-weight:900;">${upperMoney(x.amount)}</div></div>`).join('');
   return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><h2 class="page-title" style="margin:0;">Total Weekly Labour Kharcha</h2><button class="btn ghost" id="upperLabourBack">← Back to Distribute Upper</button></div><div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;"><div><label>Date Filter</label><select id="upperLabourMode"><option value="week" ${mode==='week'?'selected':''}>This Week (Saturday–Thursday)</option><option value="previousWeek" ${mode==='previousWeek'?'selected':''}>Previous Week</option><option value="month" ${mode==='month'?'selected':''}>This Month</option><option value="custom" ${mode==='custom'?'selected':''}>Custom Date</option></select></div><div><label>From</label><input id="upperLabourFrom" type="date" value="${esc(window.__upperLabourFrom||'')}"></div><div><label>To</label><input id="upperLabourTo" type="date" value="${esc(window.__upperLabourTo||'')}"></div><div style="flex:1;min-width:200px;"><label>Worker Search</label><input id="upperLabourWorker" value="${esc(window.__upperLabourWorkerQ||'')}" placeholder="Search Worker"></div><button class="btn brass" id="upperLabourPrint">🖨️ Print</button></div></div><div id="upperLabourPrintArea"><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">${workerBoxes||'<div class="card" style="margin:0;flex:1;"><div class="empty">No Labour Kharcha records for this filter.</div></div>'}<div class="card" style="margin:0;min-width:210px;flex:1 1 220px;"><div class="label">TOTAL LABOUR KHARCHA</div><div style="font-size:26px;font-weight:900;">${upperMoney(total)}</div></div></div><div class="card"><table><thead><tr><th>Date</th><th>Worker</th><th>Voucher #</th><th>Current Voucher Kharcha</th><th>Weekly Total at Voucher</th></tr></thead><tbody>${rows.length?rows.map(r=>{const wk=upperWorkerWeekSummary(r.workerId,new Date(r.date),r.date);return `<tr><td>${esc(String(r.date||'').slice(0,10))}</td><td>${esc(r.workerName||'')}</td><td><button class="btn ghost small" data-upper-labour-voucher="${esc(r.id)}">#${r.voucherNo}</button></td><td>${upperMoney(Number(r.totalAmount)||0)}</td><td>${upperMoney(wk.kharcha)}</td></tr>`;}).join(''):`<tr><td colspan="5" class="empty">No matching Labour Kharcha records.</td></tr>`}</tbody></table><div style="font-weight:900;margin-top:12px;">TOTAL LABOUR KHARCHA: ${upperMoney(total)}</div></div></div>`;
@@ -10074,7 +10096,12 @@ function attachPageHandlers(){
   document.getElementById('btnAddUpperMaterialRow')?.addEventListener('click',()=>addUpperDistributionRow('material'));
   if(document.getElementById('upperDistributionRows')) bindUpperDistributionRows();
   document.getElementById('btnCreateUpperVoucher')?.addEventListener('click',createUpperDistribution);   document.getElementById('btnSaveUpperPending')?.addEventListener('click',saveUpperPending);
-  document.getElementById('upperPendingCard')?.addEventListener('click',(e)=>{ if(e.target.closest('button,input,select,textarea,label')) return; goto('upperPending'); });
+  document.getElementById('upperPendingCard')?.addEventListener('click',()=>goto('upperPending'));
+  document.getElementById('upperTodayArticlesCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperArticleSummary');});
+  document.getElementById('upperTodayMaterialsCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperMaterialSummary');});
+  document.getElementById('upperWeeklyKharchaCard')?.addEventListener('click',()=>goto('upperWeeklyKharcha'));
+  document.getElementById('upperWeeklyBack')?.addEventListener('click',()=>goto('distributeUpper',false,false,true));
+  document.getElementById('upperWeeklyPageSearch')?.addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();document.querySelectorAll('.upper-detail-row-v16').forEach(r=>r.style.display=!q||r.textContent.toLowerCase().includes(q)?'':'none');});
   document.getElementById('upperSummaryBack')?.addEventListener('click',()=>goto('distributeUpper'));
   document.getElementById('upperSummaryMode')?.addEventListener('change',e=>{window.__upperSummaryFilterMode=e.target.value;refreshUpperSummaryPage();});
   document.getElementById('upperSummaryFrom')?.addEventListener('change',e=>{window.__upperSummaryFrom=e.target.value;window.__upperSummaryFilterMode='custom';refreshUpperSummaryPage();});
