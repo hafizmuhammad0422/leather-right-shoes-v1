@@ -6287,6 +6287,14 @@ function gasVoucherBalanceDisplay(v, previewMode){
 
     newGasKg += payableKg;
     advanceKg -= advanceUsed;
+  }else if(v && v.gasBalanceSnapshot){
+    // Historical vouchers must show the balance that existed when that voucher
+    // was created, not today's/current supplier balance.
+    const s=v.gasBalanceSnapshot;
+    return {
+      pendingKg: Math.max(0, Number(s.pendingKg)||0),
+      totalKg: Math.max(0, Number(s.totalKg)||0)
+    };
   }else{
     const effect = v && v.gasBalanceEffect ? v.gasBalanceEffect : {};
     const weeks = Array.isArray(settings.gasSupplierWeeks) ? settings.gasSupplierWeeks : [];
@@ -6301,15 +6309,25 @@ function gasVoucherBalanceDisplay(v, previewMode){
       }
     }
 
-    // For older vouchers that have no stored balance effect, fall back to the
-    // current supplier week without changing any stored data.
-    if(!w) w = weeks.length ? weeks[weeks.length-1] : null;
-
     if(w){
       openingKg = gasWeekKg(w,'openingKg');
-      newGasKg = gasWeekKg(w,'newGasKg');
-      payKg = gasWeekKg(w,'payKg');
-      advanceKg = gasWeekKg(w,'advanceKg');
+
+      // Backward-compatible reconstruction for vouchers created before
+      // historical snapshots existed. Count only voucher effects that had
+      // happened by this voucher's own timestamp inside the same supplier week.
+      const voucherAt = new Date(v && v.date ? v.date : 0).getTime();
+      const sameWeek = (gasVouchers||[])
+        .filter(x=>x && !x.voided && !x.deletedAt && x.gasBalanceEffect)
+        .filter(x=>{
+          const e=x.gasBalanceEffect||{};
+          if(effect.weekId && e.weekId) return String(e.weekId)===String(effect.weekId);
+          return effect.weekKey && e.weekKey && String(e.weekKey)===String(effect.weekKey);
+        })
+        .filter(x=>new Date(x.date||0).getTime()<=voucherAt);
+
+      newGasKg = sameWeek.reduce((sum,x)=>sum+(Number(x.gasBalanceEffect?.newGasKgAdded)||0),0);
+      payKg = 0;
+      advanceKg = 0;
     }
   }
 
@@ -7211,6 +7229,14 @@ function openCreateGasVoucherModal(){
     gasWeek.newGasKg = Math.round((gasWeekKg(gasWeek,'newGasKg') + payableKg + Number.EPSILON) * 100) / 100;
     voucher.gasBalanceEffect = {weekKey:gasWeek.weekKey, weekId:gasWeek.weekId || null, advanceUsedKg:advanceUsed, newGasKgAdded:payableKg};
     recalcGasWeekBalance(gasWeek);
+
+    // Freeze the supplier balance as it existed at this exact voucher.
+    // Opening an old voucher later must never display the current gas balance.
+    voucher.gasBalanceSnapshot = {
+      pendingKg: Math.max(0, Math.round((gasWeekKg(gasWeek,'openingKg') + gasWeekKg(gasWeek,'newGasKg') - gasWeekKg(gasWeek,'payKg') + Number.EPSILON) * 100) / 100),
+      totalKg: Math.max(0, Math.round((gasWeekKg(gasWeek,'openingKg') + gasWeekKg(gasWeek,'newGasKg') + Number.EPSILON) * 100) / 100),
+      capturedAt: voucher.date
+    };
 
     persistAll();
     audit('Gas Voucher Created', `#${voucher.voucherNo} — ${worker.name} — ${qtyKg} KG`);
