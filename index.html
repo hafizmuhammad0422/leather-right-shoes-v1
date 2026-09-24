@@ -1224,6 +1224,26 @@
 .bm-today-article-card.total{font-weight:800}
 @media(max-width:899px){.bm-pending-filter-row{grid-template-columns:repeat(3,auto);}.bm-pending-filter-row input,.bm-pending-total{grid-column:1/-1}}
 </style>
+<style id="batam-production-materials-v9">
+.bm-production-list-card{padding:9px 10px!important}
+.bm-production-list-head{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.bm-production-list-head h3{margin:0;font-size:15px}.bm-production-list-head>div>div{font-size:11px;color:var(--muted);margin-top:2px}
+.bm-production-control-row{display:flex;align-items:center;gap:5px;overflow-x:auto;margin-top:8px;padding-bottom:2px}
+.bm-production-control-row>*{flex:0 0 auto}.bm-production-control-row input{height:30px!important;min-height:30px!important;width:205px!important;font-size:10px!important}
+.bm-inline-total{height:30px;min-width:88px;border:1px solid var(--line);border-radius:7px;padding:3px 7px;display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:9.5px;white-space:nowrap}
+.bm-inline-total strong{font-size:11px}.bm-grand-total{font-weight:800}
+.bm-custom-date-row{display:flex;gap:8px;align-items:center;margin-top:6px;font-size:10px}.bm-custom-date-row label{margin:0;display:flex;align-items:center;gap:4px}.bm-custom-date-row input{height:29px!important;min-height:29px!important}
+.bm-production-history{overflow:auto;margin-top:7px}.bm-production-history table th,.bm-production-history table td{padding:5px 6px!important;font-size:10.5px!important}.bm-production-history .btn.small{min-height:25px!important;padding:2px 5px!important;font-size:9.5px!important}
+.bm-material-main-card,.bm-material-worker-card,.bm-material-entry-card,.bm-material-accounts-card{padding:9px 10px!important;margin-bottom:7px!important}
+.bm-material-control-row{display:flex;align-items:center;gap:5px;overflow-x:auto;margin-bottom:8px}.bm-material-control-row>*{flex:0 0 auto}.bm-material-control-row input{height:30px!important;min-height:30px!important;width:220px!important}
+.bm-material-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px}
+.bm-material-mini{height:96px;border:1px solid var(--line);border-radius:8px;padding:4px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.bm-material-mini-photo{width:34px;height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:2px}.bm-material-mini-photo img{width:100%;height:100%;object-fit:cover;border-radius:6px}
+.bm-material-mini>strong{font-size:9px;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bm-material-mini>span{font-size:8.5px;color:var(--muted)}.bm-material-mini>div:last-child{display:flex;gap:2px;margin-top:3px}.bm-material-mini .btn{font-size:8px!important;padding:1px 3px!important;min-height:20px!important}
+.bm-material-entry-row{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(100px,.6fr) minmax(160px,1fr) auto;gap:6px;align-items:end}.bm-material-entry-row label{font-size:10px;margin-bottom:3px}.bm-material-entry-row input,.bm-material-entry-row select,.bm-material-entry-row .btn{height:34px!important;min-height:34px!important;font-size:11px!important}
+.bm-material-accounts-card h3{margin:0 0 7px;font-size:14px}.bm-material-account-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.bm-material-account{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:3px}.bm-material-account strong{font-size:11px}.bm-material-account span{font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bm-material-account b{font-size:10px}
+@media(max-width:899px){.bm-material-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bm-material-entry-row{grid-template-columns:1fr}.bm-material-account-grid{grid-template-columns:1fr 1fr}}
+</style>
 </head>
 <body>
 <div id="app">
@@ -8466,16 +8486,24 @@ let batamMansDraftItems=[];
 let batamMansDraftMaterials=[];
 let batamMansProductionFilter='today';
 let batamMansProductionSearch='';
+let batamMansProductionCustomFrom='';
+let batamMansProductionCustomTo='';
 function batamMansVouchers(){normalizeBatamMansState();return settings.batamMansProductionVouchers;}
 function batamMansVoucherNo(){const n=settings.nextBatamMansVoucherNo++;return 'BMP-'+String(n).padStart(6,'0');}
 function batamLocalDateKey(value){const d=value?new Date(value):new Date();if(Number.isNaN(d.getTime()))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function batamWeekStart(d){const x=new Date(d);x.setHours(0,0,0,0);const day=x.getDay(),daysSinceSaturday=(day+1)%7;x.setDate(x.getDate()-daysSinceSaturday);return x;}
 function batamFilteredVouchers(){
- const now=new Date(),today=batamLocalDateKey(now),ws=batamWeekStart(now),we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(0,0,0,0);const q=String(batamMansProductionSearch||'').trim().toLowerCase();
+ const now=new Date(),today=batamLocalDateKey(now),ws=batamWeekStart(now),we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(0,0,0,0);
+ const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(batamMansProductionSearch||'').trim().toLowerCase();
  return batamMansVouchers().filter(v=>{
-   const d=new Date(v.createdAt||v.date||0);let ok=true;
-   if(batamMansProductionFilter==='today')ok=batamLocalDateKey(d)===today;
+   const d=new Date(v.createdAt||v.date||0),key=batamLocalDateKey(d);let ok=true;
+   if(batamMansProductionFilter==='today')ok=key===today;
    else if(batamMansProductionFilter==='week')ok=d>=ws&&d<we&&d.getDay()!==5;
+   else if(batamMansProductionFilter==='month')ok=key.startsWith(month);
+   else if(batamMansProductionFilter==='custom'){
+     const from=batamMansProductionCustomFrom||'',to=batamMansProductionCustomTo||batamMansProductionCustomFrom||'';
+     ok=(!from||key>=from)&&(!to||key<=to);
+   }
    const worker=batamMansWorkerName(v.workerId),arts=(v.items||[]).map(i=>batamMansArticleName(i.articleId)).join(' ');
    return ok&&(!q||`${v.voucherNo} ${worker} ${arts}`.toLowerCase().includes(q));
  });
@@ -8483,13 +8511,22 @@ function batamFilteredVouchers(){
 function batamVoucherStatus(v){const items=v.items||[];if(items.some(i=>i.verifiedQty===null||i.verifiedQty===undefined||i.verifiedQty===''))return 'Pending Verification';return items.every(i=>Number(i.verifiedQty)===Number(i.reportedQty))?'Verified':'Short / Not Fully Verified';}
 function batamVoucherBadge(s){return batamMansBadge(s);}
 function batamProductionListHtml(){
- const rows=batamFilteredVouchers(),today=batamLocalDateKey(new Date()),todayV=batamMansVouchers().filter(v=>!v.deletedAt&&batamLocalDateKey(v.createdAt||v.date)===today),articleTotals={};
- todayV.forEach(v=>(v.items||[]).forEach(i=>{const id=String(i.articleId);articleTotals[id]=(articleTotals[id]||0)+(Number(i.reportedQty)||0);}));
- const articleCards=(settings.batamMansProductionArticles||[]).map(a=>({name:a.name||'Article',total:articleTotals[String(a.id)]||0})),todayTotal=articleCards.reduce((s,a)=>s+a.total,0);
- return `<div class="card" style="margin-top:12px;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><div><h3 style="margin:0;">Production List</h3><div style="font-size:12px;color:var(--muted);margin-top:3px;">Reported production vouchers & worker production history</div></div><button class="btn brass" id="bmPrintVerificationList">🖨 Print Verification Slip</button> <button class="btn ghost" id="bmCustomizeVoucher">⚙️ Customize Voucher</button></div>
- <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;"><button class="btn ${batamMansProductionFilter==='today'?'brass':'ghost'} small" data-bm-filter="today">Today</button><button class="btn ${batamMansProductionFilter==='week'?'brass':'ghost'} small" data-bm-filter="week">This Week</button><button class="btn ${batamMansProductionFilter==='all'?'brass':'ghost'} small" data-bm-filter="all">All Production</button><input id="bmProductionSearch" value="${esc(batamMansProductionSearch)}" placeholder="Search worker, article or voucher..." style="min-width:220px;flex:1;"></div>
- <div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>Voucher</th><th>Date / Time</th><th>Worker</th><th>Articles</th><th>Total Atoms</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(v=>{const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);return `<tr><td>${esc(v.voucherNo)}</td><td>${esc(new Date(v.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(v.workerId))}</td><td>${esc((v.items||[]).map(i=>batamMansArticleName(i.articleId)).join(', '))}</td><td>${total}</td><td>${batamVoucherBadge(batamVoucherStatus(v))}</td><td><button class="btn ghost small" data-bm-view-voucher="${esc(v.id)}">View</button> <button class="btn ghost small" data-bm-print-voucher="${esc(v.id)}">Print</button> <button class="btn blue small" data-bm-edit-voucher="${esc(v.id)}">Edit</button> <button class="btn red small" data-bm-delete-voucher="${esc(v.id)}">Delete</button></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">No production vouchers in this view.</td></tr>'}</tbody></table></div>
- <div class="bm-today-article-row">${articleCards.map(a=>`<div class="bm-today-article-card"><span>${esc(a.name)}</span><strong>${a.total} ATOMS</strong></div>`).join('')}<div class="bm-today-article-card total"><span>Today Total Production</span><strong>${todayTotal} ATOMS</strong></div></div>
+ const rows=batamFilteredVouchers(),articleTotals={};
+ rows.forEach(v=>(v.items||[]).forEach(i=>{const id=String(i.articleId);articleTotals[id]=(articleTotals[id]||0)+(Number(i.reportedQty)||0);}));
+ const articleCards=(settings.batamMansProductionArticles||[]).map(a=>({name:a.name||'Article',total:articleTotals[String(a.id)]||0})),periodTotal=articleCards.reduce((s,a)=>s+a.total,0);
+ return `<div class="card bm-production-list-card"><div class="bm-production-list-head"><div><h3>Production List</h3><div>Reported production vouchers & worker production history</div></div><div><button class="btn brass small" id="bmPrintVerificationList">🖨 Verification Slip</button> <button class="btn ghost small" id="bmCustomizeVoucher">⚙️ Voucher</button></div></div>
+ <div class="bm-production-control-row">
+   <button class="btn ${batamMansProductionFilter==='today'?'brass':'ghost'} small" data-bm-filter="today">Today</button>
+   <button class="btn ${batamMansProductionFilter==='week'?'brass':'ghost'} small" data-bm-filter="week">This Week</button>
+   <button class="btn ${batamMansProductionFilter==='month'?'brass':'ghost'} small" data-bm-filter="month">This Month</button>
+   <button class="btn ${batamMansProductionFilter==='custom'?'brass':'ghost'} small" id="bmCustomDateToggle">Custom Date</button>
+   <button class="btn ${batamMansProductionFilter==='all'?'brass':'ghost'} small" data-bm-filter="all">All Production</button>
+   <input id="bmProductionSearch" value="${esc(batamMansProductionSearch)}" placeholder="Search worker, article or voucher...">
+   ${articleCards.map(a=>`<div class="bm-inline-total"><span>${esc(a.name)}</span><strong>${a.total}</strong></div>`).join('')}
+   <div class="bm-inline-total bm-grand-total"><span>Total Items</span><strong>${periodTotal}</strong></div>
+ </div>
+ ${batamMansProductionFilter==='custom'?`<div class="bm-custom-date-row"><label>From <input type="date" id="bmCustomFrom" value="${esc(batamMansProductionCustomFrom)}"></label><label>To <input type="date" id="bmCustomTo" value="${esc(batamMansProductionCustomTo)}"></label></div>`:''}
+ <div class="bm-production-history"><table><thead><tr><th>Voucher</th><th>Date / Time</th><th>Worker</th><th>Articles</th><th>Total Atoms</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(v=>{const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);return `<tr><td>${esc(v.voucherNo)}</td><td>${esc(new Date(v.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(v.workerId))}</td><td>${esc((v.items||[]).map(i=>batamMansArticleName(i.articleId)).join(', '))}</td><td>${total}</td><td>${batamVoucherBadge(batamVoucherStatus(v))}</td><td><button class="btn ghost small" data-bm-view-voucher="${esc(v.id)}">View</button> <button class="btn ghost small" data-bm-print-voucher="${esc(v.id)}">Print</button> <button class="btn blue small" data-bm-edit-voucher="${esc(v.id)}">Edit</button> <button class="btn red small" data-bm-delete-voucher="${esc(v.id)}">Delete</button></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">No production vouchers in this view.</td></tr>'}</tbody></table></div>
  </div>`;
 }
 
@@ -8700,10 +8737,66 @@ function pageBatamMansProductionArticles(){
  return `<div class="bm-subpage-head"><button class="btn ghost" id="bmBackArticlesPage">← Back</button><h2 class="page-title">Production Articles</h2><button class="btn brass" id="bmPageAddArticle">+ Add Production Article</button></div>
  <div class="card"><div class="upper-material-grid">${list.length?list.map(a=>`<div class="upper-material-card"><div class="upper-material-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name||'')}">`:'<span style="font-size:28px;">👞</span>'}</div><div style="font-weight:800;">${esc(a.name||'')}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${Number(a.stock)||0} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-bmpa-edit="${esc(a.id)}" style="flex:1;">Edit</button><button class="btn red small" data-bmpa-delete="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join(''):'<div class="empty">No Production Articles saved yet.</div>'}</div></div>`;
 }
+
+let batamMaterialFilter='today';
+let batamMaterialSearch='';
+let batamMaterialSelectedWorker=null;
+function batamMaterialFilteredRows(){
+ const now=new Date(),today=batamLocalDateKey(now),ws=batamWeekStart(now),we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(0,0,0,0);
+ const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(batamMaterialSearch||'').trim().toLowerCase();
+ return batamMaterialDistributions().filter(r=>{const d=new Date(r.createdAt),key=batamLocalDateKey(d);let ok=true;
+  if(batamMaterialFilter==='today')ok=key===today;
+  else if(batamMaterialFilter==='week')ok=d>=ws&&d<we&&d.getDay()!==5;
+  else if(batamMaterialFilter==='month')ok=key.startsWith(month);
+  const worker=batamMansWorkerName(r.workerId),mat=getBatamMansProductionMaterial(r.materialId)?.name||'Material';
+  return ok&&(!q||`${worker} ${mat}`.toLowerCase().includes(q));
+ });
+}
+function batamMaterialWorkerAccounts(){
+ const map=new Map();
+ batamMaterialFilteredRows().forEach(r=>{const id=String(r.workerId),workerName=batamMansWorkerName(id);
+  if(!map.has(id))map.set(id,{workerId:id,workerName,materials:new Map(),total:0,rows:[]});
+  const a=map.get(id),mid=String(r.materialId),name=getBatamMansProductionMaterial(mid)?.name||'Material',qty=Number(r.qty)||0;
+  if(!a.materials.has(mid))a.materials.set(mid,{name,qty:0});a.materials.get(mid).qty+=qty;a.total+=qty;a.rows.push(r);
+ });
+ return Array.from(map.values()).sort((a,b)=>a.workerName.localeCompare(b.workerName));
+}
+function openBatamMaterialAccount(workerId){
+ const a=batamMaterialWorkerAccounts().find(x=>String(x.workerId)===String(workerId));if(!a)return;
+ modal(`<h3 style="margin-top:0;">${esc(a.workerName)} — Material Account</h3><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Array.from(a.materials.values()).map(m=>`<div class="bm-inline-total"><span>${esc(m.name)}</span><strong>${m.qty} ATOMS</strong></div>`).join('')}<div class="bm-inline-total bm-grand-total"><span>Total</span><strong>${a.total} ATOMS</strong></div></div><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Material</th><th>Atoms</th><th>Notes</th></tr></thead><tbody>${a.rows.slice().reverse().map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(getBatamMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${Number(r.qty)||0}</td><td>${esc(r.notes||'')}</td></tr>`).join('')}</tbody></table></div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
 function pageBatamMansProductionMaterials(){
- normalizeBatamMansState();const list=settings.batamMansProductionMaterials||[];
- return `<div class="bm-subpage-head"><button class="btn ghost" id="bmBackMaterialsPage">← Back</button><h2 class="page-title">Production Materials</h2><div style="display:flex;gap:7px;"><button class="btn brass" id="bmPageAddMaterial">+ Add Production Material</button><button class="btn ghost" id="bmPageDistributeMaterial">📤 Material Distribution</button></div></div>
- <div class="card"><div class="upper-material-grid">${list.length?list.map(m=>`<div class="upper-material-card"><div class="upper-material-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name||'')}">`:'<span style="font-size:28px;">📦</span>'}</div><div style="font-weight:800;">${esc(m.name||'')}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${Number(m.stock)||0} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-bmpm-edit="${esc(m.id)}" style="flex:1;">Edit</button><button class="btn red small" data-bmpm-delete="${esc(m.id)}" style="flex:1;">Delete</button></div></div>`).join(''):'<div class="empty">No Production Materials saved yet.</div>'}</div></div>`;
+ normalizeBatamMansState();const list=settings.batamMansProductionMaterials||[],ws=batamMansProductionWorkers(),accounts=batamMaterialWorkerAccounts();
+ const selected=ws.find(w=>String(w.id)===String(batamMaterialSelectedWorker))||null;if(!selected)batamMaterialSelectedWorker=null;
+ return `<div class="bm-subpage-head"><button class="btn ghost" id="bmBackMaterialsPage">← Back</button><h2 class="page-title">Production Materials</h2></div>
+ <div class="card bm-material-main-card">
+   <div class="bm-material-control-row">
+    <button class="btn brass small" id="bmPageAddMaterial">+ Add Production Material</button>
+    <button class="btn ${batamMaterialFilter==='today'?'brass':'ghost'} small" data-bm-material-filter="today">Today</button>
+    <button class="btn ${batamMaterialFilter==='week'?'brass':'ghost'} small" data-bm-material-filter="week">This Week</button>
+    <button class="btn ${batamMaterialFilter==='month'?'brass':'ghost'} small" data-bm-material-filter="month">This Month</button>
+    <button class="btn ${batamMaterialFilter==='all'?'brass':'ghost'} small" data-bm-material-filter="all">All</button>
+    <input id="bmMaterialSearch" value="${esc(batamMaterialSearch)}" placeholder="Search Worker / Material">
+   </div>
+   <div class="bm-material-grid">${list.length?list.map(m=>`<div class="bm-material-mini"><div class="bm-material-mini-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name||'')}">`:'📦'}</div><strong title="${esc(m.name||'')}">${esc(m.name||'')}</strong><span>${Number(m.stock)||0} ATOMS</span><div><button class="btn ghost small" data-bmpm-edit="${esc(m.id)}">Edit</button><button class="btn red small" data-bmpm-delete="${esc(m.id)}">Delete</button></div></div>`).join(''):'<div class="empty">No Production Materials saved yet.</div>'}</div>
+ </div>
+
+ <div class="card bm-material-worker-card">
+   <div class="bm-worker-heading"><h3>Select Batam Man</h3><span>Total Batam Mans: <strong>${ws.length}</strong></span></div>
+   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(batamMaterialSelectedWorker)===String(w.id)?'selected':''}" data-bm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-bm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div></button>`).join(''):'<div class="empty">No active Batam Man worker found.</div>'}</div>
+ </div>
+
+ <div class="card bm-material-entry-card">
+   <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Batam Man above first</span>'}</div>
+   <div class="bm-material-entry-row">
+    <div><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"></div>
+    <div><label>Notes (Optional)</label><input id="bmDistNotes" placeholder="Notes"></div>
+    <button class="btn brass" id="bmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
+   </div>
+ </div>
+
+ <div class="card bm-material-accounts-card"><h3>Worker Material Accounts</h3><div class="bm-material-account-grid">${accounts.length?accounts.map(a=>`<button class="bm-material-account" data-bm-material-account="${esc(a.workerId)}"><strong>${esc(a.workerName)}</strong><span>${Array.from(a.materials.values()).map(m=>`${esc(m.name)} ${m.qty}`).join(' • ')}</span><b>Total ${a.total} ATOMS</b></button>`).join(''):'<div class="empty">No material distribution in this view.</div>'}</div></div>`;
 }
 function pageBatamMansProductionList(){
  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="bmBackProduction">← Back</button><h2 class="page-title" style="margin:0;">Batam Mans Production List</h2></div>${batamProductionListHtml()}`;
@@ -8714,14 +8807,14 @@ function pageBatamMansDistributeMaterial(){
  return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="bmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Batam Man</label><select id="bmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${ms.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="bmDistNotes" rows="2"></textarea><button class="btn brass" id="bmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(r.workerId))}</td><td>${esc(getBatamMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
 }
 async function saveBatamMaterialDistribution(){
- const workerId=document.getElementById('bmDistWorker')?.value,materialId=document.getElementById('bmDistMaterial')?.value,qty=Number(document.getElementById('bmDistQty')?.value),notes=document.getElementById('bmDistNotes')?.value.trim()||'',m=getBatamMansProductionMaterial(materialId);
+ const workerId=batamMaterialSelectedWorker||document.getElementById('bmDistWorker')?.value,materialId=document.getElementById('bmDistMaterial')?.value,qty=Number(document.getElementById('bmDistQty')?.value),notes=document.getElementById('bmDistNotes')?.value.trim()||'',m=getBatamMansProductionMaterial(materialId);
  if(!workerId||!m||!Number.isInteger(qty)||qty<=0){toast('Select Employee, Material and enter positive whole Atoms.');return;}
  if(Number(m.stock)<qty){toast('Not enough Production Material stock.');return;}
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
- m.stock=Number(m.stock)-qty;batamMaterialDistributions().push({id:uid(),workerId,materialId,qty,notes,createdAt:now,createdBy:'Admin'});
+ m.stock=Number(m.stock)-qty;batamMaterialDistributions().push({id:uid(),workerId:String(workerId),materialId:String(materialId),qty,notes,createdAt:now,createdBy:'Admin'});
  audit('Batam Mans Material Distributed',`${batamMansWorkerName(workerId)} — ${m.name} — ${qty} Atoms`);
  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material distribution was not saved.');return;}
- render();toast('Material distributed successfully');
+ render();toast('Material distribution saved successfully');
 }
 
 function batamPendingRecords(){normalizeBatamMansState();return settings.batamMansPendingRecords;}
@@ -9123,6 +9216,14 @@ function attachPageHandlers(){
   document.querySelectorAll('[data-bm-remove-draft]').forEach(b=>b.addEventListener('click',()=>removeBatamDraftItem(b.dataset.bmRemoveDraft)));
   document.getElementById('bmCreateVoucher')?.addEventListener('click',createBatamProductionVoucher);
   document.querySelectorAll('[data-bm-filter]').forEach(b=>b.addEventListener('click',()=>{batamMansProductionFilter=b.dataset.bmFilter;render();}));
+  document.getElementById('bmCustomDateToggle')?.addEventListener('click',()=>{batamMansProductionFilter='custom';render();});
+  document.getElementById('bmCustomFrom')?.addEventListener('change',e=>{batamMansProductionCustomFrom=e.target.value||'';render();});
+  document.getElementById('bmCustomTo')?.addEventListener('change',e=>{batamMansProductionCustomTo=e.target.value||'';render();});
+  document.querySelectorAll('[data-bm-material-filter]').forEach(b=>b.addEventListener('click',()=>{batamMaterialFilter=b.dataset.bmMaterialFilter;render();}));
+  document.getElementById('bmMaterialSearch')?.addEventListener('input',e=>{batamMaterialSearch=e.target.value||'';render();const x=document.getElementById('bmMaterialSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
+  document.querySelectorAll('[data-bm-material-worker]').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('[data-bm-material-worker-photo]'))return;batamMaterialSelectedWorker=b.dataset.bmMaterialWorker;render();}));
+  document.querySelectorAll('[data-bm-material-worker-photo]').forEach(p=>p.addEventListener('click',e=>{e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(p.dataset.bmMaterialWorkerPhoto));if(w?.photo)openImageLightbox(w.photo);}));
+  document.querySelectorAll('[data-bm-material-account]').forEach(b=>b.addEventListener('click',()=>openBatamMaterialAccount(b.dataset.bmMaterialAccount)));
   document.getElementById('bmProductionSearch')?.addEventListener('input',e=>{batamMansProductionSearch=e.target.value;render();const x=document.getElementById('bmProductionSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
   document.querySelectorAll('[data-bm-view-voucher]').forEach(b=>b.addEventListener('click',()=>openBatamVoucher(b.dataset.bmViewVoucher)));
   document.querySelectorAll('[data-bm-print-voucher]').forEach(b=>b.addEventListener('click',()=>openBatamVoucher(b.dataset.bmPrintVoucher,true)));
