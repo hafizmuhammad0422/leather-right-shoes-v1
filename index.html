@@ -4954,28 +4954,24 @@ function openShoeBoxReceiveVoucherBuilder(supplierIndex,initialPurchaseIds){
   renderBuilder();
 }
 function printShoeBoxVoucherHtml(html,voucherNo){
-  const frame=document.createElement('iframe');
-  frame.setAttribute('aria-hidden','true');
-  frame.style.position='fixed';
-  frame.style.right='0';
-  frame.style.bottom='0';
-  frame.style.width='1px';
-  frame.style.height='1px';
-  frame.style.border='0';
-  frame.style.opacity='0';
-  document.body.appendChild(frame);
-  try{
-    const doc=frame.contentWindow.document;
-    doc.open();
-    doc.write(html,voucherNo);
-    doc.close();
-    frame.contentWindow.focus();
-    frame.contentWindow.print();
-  }catch(err){
-    console.error('Shoe Box voucher print failed:',err);
-    toast('Print dialog could not open. Please try the Print button again.');
-  }
-  setTimeout(()=>{try{frame.remove();}catch(_e){}},1500);
+  const w=window.open('','_blank','width=420,height=720');
+  if(!w){toast('Print window was blocked. Please allow pop-ups for this site and try again.');return;}
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><title>Receive Voucher ${esc(voucherNo)}</title>
+  <style>
+    @page{size:80mm auto;margin:0}
+    html,body{margin:0;padding:0;width:80mm}
+    body{font-family:Arial,sans-serif;padding:4mm;box-sizing:border-box}
+    .receipt-paper{width:100%;margin:auto}
+    .rline{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin:3px 0}
+    .sub{font-size:10px;text-align:center}.footer{font-size:10px}
+    table{width:100%;font-size:9px}th,td{padding:2px 1px}
+    hr{border:0;border-top:1px dashed #777;margin:6px 0}
+    @media print{html,body{width:80mm}.receipt-paper{width:100%}}
+  </style></head><body>${html}</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
 }
 
 function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=false){
@@ -4994,7 +4990,6 @@ function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=fals
     <div class="modal-actions"><button type="button" class="btn blue" id="sbsVoucherPrint">🖨️ Print</button><button type="button" class="btn ghost" id="sbsVoucherClose">Close</button></div>`);
   document.getElementById('sbsVoucherClose').onclick=closeModal;
   document.getElementById('sbsVoucherPrint').onclick=()=>printShoeBoxVoucherHtml(html,voucherNo);
-  if(autoPrint) printShoeBoxVoucherHtml(html,voucherNo);
 }
 
 
@@ -5370,10 +5365,6 @@ function openShoeBoxReceiveSession(supplierIndex){
       closeModal();
       render();
       openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds);
-      setTimeout(()=>{
-        const shouldPrint=confirm('کیا آپ یہ Voucher Thermal Printer سے Print کرنا چاہتے ہیں؟');
-        if(shouldPrint) printShoeBoxVoucherHtml(html,voucherNo);
-      },180);
       toast(`${voucherNo} saved — ${chosenNow.length} products received`);
     };
   };
