@@ -8045,7 +8045,20 @@ function batamVoucherHtml(v){
  const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);
  return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div style="text-align:center;">${settings.logo?`<img src="${settings.logo}" style="max-width:54px;max-height:54px;">`:''}<h3 style="margin:3px 0;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3><div style="font-weight:900;">BATAM MANS PRODUCTION VOUCHER</div><div class="sub">${esc(v.voucherNo)} | ${esc(new Date(v.createdAt).toLocaleString())}</div></div><hr><div><strong>Worker:</strong> ${esc(batamMansWorkerName(v.workerId))}</div><table style="width:100%;font-size:10px;"><thead><tr><th>#</th><th>Article</th><th>Atoms</th></tr></thead><tbody>${(v.items||[]).map((i,n)=>`<tr><td>${n+1}</td><td>${esc(batamMansArticleName(i.articleId))}</td><td>${i.reportedQty}</td></tr>`).join('')}</tbody></table><hr><strong>Total: ${total} Atoms</strong>${v.notes?`<div style="margin-top:6px;">Notes: ${esc(v.notes)}</div>`:''}<div style="margin-top:6px;">Status: ${esc(batamVoucherStatus(v))}</div></div>`;
 }
-function openBatamVoucher(id,printNow=false){const v=batamMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(printNow){printHtml(batamVoucherHtml(v));return;}modal(`${batamVoucherHtml(v)}<div class="modal-actions"><button class="btn brass" id="bmModalPrintVoucher">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('bmModalPrintVoucher').onclick=()=>printHtml(batamVoucherHtml(v));}
+function printBatamMansHtml(html,title='Batam Mans Production'){
+ const w=window.open('','_blank','width=420,height=720');
+ if(!w){toast('Print window was blocked. Please allow pop-ups for this site and try again.');return;}
+ w.document.open();
+ w.document.write(`<!doctype html><html><head><title>${esc(title)}</title><style>
+ @page{size:80mm auto;margin:0}html,body{margin:0;padding:0;width:80mm}
+ body{font-family:Arial,sans-serif;padding:4mm;box-sizing:border-box}.receipt-paper{width:100%!important;margin:auto}
+ .sub{font-size:10px;text-align:center}table{width:100%;border-collapse:collapse;font-size:9px}
+ th,td{padding:2px 1px;border-bottom:1px solid #ddd;text-align:left}hr{border:0;border-top:1px dashed #777;margin:6px 0}
+ @media print{html,body{width:80mm}.receipt-paper{width:100%!important}}
+ </style></head><body>${html}</body></html>`);
+ w.document.close();w.focus();w.print();
+}
+function openBatamVoucher(id,printNow=false){const v=batamMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(printNow){printBatamMansHtml(batamVoucherHtml(v));return;}modal(`${batamVoucherHtml(v)}<div class="modal-actions"><button class="btn brass" id="bmModalPrintVoucher">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('bmModalPrintVoucher').onclick=()=>printBatamMansHtml(batamVoucherHtml(v));}
 function addBatamDraftItem(){
  if(!batamMansSelectedWorker){toast('Select Batam Man first.');return;}
  const articleId=document.getElementById('bmArticle')?.value,qty=Number(document.getElementById('bmReported')?.value);
@@ -8066,14 +8079,14 @@ async function createBatamProductionVoucher(){
  items.forEach(i=>batamMansEntries().push({id:i.id,voucherId,date:now,workerId:v.workerId,articleId:i.articleId,reportedQty:i.reportedQty,originalReportedQty:i.reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''}));
  audit('Batam Mans Production Voucher Created',`${voucherNo} — ${batamMansWorkerName(v.workerId)} — ${items.reduce((a,i)=>a+i.reportedQty,0)} Atoms`);
  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher was not saved.');return;}
- batamMansDraftItems=[];render();toast('Production voucher saved as Pending Verification');
+ batamMansDraftItems=[];printBatamMansHtml(batamVoucherHtml(v),`Production Voucher ${voucherNo}`);render();toast('Production voucher saved as Pending Verification');
 }
 function batamVerificationSlipHtml(vouchers){
  const flat=[];vouchers.forEach(v=>(v.items||[]).forEach(i=>flat.push({v,i})));
  const slipNo='BMV-'+String(settings.nextBatamMansSlipNo||1).padStart(6,'0');
  return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div style="text-align:center;">${settings.logo?`<img src="${settings.logo}" style="max-width:54px;max-height:54px;">`:''}<h3 style="margin:3px 0;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3><div style="font-weight:900;">BATAM MANS PRODUCTION VERIFICATION SLIP</div><div class="sub">${slipNo} | ${esc(new Date().toLocaleString())}</div></div><hr><table style="width:100%;font-size:9px;border-collapse:collapse;"><thead><tr><th>#</th><th>Worker</th><th>Article</th><th>Reported Atoms</th><th>Verified</th><th>✓/✕</th></tr></thead><tbody>${flat.map((x,n)=>`<tr><td>${n+1}</td><td>${esc(batamMansWorkerName(x.v.workerId))}</td><td>${esc(batamMansArticleName(x.i.articleId))}</td><td>${x.i.reportedQty}</td><td>_____</td><td>___</td></tr>`).join('')}</tbody></table><hr><div style="font-size:10px;line-height:1.9;">Verified By: ____________________<br>Signature: ______________________<br>Verification Time: ______________</div></div>`;
 }
-function printBatamCurrentVerificationList(){const vs=batamFilteredVouchers().filter(v=>batamVoucherStatus(v)==='Pending Verification');if(!vs.length){toast('No pending production in this view.');return;}printHtml(batamVerificationSlipHtml(vs));}
+function printBatamCurrentVerificationList(){const vs=batamFilteredVouchers().filter(v=>batamVoucherStatus(v)==='Pending Verification');if(!vs.length){toast('No pending production in this view.');return;}printBatamMansHtml(batamVerificationSlipHtml(vs));}
 
 function batamMansExpenses(){normalizeBatamMansState();return settings.batamMansExpenses;}
 function batamExpensePanelHtml(){
@@ -8195,14 +8208,14 @@ async function createBatamMansSlip(){
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),slipNo=batamMansUniqueSlipNo(),id=uid(),now=new Date().toISOString();
   const slip={id,slipNo,date,entryIds:pending.map(e=>e.id),createdAt:now,createdBy:'Admin'};batamMansSlips().push(slip);pending.forEach(e=>e.slipId=id);audit('Batam Mans Verification Slip Created',`${slipNo} — ${pending.length} entries`);
   if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Slip was not saved.');return;}
-  modal(`${batamMansSlipHtml(slip)}<div class="modal-actions"><button class="btn brass" id="bmDoPrint">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('bmDoPrint').onclick=()=>printHtml(batamMansSlipHtml(slip));
+  modal(`${batamMansSlipHtml(slip)}<div class="modal-actions"><button class="btn brass" id="bmDoPrint">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('bmDoPrint').onclick=()=>printBatamMansHtml(batamMansSlipHtml(slip),'Batam Mans Verification Slip');
 }
 function pageBatamMansSlips(){
   const rows=batamMansSlips().slice().sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
   return `<h2 class="page-title">Batam Mans Verification Slips</h2><div class="card"><table><thead><tr><th>Slip No.</th><th>Date</th><th>Entries</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(s=>`<tr><td><strong>${esc(s.slipNo)}</strong></td><td>${esc(s.date)}</td><td>${s.entryIds.length}</td><td><button class="btn blue small" onclick="openBatamMansSlip('${s.id}')">Open</button></td></tr>`).join(''):'<tr><td colspan="4" class="empty">No verification slips.</td></tr>'}</tbody></table></div>`;
 }
 function openBatamMansSlip(id){
-  const s=batamMansSlips().find(x=>String(x.id)===String(id));if(!s)return;modal(`${batamMansSlipHtml(s)}<div class="modal-actions"><button class="btn brass" onclick="printHtml(batamMansSlipHtml(batamMansSlips().find(x=>String(x.id)==='${id}')))">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  const s=batamMansSlips().find(x=>String(x.id)===String(id));if(!s)return;modal(`${batamMansSlipHtml(s)}<div class="modal-actions"><button class="btn brass" onclick="printBatamMansHtml(batamMansSlipHtml(batamMansSlips().find(x=>String(x.id)==='${id}')),'Batam Mans Verification Slip')">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
 }
 function pageBatamMansVerification(){
   const pending=batamMansEntries().filter(e=>batamMansStatus(e)==='Pending Verification').sort((a,b)=>String(b.date).localeCompare(String(a.date)));
