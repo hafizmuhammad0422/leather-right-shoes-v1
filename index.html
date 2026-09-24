@@ -7282,6 +7282,19 @@ function openCreateGasVoucherModal(){
     gasVouchers.push(voucher);
     settings.nextGasVoucherNo=voucher.voucherNo+1;
 
+    // Historical worker Total Gas snapshot: this voucher must always show the
+    // worker's cumulative KG as it stood at this exact voucher.
+    voucher.workerTotalGasKgSnapshot = Math.round((
+      gasVouchers
+        .filter(v=>!v.voided && !v.deletedAt)
+        .filter(v=>{
+          const vid=String(v.workerRecordId||'');
+          if(vid && vid===String(worker.id)) return true;
+          return String(v.workerName||'').trim().toLowerCase()===String(worker.name||'').trim().toLowerCase();
+        })
+        .reduce((sum,v)=>sum+(Number(v.qtyKg)||0),0) + Number.EPSILON
+    )*100)/100;
+
     // Link every newly created gas voucher to the active supplier balance.
     // First consume any KG that was paid in advance. Only the portion not
     // covered by advance is added to New Gas Amount.
@@ -7346,14 +7359,17 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
 
   const printWorkerName = selectedWorker?.name || workerName;
   const printWorkerType = String(selectedWorker?.category||'').trim() || '—';
-  const totalGas = gasVouchers
-    .filter(v=>!v.voided && !v.deletedAt)
-    .filter(v=>{
-      const voucherWorkerId = String(v.workerRecordId||'');
-      if(workerRecordId && voucherWorkerId && voucherWorkerId===workerRecordId) return true;
-      return String(v.workerName||'').trim().toLowerCase()===String(printWorkerName||'').trim().toLowerCase();
-    })
-    .reduce((sum,v)=>sum+(Number(v.qtyKg)||0),0);
+  const totalGas = voucher && voucher.workerTotalGasKgSnapshot!=null
+    ? Number(voucher.workerTotalGasKgSnapshot)||0
+    : gasVouchers
+        .filter(v=>!v.voided && !v.deletedAt)
+        .filter(v=>new Date(v.date||0).getTime()<=new Date(voucher?.date||0).getTime())
+        .filter(v=>{
+          const voucherWorkerId = String(v.workerRecordId||'');
+          if(workerRecordId && voucherWorkerId && voucherWorkerId===workerRecordId) return true;
+          return String(v.workerName||'').trim().toLowerCase()===String(printWorkerName||'').trim().toLowerCase();
+        })
+        .reduce((sum,v)=>sum+(Number(v.qtyKg)||0),0);
   const printWorkerTotalLabel = `${printWorkerName} Total Gas`;
 
   const selectedWorkerPrintRows = printWorkerName ? `
