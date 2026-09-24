@@ -1079,6 +1079,45 @@ body.layout-editing .page-card-layout-tools{display:flex}
 body.layout-editing .layout-dragging{opacity:.5!important}
 body.layout-editing .layout-drop-target{outline:2px solid #b88a2b!important}
 </style>
+<style id="batam-production-compact-layout-v1">
+@media (min-width:900px){
+ .bm-compact-page{width:100%;max-width:none!important}
+ .bm-page-title{margin:0 0 5px!important;font-size:19px!important;line-height:1!important}
+ .bm-main-compact-row{
+   width:100%!important;box-sizing:border-box!important;margin:0 0 6px!important;padding:5px 7px!important;
+   display:grid!important;grid-template-columns:auto auto auto minmax(125px,1fr) minmax(135px,1fr) minmax(115px,.8fr) minmax(90px,.65fr) minmax(45px,.35fr)!important;
+   gap:5px!important;align-items:center!important;
+ }
+ .bm-top-card{height:30px!important;min-height:30px!important;padding:3px 7px!important;font-size:10.5px!important;white-space:nowrap!important}
+ .bm-future-slot{height:30px;border:1px dashed var(--line);border-radius:7px;opacity:.55}
+ .bm-worker-card{width:100%!important;box-sizing:border-box!important;margin:0 0 6px!important;padding:6px 8px!important}
+ .bm-worker-card>h3{margin:0 0 5px!important;font-size:14px!important;line-height:1!important}
+ .bm-worker-grid{display:grid!important;grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:4px!important;width:100%!important}
+ .bm-worker-box{
+   height:70px!important;min-height:70px!important;max-height:70px!important;padding:3px 2px!important;margin:0!important;
+   display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;
+ }
+ .bm-worker-box .entity-photo{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;margin:0 auto!important;font-size:14px!important}
+ .bm-worker-name{font-size:9px!important;font-weight:700!important;line-height:1.05!important;margin-top:3px!important;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .bm-selected-line{font-size:10px;color:var(--muted);margin-top:4px;line-height:1}
+ .bm-entry-card{width:100%!important;box-sizing:border-box!important;margin:0!important;padding:6px 8px!important}
+ .bm-entry-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+ .bm-entry-head h3{margin:0!important;font-size:14px!important;line-height:1!important}
+ .bm-entry-head span{font-size:10px;color:var(--muted)}
+ .bm-entry-row{
+   display:grid!important;
+   grid-template-columns:minmax(150px,1.35fr) minmax(85px,.55fr) minmax(95px,.65fr) minmax(85px,.55fr) minmax(120px,1fr) auto auto minmax(35px,.25fr)!important;
+   gap:5px!important;align-items:end!important;
+ }
+ .bm-field label,.bm-entry-action label{display:block!important;font-size:9.5px!important;margin:0 0 2px!important;line-height:1!important}
+ .bm-entry-row input,.bm-entry-row select,.bm-entry-row .btn{height:28px!important;min-height:28px!important;padding:3px 6px!important;font-size:10.5px!important}
+ .bm-pending-display{width:100%!important}
+ .bm-entry-future-slot{height:28px;border:1px dashed var(--line);border-radius:6px;opacity:.5}
+ .bm-added-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;margin-top:5px}
+ .bm-added-item{min-height:26px;border:1px solid var(--line);border-radius:6px;padding:3px 5px;display:grid;grid-template-columns:1fr auto auto;gap:5px;align-items:center;font-size:10px}
+ .bm-added-item .btn{min-height:20px!important;height:20px!important;padding:1px 5px!important;font-size:9px!important}
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -2410,7 +2449,9 @@ function render(){
     main.innerHTML = `<button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
   }
   if(currentPage!=='dashboard'){
-    if(currentPage==='workerSummaryDetail'){
+    if(currentPage==='batamMansProduction'){
+      // This page owns its compact full-width navigation/action row.
+    } else if(currentPage==='workerSummaryDetail'){
       // Keep its own Back to Workers behavior; add only the page-local customizer.
       main.innerHTML = `<button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
     } else if(currentPage==='shoeBoxSupplier1' || currentPage==='shoeBoxSupplier2'){
@@ -8304,13 +8345,16 @@ function openBatamMansProductionMaterialModal(id){
 }
 function openBatamMansProductionArticlesList(){
   normalizeBatamMansState();const list=settings.batamMansProductionArticles;
-  modal(`<h3 style="margin-top:0;">Production Articles</h3>${list.length?`<div class="upper-article-grid">${list.map(a=>`<div class="upper-article-card"><div class="upper-article-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name)}">`:'<span style="font-size:28px;">👞</span>'}</div><div style="font-weight:800;">${esc(a.name)}</div><div style="font-size:16px;font-weight:800;color:var(--brass-dark);margin-top:8px;">${upperMoney(a.rate)} / Atom</div><div style="font-size:13px;margin-top:5px;">Stock: <strong>${a.stock} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-bmpa-edit="${esc(a.id)}" style="flex:1;">Edit</button><button class="btn red small" data-bmpa-delete="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Production Articles saved yet.</div>'}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  modal(`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;"><h3 style="margin:0;">Production Articles</h3><button class="btn brass small" id="bmArticleHubAdd">+ Add Production Article</button></div>${list.length?`<div class="upper-article-grid">${list.map(a=>`<div class="upper-article-card"><div class="upper-article-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name)}">`:'<span style="font-size:28px;">👞</span>'}</div><div style="font-weight:800;">${esc(a.name)}</div><div style="font-size:16px;font-weight:800;color:var(--brass-dark);margin-top:8px;">${upperMoney(a.rate)} / Atom</div><div style="font-size:13px;margin-top:5px;">Stock: <strong>${a.stock} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-bmpa-edit="${esc(a.id)}" style="flex:1;">Edit</button><button class="btn red small" data-bmpa-delete="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Production Articles saved yet.</div>'}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  document.getElementById('bmArticleHubAdd')?.addEventListener('click',()=>openBatamMansProductionArticleModal());
   document.querySelectorAll('[data-bmpa-edit]').forEach(b=>b.onclick=()=>openBatamMansProductionArticleModal(b.dataset.bmpaEdit));
   document.querySelectorAll('[data-bmpa-delete]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this Production Article?'))return;settings.batamMansProductionArticles=settings.batamMansProductionArticles.filter(x=>String(x.id)!==String(b.dataset.bmpaDelete));persistAll();openBatamMansProductionArticlesList();});
 }
 function openBatamMansProductionMaterialsList(){
   normalizeBatamMansState();const list=settings.batamMansProductionMaterials;
-  modal(`<h3 style="margin-top:0;">Production Materials</h3>${list.length?`<div class="upper-material-grid">${list.map(m=>`<div class="upper-material-card"><div class="upper-material-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}">`:'<span style="font-size:28px;">📦</span>'}</div><div style="font-weight:800;">${esc(m.name)}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${m.stock} Atoms</strong></div><div style="font-size:11px;color:var(--muted);margin-top:4px;">No rate / no price</div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-bmpm-edit="${esc(m.id)}" style="flex:1;">Edit</button><button class="btn red small" data-bmpm-delete="${esc(m.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Production Materials saved yet.</div>'}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  modal(`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><h3 style="margin:0;">Production Materials</h3><div style="display:flex;gap:6px;"><button class="btn brass small" id="bmMaterialHubAdd">+ Add Production Material</button><button class="btn ghost small" id="bmMaterialHubDistribute">📤 Material Distribution</button></div></div>${list.length?`<div class="upper-material-grid">${list.map(m=>`<div class="upper-material-card"><div class="upper-material-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}">`:'<span style="font-size:28px;">📦</span>'}</div><div style="font-weight:800;">${esc(m.name)}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${m.stock} Atoms</strong></div><div style="font-size:11px;color:var(--muted);margin-top:4px;">No rate / no price</div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-bmpm-edit="${esc(m.id)}" style="flex:1;">Edit</button><button class="btn red small" data-bmpm-delete="${esc(m.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Production Materials saved yet.</div>'}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+  document.getElementById('bmMaterialHubAdd')?.addEventListener('click',()=>openBatamMansProductionMaterialModal());
+  document.getElementById('bmMaterialHubDistribute')?.addEventListener('click',()=>{closeModal();goto('batamMansDistributeMaterial');});
   document.querySelectorAll('[data-bmpm-edit]').forEach(b=>b.onclick=()=>openBatamMansProductionMaterialModal(b.dataset.bmpmEdit));
   document.querySelectorAll('[data-bmpm-delete]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this Production Material?'))return;settings.batamMansProductionMaterials=settings.batamMansProductionMaterials.filter(x=>String(x.id)!==String(b.dataset.bmpmDelete));persistAll();openBatamMansProductionMaterialsList();});
 }
@@ -8573,15 +8617,50 @@ async function deleteBatamPendingEntry(id){
  const rec=batamPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.batamMansPendingRecords=settings.batamMansPendingRecords.filter(p=>String(p.id)!==String(id));audit('Batam Pending Deleted',`${rec.workerName}: ${d} ATOMS`);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved.');return;}closeModal();render();toast('Pending entry deleted');
 }
 function pageBatamMansProduction(){
- normalizeBatamMansState();const batamWorkers=batamMansProductionWorkers(),selected=batamWorkers.find(w=>String(w.id)===String(batamMansSelectedWorker))||null;if(!selected)batamMansSelectedWorker=null;const prodArticles=settings.batamMansProductionArticles||[];
- return `<h2 class="page-title">Batam Mans Production</h2>
- <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;"><button class="btn brass" id="btnAddProductionArticle" style="min-height:48px;">+ Add Production Article</button><button class="btn ghost" id="btnProductionArticles" style="min-height:48px;">📋 Production Articles</button><button class="btn brass" id="btnAddProductionMaterial" style="min-height:48px;">+ Add Production Material</button><button class="btn ghost" id="btnProductionMaterials" style="min-height:48px;">📦 Production Materials</button></div>
- <div class="card"><h3 style="margin-top:0;">Select Batam Man</h3><div class="pick-grid">${batamWorkers.length?batamWorkers.map(w=>`<button type="button" class="pick-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}" style="width:86px;height:86px;margin:auto;font-size:24px;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div style="font-size:12px;font-weight:700;margin-top:6px;">${esc(w.name||'')}</div></button>`).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>${selected?`<div style="font-size:12px;color:var(--muted);margin-top:10px;">Selected Worker: <strong>${esc(selected.name||'')}</strong></div>`:''}</div>
- <div class="card"><h3 style="margin-top:0;">Enter Production Details</h3>${selected?`<div style="font-size:13px;margin-bottom:10px;">Worker: <strong>${esc(selected.name||'')}</strong> <span style="color:var(--muted);">• Date & time will be saved automatically</span></div>`:'<div class="empty" style="margin-bottom:10px;">Select Batam Man from above first.</div>'}
- <div style="display:grid;grid-template-columns:minmax(220px,1fr) minmax(150px,.45fr);gap:10px;"><div><label>Production Article</label><select id="bmArticle"><option value="">Select Production Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div><div><label>Reported Quantity (Atoms)</label><input id="bmReported" type="number" min="1" step="1" placeholder="Atoms"></div></div><button class="btn ghost" id="bmAddDraft" style="margin-top:10px;">+ Add Item</button>
- ${batamMansDraftItems.length?`<div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>Article</th><th>Atoms</th><th></th></tr></thead><tbody>${batamMansDraftItems.map(i=>`<tr><td>${esc(batamMansArticleName(i.articleId))}</td><td>${i.reportedQty}</td><td><button class="btn red small" data-bm-remove-draft="${esc(i.id)}">✕</button></td></tr>`).join('')}</tbody></table></div>`:''}
- <div style="border-top:1px solid var(--line);margin-top:12px;padding-top:10px;"><strong>Distribute Production Material (Optional)</strong><div style="display:grid;grid-template-columns:minmax(220px,1fr) minmax(140px,.45fr);gap:10px;margin-top:6px;"><select id="bmMaterial"><option value="">Select Production Material</option>${(settings.batamMansProductionMaterials||[]).map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — ${Number(m.stock)||0} Atoms</option>`).join('')}</select><input id="bmMaterialQty" type="number" min="1" step="1" placeholder="Atoms"></div><button class="btn ghost small" id="bmAddMaterialDraft" style="margin-top:7px;">+ Add Material</button>${batamMansDraftMaterials.length?`<div style="margin-top:7px;">${batamMansDraftMaterials.map(m=>`<div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding:5px 0;"><span>${esc(getBatamMansProductionMaterial(m.materialId)?.name||'Material')} — ${m.qty} Atoms</span><button class="btn red small" data-bm-remove-material="${esc(m.id)}">✕</button></div>`).join('')}</div>`:''}</div><label style="margin-top:10px;">Kharcha / Expense (Rs.) — Optional</label><input id="bmExpenseAmount" type="number" min="0" step="0.01" placeholder="0"><label style="margin-top:10px;">Notes (Optional)</label><textarea id="bmNotes" rows="2"></textarea><div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn brass" id="bmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div></div>
- <button type="button" class="card" id="bmOpenProductionList" style="width:100%;text-align:left;cursor:pointer;border:1px solid var(--line);"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;"><div><h3 style="margin:0;">📋 Production List</h3><div style="font-size:12px;color:var(--muted);margin-top:4px;">Today • This Week • All Production • Worker History • Search • Print • Verification Slip</div></div><span style="font-size:24px;">›</span></div></button>${batamPendingMiniCard()}`;
+ normalizeBatamMansState();
+ const batamWorkers=batamMansProductionWorkers(),
+ selected=batamWorkers.find(w=>String(w.id)===String(batamMansSelectedWorker))||null;
+ if(!selected)batamMansSelectedWorker=null;
+ const prodArticles=settings.batamMansProductionArticles||[];
+ const pendingQty=selected?(getBatamPendingForWorker(selected.id)?.qty||0):0;
+ const backDisabled=navHistory.length?'':'disabled';
+
+ return `<div class="bm-compact-page">
+ <h2 class="page-title bm-page-title">Batam Mans Production</h2>
+
+ <div class="card bm-main-compact-row">
+   <button type="button" class="btn ghost small bm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
+   <button type="button" class="btn ghost small bm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
+   <button type="button" class="btn ghost small bm-top-card page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>
+   <button type="button" class="btn brass small bm-top-card" id="bmOpenArticlesHub">👞 Production Articles</button>
+   <button type="button" class="btn brass small bm-top-card" id="bmOpenMaterialsHub">📦 Production Materials</button>
+   <button type="button" class="btn blue small bm-top-card" id="bmOpenProductionList">📋 Production List</button>
+   <button type="button" class="btn ghost small bm-top-card" id="bmOpenPending">⏳ Pending</button>
+   <span class="bm-future-slot" aria-hidden="true"></span>
+ </div>
+
+ <div class="card bm-worker-card">
+   <h3>Select Batam Man</h3>
+   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div></button>`).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
+   ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
+ </div>
+
+ <div class="card bm-entry-card">
+   <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Batam Man above first</span>'}</div>
+   <div class="bm-entry-row">
+     <div class="bm-field bm-article-field"><label>Production Article</label><select id="bmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div>
+     <div class="bm-field bm-qty-field"><label>Quantity / Items</label><input id="bmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
+     <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="bmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
+     <div class="bm-field bm-pending-field"><label>Pending</label><button type="button" class="btn ghost bm-pending-display" id="bmEntryPending">${selected?`${pendingQty} Atoms`:'—'}</button></div>
+     <div class="bm-field bm-notes-field"><label>Notes (Optional)</label><input id="bmNotes" placeholder="Notes"></div>
+     <div class="bm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="bmAddDraft">+ Add Item</button></div>
+     <div class="bm-entry-action"><label>&nbsp;</label><button class="btn brass" id="bmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
+     <span class="bm-entry-future-slot" aria-hidden="true"></span>
+   </div>
+
+   ${batamMansDraftItems.length?`<div class="bm-added-items">${batamMansDraftItems.map((i,n)=>`<div class="bm-added-item"><span>${n+1}. <strong>${esc(batamMansArticleName(i.articleId))}</strong></span><span>${i.reportedQty} Atoms</span><button class="btn red small" data-bm-remove-draft="${esc(i.id)}">✕</button></div>`).join('')}</div>`:''}
+ </div>
+ </div>`;
 }
 async function saveBatamMansEntry(){
   const date=document.getElementById('bmDate')?.value,workerId=document.getElementById('bmWorker')?.value,articleId=document.getElementById('bmArticle')?.value,reportedQty=Number(document.getElementById('bmReported')?.value),notes=document.getElementById('bmNotes')?.value.trim()||'';
@@ -8826,6 +8905,10 @@ function attachPageHandlers(){
   });
 
   // Batam Mans Production — scoped first-stage controls
+  // Batam Mans Production — compact layout hubs (existing workflows)
+  document.getElementById('bmOpenArticlesHub')?.addEventListener('click',openBatamMansProductionArticlesList);
+  document.getElementById('bmOpenMaterialsHub')?.addEventListener('click',openBatamMansProductionMaterialsList);
+  document.getElementById('bmEntryPending')?.addEventListener('click',()=>goto('batamMansPending'));
   document.getElementById('btnAddProductionArticle')?.addEventListener('click',()=>openBatamMansProductionArticleModal());
   document.getElementById('btnProductionArticles')?.addEventListener('click',openBatamMansProductionArticlesList);
   document.getElementById('btnAddProductionMaterial')?.addEventListener('click',()=>openBatamMansProductionMaterialModal());
