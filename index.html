@@ -4839,7 +4839,7 @@ function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes=''){
   (supplier.products||[]).forEach(product=>{
     const pid=String(product?.id||product?.name||'');
     if(!pid || summaryByProduct.has(pid))return;
-    const total=shoeBoxCurrentProductTotalAtoms(supplier,product);
+    const total=shoeBoxHistoricalProductAtomsAt(supplier,product.id,voucher);
     summaryByProduct.set(pid,{name:product?.name||'Product',total});
   });
   const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;${cfg.receivingSummary?.bold===true?'font-weight:900;':''}">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline" style="${cfg.receivingSummary?.bold===true?'font-weight:900;':''}"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeBoxQuantityDisplay(x.total)} Atoms</span></div>`).join('')}${(()=>{const totalReceivingItems=Array.from(summaryByProduct.values()).reduce((sum,x)=>sum+(Number(x.total)||0),0);return `<div class="rline" style="margin-top:6px;padding-top:6px;border-top:1px dashed #777;font-weight:900;"><span>TOTAL RECEIVING ITEMS:</span><span>${shoeBoxQuantityDisplay(totalReceivingItems)} ITEMS</span></div>`;})()}</div>`:'';
@@ -4921,11 +4921,90 @@ function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=fals
   if(autoPrint) setTimeout(()=>document.getElementById('sbsVoucherPrint')?.click(),120);
 }
 
+
+
+function shoeBoxHistoricalProductAtomsAt(supplier, productId, voucher){
+  const cutoff=new Date(voucher?.createdAt||voucher?.date||0).getTime();
+  if(!Number.isFinite(cutoff)) return 0;
+  return (supplier?.purchases||[]).reduce((sum,p)=>{
+    if(String(p.productId||'')!==String(productId)) return sum;
+    const pt=new Date(p.date||p.createdAt||0).getTime();
+    return Number.isFinite(pt)&&pt<=cutoff ? sum+(Number(p.atoms??p.items??p.boxes)||0) : sum;
+  },0);
+}
+
+function shoeBoxHistoricalReceivedTotalAt(supplier, voucher){
+  const cutoff=new Date(voucher?.createdAt||voucher?.date||0).getTime();
+  if(!Number.isFinite(cutoff)) return Number(voucher?.workerTotalBoxesSnapshot)||0;
+  return (supplier?.purchases||[]).reduce((sum,p)=>{
+    const pt=new Date(p.date||p.createdAt||0).getTime();
+    if(Number.isFinite(pt) && pt<=cutoff) return sum+(Number(p.atoms??p.items??p.boxes)||0);
+    return sum;
+  },0);
+}
+
 function editShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
- const s=getShoeBoxSuppliers()[supplierIndex];if(!s)return;const v=(s.receiveVouchers||[]).find(x=>String(x.id)===String(voucherId));const ids=(v?.purchaseIds||purchaseIds||[]).map(String),rows=(s.purchases||[]).filter(p=>ids.includes(String(p.id)));
- if(rows.length!==1){toast('For multi-product vouchers, edit the individual receiving entries.');return;}const row=rows[0],old=Number(row.atoms??row.items)||0,n=prompt(`Old Quantity: ${old} Atoms\nEnter new whole Atoms:`,old);if(n===null)return;const qty=sbWholeAtoms(n);if(!qty){toast('Only positive whole Atoms are allowed');return;}if(!confirm(`Change ${old} Atoms to ${qty} Atoms?`))return;
- const snap=sbSnapshot(),product=(s.products||[]).find(p=>String(p.id)===String(row.productId)),diff=qty-old;if(product){product.stockItems=Math.max(0,shoeBoxProductStockItems(product)+diff);product.stockBoxes=Math.max(0,(Number(product.stockBoxes)||0)+diff);}row.atoms=row.items=row.boxes=qty;row.editedAt=new Date().toISOString();audit('Shoe Box Voucher Edited',`${row.voucherNo||v?.voucherNo||''}: ${old} → ${qty} Atoms`);
- sbCriticalCommit(snap,'Shoe Box voucher edit was not saved to D1. Original quantity and stock were restored.').then(ok=>{if(ok){render();toast('Voucher updated');}});
+  const supplier=getShoeBoxSuppliers()[supplierIndex]; if(!supplier)return;
+  const voucher=(supplier.receiveVouchers||[]).find(v=>String(v.id)===String(voucherId)); if(!voucher)return;
+  const ids=(voucher.purchaseIds||purchaseIds||[]).map(String);
+  const rows=(supplier.purchases||[]).filter(p=>ids.includes(String(p.id)));
+  const products=(supplier.products||[]);
+  const selected={};
+  rows.forEach(r=>selected[String(r.productId)]={purchaseId:String(r.id),atoms:Number(r.atoms??r.items??r.boxes)||0});
+  const draw=()=>{
+    modal(`<h3>Edit Receive Voucher ${esc(voucher.voucherNo||'')}</h3>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Change the products/Atoms below. Saving keeps the same voucher number and adjusts stock only by the difference.</div>
+      <div style="display:grid;gap:8px;max-height:52vh;overflow:auto;">
+      ${products.map(p=>{const s=selected[String(p.id)],q=s?.atoms||0;return `<div style="display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px;">
+        <label style="margin:0;"><input type="checkbox" data-sbveditcheck="${esc(p.id)}" ${s?'checked':''}> ${esc(p.name)}</label>
+        <input type="number" min="1" step="1" data-sbveditqty="${esc(p.id)}" value="${q||''}" ${s?'':'disabled'} placeholder="Atoms">
+      </div>`}).join('')}</div>
+      <div class="modal-actions"><button class="btn brass" id="sbVoucherEditSave">Save Changes</button><button class="btn ghost" id="sbVoucherEditCancel">Cancel</button></div>`);
+    document.querySelectorAll('[data-sbveditcheck]').forEach(ch=>ch.onchange=()=>{const q=document.querySelector(`[data-sbveditqty="${CSS.escape(ch.dataset.sbveditcheck)}"]`);q.disabled=!ch.checked;if(ch.checked&&!q.value)q.value='1';});
+    document.getElementById('sbVoucherEditCancel').onclick=closeModal;
+    document.getElementById('sbVoucherEditSave').onclick=async()=>{
+      const btn=document.getElementById('sbVoucherEditSave');if(btn.disabled)return;
+      const next=[];
+      for(const ch of document.querySelectorAll('[data-sbveditcheck]')){
+        if(!ch.checked)continue;
+        const pid=String(ch.dataset.sbveditcheck),q=document.querySelector(`[data-sbveditqty="${CSS.escape(pid)}"]`),atoms=sbWholeAtoms(q.value);
+        if(!atoms){toast('Every selected product must have positive whole Atoms.');return;}
+        next.push({productId:pid,atoms});
+      }
+      if(!next.length){toast('Select at least one product.');return;}
+      const beforeText=rows.map(r=>`${products.find(p=>String(p.id)===String(r.productId))?.name||'Product'}: ${Number(r.atoms??r.items??r.boxes)||0}`).join('\n');
+      const afterText=next.map(n=>`${products.find(p=>String(p.id)===String(n.productId))?.name||'Product'}: ${n.atoms}`).join('\n');
+      if(!confirm(`Voucher ${voucher.voucherNo}\n\nOLD:\n${beforeText}\n\nNEW:\n${afterText}\n\nConfirm changes?`))return;
+      btn.disabled=true; const snap=sbSnapshot();
+
+      // Reverse all original voucher rows from product stock.
+      rows.forEach(r=>{
+        const p=products.find(x=>String(x.id)===String(r.productId)); if(!p)return;
+        const old=Number(r.atoms??r.items??r.boxes)||0;
+        p.stockItems=Math.max(0,shoeBoxProductStockItems(p)-old);
+        p.stockBoxes=Math.max(0,(Number(p.stockBoxes)||0)-old);
+      });
+      supplier.purchases=(supplier.purchases||[]).filter(p=>!ids.includes(String(p.id)));
+
+      // Recreate rows under the SAME voucher number/date and apply new stock.
+      const newIds=[];
+      next.forEach(n=>{
+        const p=products.find(x=>String(x.id)===String(n.productId));if(!p)return;
+        const id=uid();newIds.push(id);
+        const oldTemplate=rows.find(r=>String(r.productId)===String(n.productId))||{};
+        supplier.purchases.push({...oldTemplate,id,productId:p.id,atoms:n.atoms,items:n.atoms,boxes:n.atoms,voucherNo:voucher.voucherNo,date:voucher.date||oldTemplate.date||new Date().toISOString(),editedAt:new Date().toISOString()});
+        p.stockItems=shoeBoxProductStockItems(p)+n.atoms;
+        p.stockBoxes=(Number(p.stockBoxes)||0)+n.atoms;
+      });
+      voucher.purchaseIds=newIds;
+      voucher.workerTotalBoxesSnapshot=shoeBoxHistoricalReceivedTotalAt(supplier,voucher);
+      voucher.editedAt=new Date().toISOString();
+      audit('Shoe Box Voucher Edited',`${voucher.voucherNo} — multi-product voucher updated`);
+      if(!await sbCriticalCommit(snap,'Voucher edit was not saved to D1. Original voucher and stock were restored.'))return;
+      closeModal();render();toast(`${voucher.voucherNo} updated`);
+    };
+  };
+  draw();
 }
 async function deleteShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
   const supplier=getShoeBoxSuppliers()[supplierIndex];
