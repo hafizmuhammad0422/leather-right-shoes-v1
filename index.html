@@ -1006,6 +1006,71 @@
   }
 }
 </style>
+
+<style id="page-layout-customizer-visible-fix">
+@media (min-width:900px){
+  /* Always-visible small Customize Page control */
+  #layoutCustomizeBar{
+    position:fixed!important;
+    top:8px!important;
+    right:14px!important;
+    left:auto!important;
+    z-index:2147483000!important;
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    pointer-events:auto!important;
+    width:auto!important;
+    height:auto!important;
+    max-width:none!important;
+    max-height:none!important;
+    overflow:visible!important;
+  }
+  #layoutCustomizeBar button{
+    display:inline-flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    width:auto!important;
+    height:28px!important;
+    min-height:28px!important;
+    padding:3px 9px!important;
+    font-size:11px!important;
+    line-height:1!important;
+    white-space:nowrap!important;
+    visibility:visible!important;
+    opacity:1!important;
+  }
+
+  /* Do NOT clip normal pages/workers. Page can scroll until user customizes it. */
+  body:not(.layout-editing),
+  body:not(.layout-editing) .app,
+  body:not(.layout-editing) .main,
+  body:not(.layout-editing) #main{
+    max-height:none!important;
+  }
+  body:not(.layout-editing){
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+  body:not(.layout-editing) .main,
+  body:not(.layout-editing) #main{
+    height:auto!important;
+    min-height:100vh!important;
+    overflow:visible!important;
+  }
+
+  /* Keep enough top room so fixed Customize control doesn't cover content. */
+  body:not(.layout-editing) #main{
+    padding-top:40px!important;
+  }
+
+  /* Only when Customize Page is ON, show editable boundaries. */
+  body.layout-editing #main{
+    padding-top:40px!important;
+  }
+}
+</style>
+
 </head>
 <body>
 <div id="app">
@@ -9321,7 +9386,7 @@ document.addEventListener('click',e=>{});
     if(!bar){
       bar=document.createElement('div');bar.id='layoutCustomizeBar';
       bar.innerHTML='<button type="button" id="layoutCustomizeBtn">⚙ Customize Page</button>';
-      main.prepend(bar);
+      document.body.appendChild(bar);
       bar.addEventListener('click',e=>{
         const id=e.target.id;
         if(id==='layoutCustomizeBtn')startEdit();
