@@ -1262,8 +1262,8 @@
 @media(max-width:1100px){.bm-main-compact-row{grid-template-columns:repeat(8,minmax(86px,1fr))!important}.bm-top-stat strong{font-size:12px!important}}
 @media(max-width:899px){.bm-main-compact-row{display:flex!important;flex-wrap:nowrap!important}.bm-main-compact-row>*{flex:0 0 105px!important}.bm-account-page-grid{grid-template-columns:1fr 1fr}}
 </style>
-<style id="batam-finished-identical-worker-baqi-v13">
-.bm-worker-baqi,.fm-worker-baqi{font-size:8.5px;font-weight:800;line-height:1.05;margin-top:2px;white-space:nowrap;color:var(--brass-dark)}
+<style id="batam-finished-shared-baqi-v14">
+.bm-worker-baqi{font-size:8.5px;font-weight:800;line-height:1.05;margin-top:2px;white-space:nowrap;color:var(--brass-dark)}
 </style>
 </head>
 <body>
@@ -9295,19 +9295,19 @@ function finishedProductionListHtml(){
  const rows=finishedFilteredVouchers(),articleTotals={};
  rows.forEach(v=>(v.items||[]).forEach(i=>{const id=String(i.articleId);articleTotals[id]=(articleTotals[id]||0)+(Number(i.reportedQty)||0);}));
  const articleCards=(settings.finishedMansProductionArticles||[]).map(a=>({name:a.name||'Article',total:articleTotals[String(a.id)]||0})),periodTotal=articleCards.reduce((s,a)=>s+a.total,0);
- return `<div class="card fm-production-list-card"><div class="fm-production-list-head"><div><h3>Production List</h3><div>Reported production vouchers & worker production history</div></div><div><button class="btn brass small" id="fmPrintVerificationList">🖨 Verification Slip</button> <button class="btn ghost small" id="fmPrintProductionReport">🖨 Print Report</button> <button class="btn ghost small" id="fmCustomizeVoucher">⚙️ Voucher</button></div></div>
- <div class="fm-production-control-row">
+ return `<div class="card bm-production-list-card"><div class="bm-production-list-head"><div><h3>Production List</h3><div>Reported production vouchers & worker production history</div></div><div><button class="btn brass small" id="fmPrintVerificationList">🖨 Verification Slip</button> <button class="btn ghost small" id="fmPrintProductionReport">🖨 Print Report</button> <button class="btn ghost small" id="fmCustomizeVoucher">⚙️ Voucher</button></div></div>
+ <div class="bm-production-control-row">
    <button class="btn ${finishedMansProductionFilter==='today'?'brass':'ghost'} small" data-fm-filter="today">Today</button>
    <button class="btn ${finishedMansProductionFilter==='week'?'brass':'ghost'} small" data-fm-filter="week">This Week</button>
    <button class="btn ${finishedMansProductionFilter==='month'?'brass':'ghost'} small" data-fm-filter="month">This Month</button>
    <button class="btn ${finishedMansProductionFilter==='custom'?'brass':'ghost'} small" id="fmCustomDateToggle">Custom Date</button>
    <button class="btn ${finishedMansProductionFilter==='all'?'brass':'ghost'} small" data-fm-filter="all">All Production</button>
    <input id="fmProductionSearch" value="${esc(finishedMansProductionSearch)}" placeholder="Search worker, article or voucher...">
-   ${articleCards.map(a=>`<div class="fm-inline-total"><span>${esc(a.name)}</span><strong>${a.total}</strong></div>`).join('')}
-   <div class="fm-inline-total fm-grand-total"><span>Total Items</span><strong>${periodTotal}</strong></div>
+   ${articleCards.map(a=>`<div class="bm-inline-total"><span>${esc(a.name)}</span><strong>${a.total}</strong></div>`).join('')}
+   <div class="bm-inline-total bm-grand-total"><span>Total Items</span><strong>${periodTotal}</strong></div>
  </div>
- ${finishedMansProductionFilter==='custom'?`<div class="fm-custom-date-row"><label>From <input type="date" id="fmCustomFrom" value="${esc(finishedMansProductionCustomFrom)}"></label><label>To <input type="date" id="fmCustomTo" value="${esc(finishedMansProductionCustomTo)}"></label></div>`:''}
- <div class="fm-production-history"><table><thead><tr><th>Voucher</th><th>Date / Time</th><th>Worker</th><th>Articles</th><th>Total Atoms</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(v=>{const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);return `<tr><td>${esc(v.voucherNo)}</td><td>${esc(new Date(v.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(v.workerId))}</td><td>${esc((v.items||[]).map(i=>finishedMansArticleName(i.articleId)).join(', '))}</td><td>${total}</td><td>${finishedVoucherBadge(finishedVoucherStatus(v))}</td><td><button class="btn ghost small" data-fm-view-voucher="${esc(v.id)}">View</button> <button class="btn ghost small" data-fm-print-voucher="${esc(v.id)}">Print</button> <button class="btn blue small" data-fm-edit-voucher="${esc(v.id)}">Edit</button> <button class="btn red small" data-fm-delete-voucher="${esc(v.id)}">Delete</button></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">No production vouchers in this view.</td></tr>'}</tbody></table></div>
+ ${finishedMansProductionFilter==='custom'?`<div class="bm-custom-date-row"><label>From <input type="date" id="fmCustomFrom" value="${esc(finishedMansProductionCustomFrom)}"></label><label>To <input type="date" id="fmCustomTo" value="${esc(finishedMansProductionCustomTo)}"></label></div>`:''}
+ <div class="bm-production-history"><table><thead><tr><th>Voucher</th><th>Date / Time</th><th>Worker</th><th>Articles</th><th>Total Atoms</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(v=>{const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);return `<tr><td>${esc(v.voucherNo)}</td><td>${esc(new Date(v.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(v.workerId))}</td><td>${esc((v.items||[]).map(i=>finishedMansArticleName(i.articleId)).join(', '))}</td><td>${total}</td><td>${finishedVoucherBadge(finishedVoucherStatus(v))}</td><td><button class="btn ghost small" data-fm-view-voucher="${esc(v.id)}">View</button> <button class="btn ghost small" data-fm-print-voucher="${esc(v.id)}">Print</button> <button class="btn blue small" data-fm-edit-voucher="${esc(v.id)}">Edit</button> <button class="btn red small" data-fm-delete-voucher="${esc(v.id)}">Delete</button></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">No production vouchers in this view.</td></tr>'}</tbody></table></div>
  </div>`;
 }
 
@@ -9429,7 +9429,7 @@ function addFinishedDraftItem(){
  if(!finishedMansSelectedWorker){toast('Select Finished Man first.');return;}
  const host=document.getElementById('fmExtraItemRows');if(!host)return;
  const row=document.createElement('div');row.className='fm-extra-item-row';
- row.innerHTML=`<div class="fm-field"><label>Production Article</label><select data-fm-extra-article><option value="">Select Article</option>${(settings.finishedMansProductionArticles||[]).map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div><div class="fm-field"><label>Quantity / Items</label><input data-fm-extra-qty type="number" min="1" step="1" placeholder="Atoms"></div><div class="fm-entry-action"><label>&nbsp;</label><button type="button" class="btn red small" data-fm-extra-remove>✕ Remove</button></div>`;
+ row.innerHTML=`<div class="bm-field"><label>Production Article</label><select data-fm-extra-article><option value="">Select Article</option>${(settings.finishedMansProductionArticles||[]).map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div><div class="bm-field"><label>Quantity / Items</label><input data-fm-extra-qty type="number" min="1" step="1" placeholder="Atoms"></div><div class="bm-entry-action"><label>&nbsp;</label><button type="button" class="btn red small" data-fm-extra-remove>✕ Remove</button></div>`;
  row.querySelector('[data-fm-extra-remove]')?.addEventListener('click',()=>row.remove());
  host.appendChild(row);
 }
@@ -9527,7 +9527,7 @@ async function saveFinishedExpense(){
 
 function pageFinishedMansProductionArticles(){
  normalizeFinishedMansState();const list=settings.finishedMansProductionArticles||[];
- return `<div class="fm-subpage-head"><button class="btn ghost" id="fmBackArticlesPage">← Back</button><h2 class="page-title">Production Articles</h2><button class="btn brass" id="fmPageAddArticle">+ Add Production Article</button></div>
+ return `<div class="bm-subpage-head"><button class="btn ghost" id="fmBackArticlesPage">← Back</button><h2 class="page-title">Production Articles</h2><button class="btn brass" id="fmPageAddArticle">+ Add Production Article</button></div>
  <div class="card"><div class="upper-material-grid">${list.length?list.map(a=>`<div class="upper-material-card"><div class="upper-material-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name||'')}">`:'<span style="font-size:28px;">👞</span>'}</div><div style="font-weight:800;">${esc(a.name||'')}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${Number(a.stock)||0} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button class="btn ghost small" data-fmpa-edit="${esc(a.id)}" style="flex:1;">Edit</button><button class="btn red small" data-fmpa-delete="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join(''):'<div class="empty">No Production Articles saved yet.</div>'}</div></div>`;
 }
 
@@ -9559,8 +9559,8 @@ function finishedMaterialWorkerAccounts(){
 }
 function openFinishedMaterialAccount(workerId){
  const a=finishedMaterialWorkerAccounts().find(x=>String(x.workerId)===String(workerId));if(!a)return;
- modal(`<div class="fm-account-modal-head"><h3>${esc(a.workerName)} — Material Account</h3><button class="btn red small" id="fmClearMaterialAccount">Clear Account</button></div>
- <div style="display:flex;gap:6px;flex-wrap:wrap;margin:9px 0;">${Array.from(a.materials.values()).map(m=>`<div class="fm-inline-total"><span>${esc(m.name)}</span><strong>${m.qty} ATOMS</strong></div>`).join('')}<div class="fm-inline-total fm-grand-total"><span>Total</span><strong>${a.total} ATOMS</strong></div></div>
+ modal(`<div class="bm-account-modal-head"><h3>${esc(a.workerName)} — Material Account</h3><button class="btn red small" id="fmClearMaterialAccount">Clear Account</button></div>
+ <div style="display:flex;gap:6px;flex-wrap:wrap;margin:9px 0;">${Array.from(a.materials.values()).map(m=>`<div class="bm-inline-total"><span>${esc(m.name)}</span><strong>${m.qty} ATOMS</strong></div>`).join('')}<div class="bm-inline-total bm-grand-total"><span>Total</span><strong>${a.total} ATOMS</strong></div></div>
  <div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Material</th><th>Atoms</th><th>Notes</th><th>Action</th></tr></thead><tbody>${a.rows.slice().sort((x,y)=>String(y.createdAt).localeCompare(String(x.createdAt))).map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(getFinishedMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${Number(r.qty)||0}</td><td>${esc(r.notes||'')}</td><td><button class="btn blue small" data-fm-mat-entry-edit="${esc(r.id)}">Edit</button> <button class="btn red small" data-fm-mat-entry-delete="${esc(r.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>
  <div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
  document.querySelectorAll('[data-fm-mat-entry-edit]').forEach(b=>b.onclick=()=>editFinishedMaterialDistribution(b.dataset.fmMatEntryEdit));
@@ -9614,10 +9614,10 @@ function finishedMaterialAccountsReportHtml(){
 }
 function openFinishedMaterialAccounts(){
  const accounts=finishedMaterialWorkerAccounts();
- modal(`<div class="fm-account-modal-head"><h3>Worker Material Accounts</h3><button class="btn brass small" id="fmPrintMaterialAccounts">🖨 Print</button></div>
- <div class="fm-account-filter-row"><button class="btn ${finishedMaterialFilter==='today'?'brass':'ghost'} small" data-fm-account-filter="today">Today</button><button class="btn ${finishedMaterialFilter==='week'?'brass':'ghost'} small" data-fm-account-filter="week">This Week</button><button class="btn ${finishedMaterialFilter==='month'?'brass':'ghost'} small" data-fm-account-filter="month">This Month</button><button class="btn ${finishedMaterialFilter==='custom'?'brass':'ghost'} small" data-fm-account-filter="custom">Custom Date</button><button class="btn ${finishedMaterialFilter==='all'?'brass':'ghost'} small" data-fm-account-filter="all">All Time</button><input id="fmAccountSearch" value="${esc(finishedMaterialSearch)}" placeholder="Search Worker / Material"></div>
- ${finishedMaterialFilter==='custom'?`<div class="fm-custom-date-row"><label>From <input type="date" id="fmMatCustomFrom" value="${esc(finishedMaterialCustomFrom)}"></label><label>To <input type="date" id="fmMatCustomTo" value="${esc(finishedMaterialCustomTo)}"></label></div>`:''}
- <div class="fm-material-account-grid" style="margin-top:8px;">${accounts.length?accounts.map(a=>`<button class="fm-material-account" data-fm-material-account="${esc(a.workerId)}"><strong>${esc(a.workerName)}</strong><span>${Array.from(a.materials.values()).map(m=>`${esc(m.name)} ${m.qty}`).join(' • ')}</span><b>Total ${a.total} ATOMS</b></button>`).join(''):'<div class="empty">No material distribution in this view.</div>'}</div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+ modal(`<div class="bm-account-modal-head"><h3>Worker Material Accounts</h3><button class="btn brass small" id="fmPrintMaterialAccounts">🖨 Print</button></div>
+ <div class="bm-account-filter-row"><button class="btn ${finishedMaterialFilter==='today'?'brass':'ghost'} small" data-fm-account-filter="today">Today</button><button class="btn ${finishedMaterialFilter==='week'?'brass':'ghost'} small" data-fm-account-filter="week">This Week</button><button class="btn ${finishedMaterialFilter==='month'?'brass':'ghost'} small" data-fm-account-filter="month">This Month</button><button class="btn ${finishedMaterialFilter==='custom'?'brass':'ghost'} small" data-fm-account-filter="custom">Custom Date</button><button class="btn ${finishedMaterialFilter==='all'?'brass':'ghost'} small" data-fm-account-filter="all">All Time</button><input id="fmAccountSearch" value="${esc(finishedMaterialSearch)}" placeholder="Search Worker / Material"></div>
+ ${finishedMaterialFilter==='custom'?`<div class="bm-custom-date-row"><label>From <input type="date" id="fmMatCustomFrom" value="${esc(finishedMaterialCustomFrom)}"></label><label>To <input type="date" id="fmMatCustomTo" value="${esc(finishedMaterialCustomTo)}"></label></div>`:''}
+ <div class="bm-material-account-grid" style="margin-top:8px;">${accounts.length?accounts.map(a=>`<button class="bm-material-account" data-fm-material-account="${esc(a.workerId)}"><strong>${esc(a.workerName)}</strong><span>${Array.from(a.materials.values()).map(m=>`${esc(m.name)} ${m.qty}`).join(' • ')}</span><b>Total ${a.total} ATOMS</b></button>`).join(''):'<div class="empty">No material distribution in this view.</div>'}</div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
  document.querySelectorAll('[data-fm-account-filter]').forEach(b=>b.onclick=()=>{finishedMaterialFilter=b.dataset.fmAccountFilter;openFinishedMaterialAccounts();});
  document.getElementById('fmAccountSearch')?.addEventListener('input',e=>{finishedMaterialSearch=e.target.value||'';openFinishedMaterialAccounts();});
  document.getElementById('fmMatCustomFrom')?.addEventListener('change',e=>{finishedMaterialCustomFrom=e.target.value||'';openFinishedMaterialAccounts();});
@@ -9627,9 +9627,9 @@ function openFinishedMaterialAccounts(){
 }
 function pageFinishedMansMaterialAccounts(){
  const accounts=finishedMaterialWorkerAccounts();
- return `<div class="fm-subpage-head"><button class="btn ghost" id="fmBackMaterialAccounts">← Back</button><h2 class="page-title">Worker Material Accounts</h2><button class="btn brass small" id="fmPrintMaterialAccountsPage">🖨 Print</button></div>
- <div class="card fm-material-accounts-page">
-  <div class="fm-account-filter-row">
+ return `<div class="bm-subpage-head"><button class="btn ghost" id="fmBackMaterialAccounts">← Back</button><h2 class="page-title">Worker Material Accounts</h2><button class="btn brass small" id="fmPrintMaterialAccountsPage">🖨 Print</button></div>
+ <div class="card bm-material-accounts-page">
+  <div class="bm-account-filter-row">
    <button class="btn ${finishedMaterialFilter==='today'?'brass':'ghost'} small" data-fm-account-page-filter="today">Today</button>
    <button class="btn ${finishedMaterialFilter==='week'?'brass':'ghost'} small" data-fm-account-page-filter="week">This Week</button>
    <button class="btn ${finishedMaterialFilter==='month'?'brass':'ghost'} small" data-fm-account-page-filter="month">This Month</button>
@@ -9637,15 +9637,15 @@ function pageFinishedMansMaterialAccounts(){
    <button class="btn ${finishedMaterialFilter==='all'?'brass':'ghost'} small" data-fm-account-page-filter="all">All Time</button>
    <input id="fmAccountPageSearch" value="${esc(finishedMaterialSearch)}" placeholder="Search Worker / Material">
   </div>
-  ${finishedMaterialFilter==='custom'?`<div class="fm-custom-date-row"><label>From <input type="date" id="fmMatPageCustomFrom" value="${esc(finishedMaterialCustomFrom)}"></label><label>To <input type="date" id="fmMatPageCustomTo" value="${esc(finishedMaterialCustomTo)}"></label></div>`:''}
-  <div class="fm-material-account-grid fm-account-page-grid">${accounts.length?accounts.map(a=>`<button class="fm-material-account" data-fm-material-account="${esc(a.workerId)}"><strong>${esc(a.workerName)}</strong><span>${Array.from(a.materials.values()).map(m=>`${esc(m.name)} ${m.qty}`).join(' • ')}</span><b>Total ${a.total} ATOMS</b></button>`).join(''):'<div class="empty">No material distribution in this view.</div>'}</div>
+  ${finishedMaterialFilter==='custom'?`<div class="bm-custom-date-row"><label>From <input type="date" id="fmMatPageCustomFrom" value="${esc(finishedMaterialCustomFrom)}"></label><label>To <input type="date" id="fmMatPageCustomTo" value="${esc(finishedMaterialCustomTo)}"></label></div>`:''}
+  <div class="bm-material-account-grid bm-account-page-grid">${accounts.length?accounts.map(a=>`<button class="bm-material-account" data-fm-material-account="${esc(a.workerId)}"><strong>${esc(a.workerName)}</strong><span>${Array.from(a.materials.values()).map(m=>`${esc(m.name)} ${m.qty}`).join(' • ')}</span><b>Total ${a.total} ATOMS</b></button>`).join(''):'<div class="empty">No material distribution in this view.</div>'}</div>
  </div>`;
 }function pageFinishedMansProductionMaterials(){
  normalizeFinishedMansState();const list=settings.finishedMansProductionMaterials||[],ws=finishedMansProductionWorkers(),accounts=finishedMaterialWorkerAccounts();
  const selected=ws.find(w=>String(w.id)===String(finishedMaterialSelectedWorker))||null;if(!selected)finishedMaterialSelectedWorker=null;
- return `<div class="fm-subpage-head"><button class="btn ghost" id="fmBackMaterialsPage">← Back</button><h2 class="page-title">Production Materials</h2></div>
- <div class="card fm-material-main-card">
-   <div class="fm-material-control-row">
+ return `<div class="bm-subpage-head"><button class="btn ghost" id="fmBackMaterialsPage">← Back</button><h2 class="page-title">Production Materials</h2></div>
+ <div class="card bm-material-main-card">
+   <div class="bm-material-control-row">
     <button class="btn brass small" id="fmPageAddMaterial">+ Add Production Material</button>
     <button class="btn ${finishedMaterialFilter==='today'?'brass':'ghost'} small" data-fm-material-filter="today">Today</button>
     <button class="btn ${finishedMaterialFilter==='week'?'brass':'ghost'} small" data-fm-material-filter="week">This Week</button>
@@ -9653,22 +9653,22 @@ function pageFinishedMansMaterialAccounts(){
     <button class="btn ${finishedMaterialFilter==='all'?'brass':'ghost'} small" data-fm-material-filter="all">All</button>
     <input id="fmMaterialSearch" value="${esc(finishedMaterialSearch)}" placeholder="Search Worker / Material">
    </div>
-   <div class="fm-material-grid">${list.length?list.map(m=>`<div class="fm-material-mini"><div class="fm-material-mini-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name||'')}">`:'📦'}</div><strong title="${esc(m.name||'')}">${esc(m.name||'')}</strong><span>${Number(m.stock)||0} ATOMS</span><div><button class="btn ghost small" data-fmpm-edit="${esc(m.id)}">Edit</button><button class="btn red small" data-fmpm-delete="${esc(m.id)}">Delete</button></div></div>`).join(''):'<div class="empty">No Production Materials saved yet.</div>'}</div>
+   <div class="bm-material-grid">${list.length?list.map(m=>`<div class="bm-material-mini"><div class="bm-material-mini-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name||'')}">`:'📦'}</div><strong title="${esc(m.name||'')}">${esc(m.name||'')}</strong><span>${Number(m.stock)||0} ATOMS</span><div><button class="btn ghost small" data-fmpm-edit="${esc(m.id)}">Edit</button><button class="btn red small" data-fmpm-delete="${esc(m.id)}">Delete</button></div></div>`).join(''):'<div class="empty">No Production Materials saved yet.</div>'}</div>
  </div>
 
- <div class="card fm-material-worker-card">
-   <div class="fm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${ws.length}</strong></span></div>
-   <div class="fm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box fm-worker-box ${String(finishedMaterialSelectedWorker)===String(w.id)?'selected':''}" data-fm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-fm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="fm-worker-name">${esc(w.name||'')}</div><div class="fm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Finished Man worker found.</div>'}</div>
+ <div class="card bm-material-worker-card">
+   <div class="bm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${ws.length}</strong></span></div>
+   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(finishedMaterialSelectedWorker)===String(w.id)?'selected':''}" data-fm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-fm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Finished Man worker found.</div>'}</div>
  </div>
 
- <div class="card fm-material-entry-card">
-   <div class="fm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Finished Man above first</span>'}</div>
-   <div class="fm-material-entry-row">
+ <div class="card bm-material-entry-card">
+   <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Finished Man above first</span>'}</div>
+   <div class="bm-material-entry-row">
     <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
     <div><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"></div>
     <div><label>Notes (Optional)</label><input id="fmDistNotes" placeholder="Notes"></div>
     <button class="btn brass" id="fmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
-    <button class="btn ghost fm-worker-account-open" id="fmOpenMaterialAccounts">👥 Worker Material Accounts</button>
+    <button class="btn ghost bm-worker-account-open" id="fmOpenMaterialAccounts">👥 Worker Material Accounts</button>
    </div>
  </div>`;
 }
@@ -9739,16 +9739,16 @@ function finishedPendingReportHtml(){
 function printFinishedPendingReport(){printFinishedMansHtml(finishedPendingReportHtml(),'Pending Report');}
 function pageFinishedMansPending(){
  const accounts=finishedPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0);
- return `<div class="fm-pending-head"><h2 class="page-title">Finished Mans Pending</h2><button class="btn ghost" id="fmBackPending">← Back</button></div>
- <div class="card fm-pending-compact">
-   <div class="fm-pending-filter-row">
+ return `<div class="bm-pending-head"><h2 class="page-title">Finished Mans Pending</h2><button class="btn ghost" id="fmBackPending">← Back</button></div>
+ <div class="card bm-pending-compact">
+   <div class="bm-pending-filter-row">
     <button class="btn ${finishedPendingFilter==='today'?'brass':'ghost'} small" data-fm-pending-filter="today">Today</button>
     <button class="btn ${finishedPendingFilter==='month'?'brass':'ghost'} small" data-fm-pending-filter="month">Monthly</button>
     <button class="btn ${finishedPendingFilter==='all'?'brass':'ghost'} small" data-fm-pending-filter="all">All Time</button>
     <input id="fmPendingSearch" value="${esc(finishedPendingSearch)}" placeholder="Search Worker / Voucher">
-    <div class="fm-pending-total">Current Pending: <strong>${total} ATOMS</strong></div><button class="btn ghost small" id="fmPrintPendingReport">🖨 Print Report</button>
+    <div class="bm-pending-total">Current Pending: <strong>${total} ATOMS</strong></div><button class="btn ghost small" id="fmPrintPendingReport">🖨 Print Report</button>
    </div>
-   <div id="fmPendingPageList" class="fm-pending-history"></div>
+   <div id="fmPendingPageList" class="bm-pending-history"></div>
  </div>`;
 }
 function renderFinishedPendingPageList(){
@@ -9789,40 +9789,40 @@ function pageFinishedMansProduction(){
  const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
  const backDisabled=navHistory.length?'':'disabled';
 
- return `<div class="fm-compact-page">
- <h2 class="page-title fm-page-title">Finished Mans Production</h2>
+ return `<div class="bm-compact-page">
+ <h2 class="page-title bm-page-title">Finished Mans Production</h2>
 
- <div class="card fm-main-compact-row">
-   <button type="button" class="btn ghost small fm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
-   <button type="button" class="btn ghost small fm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
-   <button type="button" class="btn brass small fm-top-card" id="fmOpenArticlesHub">👞 Production Articles</button>
-   <button type="button" class="btn brass small fm-top-card" id="fmOpenMaterialsHub">📦 Production Materials</button>
-   <button type="button" class="btn blue small fm-top-card" id="fmOpenProductionList">📋 Production List</button>
-   <button type="button" class="btn ghost small fm-top-card" id="fmOpenPending">⏳ Pending</button>
-   <div class="fm-top-stat"><span>Today Kharcha</span><strong>${upperMoney(todayKharcha)}</strong></div>
-   <div class="fm-top-stat"><span>Today Production</span><strong>${todayProduction} ATOMS</strong></div>
+ <div class="card bm-main-compact-row">
+   <button type="button" class="btn ghost small bm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
+   <button type="button" class="btn ghost small bm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
+   <button type="button" class="btn brass small bm-top-card" id="fmOpenArticlesHub">👞 Production Articles</button>
+   <button type="button" class="btn brass small bm-top-card" id="fmOpenMaterialsHub">📦 Production Materials</button>
+   <button type="button" class="btn blue small bm-top-card" id="fmOpenProductionList">📋 Production List</button>
+   <button type="button" class="btn ghost small bm-top-card" id="fmOpenPending">⏳ Pending</button>
+   <div class="bm-top-stat"><span>Today Kharcha</span><strong>${upperMoney(todayKharcha)}</strong></div>
+   <div class="bm-top-stat"><span>Today Production</span><strong>${todayProduction} ATOMS</strong></div>
  </div>
 
- <div class="card fm-worker-card">
-   <div class="fm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
-   <div class="fm-worker-grid">${finishedWorkers.length?finishedWorkers.map(w=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box fm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="fm-completed-badge">✓ Completed</div>`:''}<div class="fm-worker-name">${esc(w.name||'')}</div><div class="fm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
-   ${selected?`<div class="fm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
+ <div class="card bm-worker-card">
+   <div class="bm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
+   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map(w=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
+   ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
- <div class="card fm-entry-card">
-   <div class="fm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Finished Man above first</span>'}</div>
-   <div class="fm-entry-row">
-     <div class="fm-field fm-article-field"><label>Production Article</label><select id="fmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div>
-     <div class="fm-field fm-qty-field"><label>Quantity / Items</label><input id="fmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
-     <div class="fm-field fm-expense-field"><label>Kharcha / Expense</label><input id="fmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
-     <div class="fm-field fm-pending-field"><label>Pending</label><input id="fmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
-     <div class="fm-field fm-notes-field"><label>Notes (Optional)</label><input id="fmNotes" placeholder="Notes"></div>
-     <div class="fm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="fmAddDraft">+ Add Item</button></div>
-     <div class="fm-entry-action"><label>&nbsp;</label><button class="btn brass" id="fmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
+ <div class="card bm-entry-card">
+   <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Finished Man above first</span>'}</div>
+   <div class="bm-entry-row">
+     <div class="bm-field bm-article-field"><label>Production Article</label><select id="fmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div>
+     <div class="bm-field bm-qty-field"><label>Quantity / Items</label><input id="fmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
+     <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="fmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
+     <div class="bm-field bm-pending-field"><label>Pending</label><input id="fmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
+     <div class="bm-field bm-notes-field"><label>Notes (Optional)</label><input id="fmNotes" placeholder="Notes"></div>
+     <div class="bm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="fmAddDraft">+ Add Item</button></div>
+     <div class="bm-entry-action"><label>&nbsp;</label><button class="btn brass" id="fmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
    </div>
-   <div id="fmExtraItemRows" class="fm-extra-item-rows"></div>
+   <div id="fmExtraItemRows" class="bm-extra-item-rows"></div>
 
-   ${finishedMansDraftItems.length?`<div class="fm-added-items">${finishedMansDraftItems.map((i,n)=>`<div class="fm-added-item"><span>${n+1}. <strong>${esc(finishedMansArticleName(i.articleId))}</strong></span><span>${i.reportedQty} Atoms</span><button class="btn red small" data-fm-remove-draft="${esc(i.id)}">✕</button></div>`).join('')}</div>`:''}
+   ${finishedMansDraftItems.length?`<div class="bm-added-items">${finishedMansDraftItems.map((i,n)=>`<div class="bm-added-item"><span>${n+1}. <strong>${esc(finishedMansArticleName(i.articleId))}</strong></span><span>${i.reportedQty} Atoms</span><button class="btn red small" data-fm-remove-draft="${esc(i.id)}">✕</button></div>`).join('')}</div>`:''}
  </div>
  </div>`;
 }
