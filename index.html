@@ -1207,6 +1207,23 @@
 <style id="batam-completed-badge-v7">
 .bm-completed-badge{position:absolute;top:3px;right:3px;background:#1f9d55;color:#fff;border-radius:999px;padding:2px 5px;font-size:9px;font-weight:800;line-height:1.2;z-index:3;white-space:nowrap}
 </style>
+<style id="batam-final-points-v8">
+.bm-worker-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.bm-worker-heading h3{margin:0!important}
+.bm-worker-heading span{font-size:12px;color:var(--muted);white-space:nowrap}
+.bm-pending-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.bm-pending-head .page-title{margin:0}
+.bm-pending-compact{padding:9px 10px!important}
+.bm-pending-filter-row{display:grid;grid-template-columns:auto auto auto minmax(180px,1fr) auto;gap:6px;align-items:center}
+.bm-pending-filter-row input{height:32px!important;min-height:32px!important}
+.bm-pending-total{border:1px solid var(--line);border-radius:7px;padding:7px 10px;font-size:11px;white-space:nowrap}
+.bm-pending-history{margin-top:8px}
+.bm-today-article-row{display:flex;gap:6px;align-items:stretch;overflow-x:auto;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
+.bm-today-article-card{min-width:105px;flex:1;border:1px solid var(--line);border-radius:7px;padding:6px 8px;display:flex;flex-direction:column;gap:2px;font-size:10px}
+.bm-today-article-card strong{font-size:12px}
+.bm-today-article-card.total{font-weight:800}
+@media(max-width:899px){.bm-pending-filter-row{grid-template-columns:repeat(3,auto);}.bm-pending-filter-row input,.bm-pending-total{grid-column:1/-1}}
+</style>
 </head>
 <body>
 <div id="app">
@@ -8466,10 +8483,14 @@ function batamFilteredVouchers(){
 function batamVoucherStatus(v){const items=v.items||[];if(items.some(i=>i.verifiedQty===null||i.verifiedQty===undefined||i.verifiedQty===''))return 'Pending Verification';return items.every(i=>Number(i.verifiedQty)===Number(i.reportedQty))?'Verified':'Short / Not Fully Verified';}
 function batamVoucherBadge(s){return batamMansBadge(s);}
 function batamProductionListHtml(){
- const rows=batamFilteredVouchers();
+ const rows=batamFilteredVouchers(),today=batamLocalDateKey(new Date()),todayV=batamMansVouchers().filter(v=>!v.deletedAt&&batamLocalDateKey(v.createdAt||v.date)===today),articleTotals={};
+ todayV.forEach(v=>(v.items||[]).forEach(i=>{const id=String(i.articleId);articleTotals[id]=(articleTotals[id]||0)+(Number(i.reportedQty)||0);}));
+ const articleCards=(settings.batamMansProductionArticles||[]).map(a=>({name:a.name||'Article',total:articleTotals[String(a.id)]||0})),todayTotal=articleCards.reduce((s,a)=>s+a.total,0);
  return `<div class="card" style="margin-top:12px;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;"><div><h3 style="margin:0;">Production List</h3><div style="font-size:12px;color:var(--muted);margin-top:3px;">Reported production vouchers & worker production history</div></div><button class="btn brass" id="bmPrintVerificationList">🖨 Print Verification Slip</button> <button class="btn ghost" id="bmCustomizeVoucher">⚙️ Customize Voucher</button></div>
  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;"><button class="btn ${batamMansProductionFilter==='today'?'brass':'ghost'} small" data-bm-filter="today">Today</button><button class="btn ${batamMansProductionFilter==='week'?'brass':'ghost'} small" data-bm-filter="week">This Week</button><button class="btn ${batamMansProductionFilter==='all'?'brass':'ghost'} small" data-bm-filter="all">All Production</button><input id="bmProductionSearch" value="${esc(batamMansProductionSearch)}" placeholder="Search worker, article or voucher..." style="min-width:220px;flex:1;"></div>
- <div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>Voucher</th><th>Date / Time</th><th>Worker</th><th>Articles</th><th>Total Atoms</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(v=>{const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);return `<tr><td>${esc(v.voucherNo)}</td><td>${esc(new Date(v.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(v.workerId))}</td><td>${esc((v.items||[]).map(i=>batamMansArticleName(i.articleId)).join(', '))}</td><td>${total}</td><td>${batamVoucherBadge(batamVoucherStatus(v))}</td><td><button class="btn ghost small" data-bm-view-voucher="${esc(v.id)}">View</button> <button class="btn ghost small" data-bm-print-voucher="${esc(v.id)}">Print</button> <button class="btn blue small" data-bm-edit-voucher="${esc(v.id)}">Edit</button> <button class="btn red small" data-bm-delete-voucher="${esc(v.id)}">Delete</button></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">No production vouchers in this view.</td></tr>'}</tbody></table></div></div>`;
+ <div style="overflow:auto;margin-top:10px;"><table><thead><tr><th>Voucher</th><th>Date / Time</th><th>Worker</th><th>Articles</th><th>Total Atoms</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(v=>{const total=(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0);return `<tr><td>${esc(v.voucherNo)}</td><td>${esc(new Date(v.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(v.workerId))}</td><td>${esc((v.items||[]).map(i=>batamMansArticleName(i.articleId)).join(', '))}</td><td>${total}</td><td>${batamVoucherBadge(batamVoucherStatus(v))}</td><td><button class="btn ghost small" data-bm-view-voucher="${esc(v.id)}">View</button> <button class="btn ghost small" data-bm-print-voucher="${esc(v.id)}">Print</button> <button class="btn blue small" data-bm-edit-voucher="${esc(v.id)}">Edit</button> <button class="btn red small" data-bm-delete-voucher="${esc(v.id)}">Delete</button></td></tr>`;}).join(''):'<tr><td colspan="7" class="empty">No production vouchers in this view.</td></tr>'}</tbody></table></div>
+ <div class="bm-today-article-row">${articleCards.map(a=>`<div class="bm-today-article-card"><span>${esc(a.name)}</span><strong>${a.total} ATOMS</strong></div>`).join('')}<div class="bm-today-article-card total"><span>Today Total Production</span><strong>${todayTotal} ATOMS</strong></div></div>
+ </div>`;
 }
 
 const BATAM_VOUCHER_PRINT_FIELDS=[
@@ -8507,7 +8528,7 @@ function batamVoucherHtml(v){
  return `<div class="receipt-paper" style="width:80mm;margin:auto;">
  <div class="brand-head"><h3 style="font-size:18px;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div>
  ${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}${settings.phone?`<div class="sub">Ph: ${esc(settings.phone)}</div>`:''}
- <div class="sub" style="font-weight:800;letter-spacing:1px;">BOTTOM MAN PRODUCTION VOUCHER</div><hr>
+ <div class="sub" style="font-weight:800;letter-spacing:1px;">BATAM MAN PRODUCTION VOUCHER</div><hr>
  <div class="rline"><span>Voucher #:</span><span>${esc(v.voucherNo||'')}</span></div>
  <div class="rline"><span>Date:</span><span>${esc(String(v.createdAt||'').slice(0,10))}</span></div>
  <div class="rline"><span>Time:</span><span>${fmtTime(new Date(v.createdAt))}</span></div>
@@ -8625,7 +8646,7 @@ async function createBatamProductionVoucher(){
  materials.forEach(dm=>batamMaterialDistributions().push({id:uid(),voucherId,workerId:v.workerId,materialId:dm.materialId,qty:dm.qty,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'}));
  audit('Batam Mans Production Voucher Created',`${voucherNo} — ${batamMansWorkerName(v.workerId)} — ${voucherTotal} Atoms`);
  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher was not saved.');return;}
- batamMansDraftItems=[];batamMansDraftMaterials=[];printBatamMansHtml(batamVoucherHtml(v),`Production Voucher ${voucherNo}`);render();toast('Production voucher saved as Pending Verification');
+ batamMansDraftItems=[];batamMansDraftMaterials=[];render();openBatamVoucher(voucherId,false);toast('Production voucher saved as Pending Verification');
 }
 
 function openEditBatamVoucher(id){
@@ -8719,14 +8740,47 @@ function batamPendingMiniCard(){
  const accounts=batamPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0);
  return `<button type="button" class="card" id="bmOpenPending" style="width:100%;text-align:left;cursor:pointer;border:1px solid var(--line);"><div style="display:flex;justify-content:space-between;align-items:center;"><div><h3 style="margin:0;">⏳ Pending</h3><div style="font-size:12px;color:var(--muted);margin-top:4px;">Manual Pending only — same workflow as Distribute Upper</div></div><div style="text-align:right;"><strong>${total} ATOMS</strong><div style="font-size:22px;">›</div></div></div></button>`;
 }
-function pageBatamMansPending(){
- const accounts=batamPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0),ws=batamMansProductionWorkers();
- return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><div><h2 class="page-title" style="margin-bottom:4px;">Batam Mans Pending</h2><div style="font-size:12px;color:var(--muted);">Manual Pending account only — it does not change production vouchers, verified production, material stock or expense calculations.</div></div><button class="btn ghost" id="bmBackPending">← Back</button></div><div class="card"><div class="label">CURRENT TOTAL PENDING</div><div style="font-size:26px;font-weight:900;">${total} ATOMS</div></div><div class="card"><h3 style="margin-top:0;">Add / Minus Pending</h3><label>Worker</label><select id="bmPendingWorker"><option value="">Select Worker</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div><label>Action</label><select id="bmPendingAction"><option value="add">Add Pending</option><option value="minus">Minus Pending</option></select></div><div><label>Quantity (Atoms)</label><input id="bmPendingQty" type="number" min="1" step="1"></div></div><button class="btn brass" id="bmSavePending" style="margin-top:10px;">Save Pending</button></div><div class="card"><label>Search Worker</label><input id="bmPendingSearch" placeholder="Search Worker"><div id="bmPendingPageList" style="margin-top:12px;"></div></div>`;
+
+let batamPendingFilter='today';
+let batamPendingSearch='';
+function batamPendingFilteredRows(){
+ const now=new Date(),today=batamLocalDateKey(now),month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(batamPendingSearch||'').trim().toLowerCase();
+ return batamPendingRecords().filter(r=>{const key=batamLocalDateKey(r.date),ok=batamPendingFilter==='today'?key===today:batamPendingFilter==='month'?key.startsWith(month):true;return ok&&(!q||`${r.workerName||''} ${r.voucherId||''}`.toLowerCase().includes(q));}).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
 }
-function renderBatamPendingPageList(query=''){
- const host=document.getElementById('bmPendingPageList');if(!host)return;const list=batamPendingWorkerAccounts(query);
- host.innerHTML=list.length?list.map(a=>`<div class="card" style="margin:8px 0;padding:10px;cursor:pointer;" data-bm-pending-worker="${esc(a.workerId)}"><div style="display:flex;justify-content:space-between;gap:10px;"><strong>${esc(a.workerName)}</strong><strong>${a.qty} ATOMS</strong></div><div style="font-size:12px;color:var(--muted);margin-top:5px;">Click to view Pending history / Edit / Delete</div></div>`).join(''):'<div class="empty">No matching Pending workers found.</div>';
- document.querySelectorAll('[data-bm-pending-worker]').forEach(el=>el.onclick=()=>openBatamPendingWorkerDetail(el.dataset.bmPendingWorker));
+function batamPendingVoucherForRecord(r){return r?.voucherId?batamMansVouchers().find(v=>String(v.id)===String(r.voucherId)):null;}
+function openBatamPendingRecord(id){
+ const r=batamPendingRecords().find(x=>String(x.id)===String(id));if(!r)return;const v=batamPendingVoucherForRecord(r);
+ if(v){openBatamVoucher(v.id,false);return;}
+ const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0);
+ modal(`<h3>Pending Transaction</h3><div class="rline"><span>Worker:</span><strong>${esc(r.workerName||'')}</strong></div><div class="rline"><span>Date:</span><span>${esc(fmtDate(r.date))}</span></div><div class="rline"><span>Pending:</span><strong>${d>=0?'+':''}${d} ATOMS</strong></div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+function printBatamPendingRecord(id){
+ const r=batamPendingRecords().find(x=>String(x.id)===String(id));if(!r)return;const v=batamPendingVoucherForRecord(r);
+ if(v){printBatamMansHtml(batamVoucherHtml(v));return;}
+ const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0);
+ printBatamMansHtml(`<div class="receipt-paper" style="width:80mm;margin:auto;"><div class="brand-head"><h3>${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div><div class="sub" style="font-weight:800;">BATAM MAN PENDING</div><hr><div class="rline"><span>Worker:</span><strong>${esc(r.workerName||'')}</strong></div><div class="rline"><span>Date:</span><span>${esc(fmtDate(r.date))}</span></div><div class="rline"><span>Pending:</span><strong>${d>=0?'+':''}${d} ATOMS</strong></div></div>`);
+}
+function pageBatamMansPending(){
+ const accounts=batamPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0);
+ return `<div class="bm-pending-head"><h2 class="page-title">Batam Mans Pending</h2><button class="btn ghost" id="bmBackPending">← Back</button></div>
+ <div class="card bm-pending-compact">
+   <div class="bm-pending-filter-row">
+    <button class="btn ${batamPendingFilter==='today'?'brass':'ghost'} small" data-bm-pending-filter="today">Today</button>
+    <button class="btn ${batamPendingFilter==='month'?'brass':'ghost'} small" data-bm-pending-filter="month">Monthly</button>
+    <button class="btn ${batamPendingFilter==='all'?'brass':'ghost'} small" data-bm-pending-filter="all">All Time</button>
+    <input id="bmPendingSearch" value="${esc(batamPendingSearch)}" placeholder="Search Worker / Voucher">
+    <div class="bm-pending-total">Current Pending: <strong>${total} ATOMS</strong></div>
+   </div>
+   <div id="bmPendingPageList" class="bm-pending-history"></div>
+ </div>`;
+}
+function renderBatamPendingPageList(){
+ const host=document.getElementById('bmPendingPageList');if(!host)return;const rows=batamPendingFilteredRows();
+ host.innerHTML=rows.length?`<div style="overflow:auto;"><table><thead><tr><th>Date / Time</th><th>Worker</th><th>Voucher</th><th>Pending</th><th>Action</th></tr></thead><tbody>${rows.map(r=>{const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0),v=batamPendingVoucherForRecord(r);return `<tr><td>${esc(new Date(r.date).toLocaleString())}</td><td>${esc(r.workerName||'')}</td><td>${esc(v?.voucherNo||r.voucherId||'—')}</td><td>${d>=0?'+':''}${d} ATOMS</td><td><button class="btn ghost small" data-bm-pending-view="${esc(r.id)}">View</button> <button class="btn ghost small" data-bm-pending-print="${esc(r.id)}">Print</button> <button class="btn blue small" data-bm-pending-edit="${esc(r.id)}">Edit</button> <button class="btn red small" data-bm-pending-delete="${esc(r.id)}">Delete</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">No Pending transactions in this view.</div>';
+ document.querySelectorAll('[data-bm-pending-view]').forEach(b=>b.onclick=()=>openBatamPendingRecord(b.dataset.bmPendingView));
+ document.querySelectorAll('[data-bm-pending-print]').forEach(b=>b.onclick=()=>printBatamPendingRecord(b.dataset.bmPendingPrint));
+ document.querySelectorAll('[data-bm-pending-edit]').forEach(b=>b.onclick=()=>editBatamPendingEntry(b.dataset.bmPendingEdit));
+ document.querySelectorAll('[data-bm-pending-delete]').forEach(b=>b.onclick=()=>deleteBatamPendingEntry(b.dataset.bmPendingDelete));
 }
 function openBatamPendingWorkerDetail(workerId){
  const rows=batamPendingRecords().filter(p=>String(p.workerId)===String(workerId)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))),account=getBatamPendingForWorker(workerId),name=account?.workerName||rows[0]?.workerName||'Worker';
@@ -8769,7 +8823,7 @@ function pageBatamMansProduction(){
  </div>
 
  <div class="card bm-worker-card">
-   <h3>Select Batam Man</h3>
+   <div class="bm-worker-heading"><h3>Select Batam Man</h3><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
    <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map(w=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
@@ -9053,9 +9107,9 @@ function attachPageHandlers(){
   document.getElementById('bmSaveExpense')?.addEventListener('click',saveBatamExpense);
   document.getElementById('bmOpenPending')?.addEventListener('click',()=>goto('batamMansPending'));
   document.getElementById('bmBackPending')?.addEventListener('click',()=>goto('batamMansProduction'));
-  document.getElementById('bmSavePending')?.addEventListener('click',saveBatamPending);
-  document.getElementById('bmPendingSearch')?.addEventListener('input',e=>renderBatamPendingPageList(e.target.value));
-  if(currentPage==='batamMansPending')renderBatamPendingPageList(document.getElementById('bmPendingSearch')?.value||'');
+  document.querySelectorAll('[data-bm-pending-filter]').forEach(b=>b.addEventListener('click',()=>{batamPendingFilter=b.dataset.bmPendingFilter;render();}));
+  document.getElementById('bmPendingSearch')?.addEventListener('input',e=>{batamPendingSearch=e.target.value||'';renderBatamPendingPageList();});
+  if(currentPage==='batamMansPending')renderBatamPendingPageList();
   document.querySelectorAll('[data-batam-pickworker]').forEach(card=>card.addEventListener('click',e=>{
     if(e.target.closest('[data-batam-photo]'))return;
     batamMansSelectedWorker=card.dataset.batamPickworker;render();
