@@ -5297,7 +5297,7 @@ function openShoeBoxProductCustomFieldModal(supplierIndex,productId,fieldId){
   document.getElementById('sbpcfSave').onclick=()=>{const name=document.getElementById('sbpcfName').value.trim(),value=document.getElementById('sbpcfValue').value.trim();if(!name){toast('Enter a field name');return;}if(product.customFields.some(f=>String(f.id)!==String(fieldId||'')&&String(f.name).toLowerCase()===name.toLowerCase())){toast('This field name already exists');return;}if(field){field.name=name;field.value=value;}else product.customFields.push({id:uid(),name,value});persistAll();openShoeBoxProductCustomFieldsModal(supplierIndex,productId);};
 }
 function openShoeBoxReceiveSession(supplierIndex){
-  const supplier=getShoeBoxSuppliers()[supplierIndex];
+  let supplier=getShoeBoxSuppliers()[supplierIndex];
   if(!supplier) return;
   const products=Array.isArray(supplier.products)?supplier.products:[];
   if(!products.length){toast('Add at least one product first');return;}
@@ -5348,6 +5348,8 @@ function openShoeBoxReceiveSession(supplierIndex){
       const localReceiveDate=new Date(parts[0],parts[1]-1,parts[2],now.getHours(),now.getMinutes(),now.getSeconds(),now.getMilliseconds());
       const iso=localReceiveDate.toISOString();
       const __voucherN=sbUniqueReceiveVoucherNo();const voucherNo=`RV-${String(__voucherN).padStart(4,'0')}`;settings.nextShoeBoxReceiveVoucherNo=__voucherN+1;
+      supplier=getShoeBoxSuppliers()[supplierIndex];
+      if(!supplier){toast('Shoe Box supplier not found');__btn.disabled=false;return;}
       const purchaseIds=[];
       chosenNow.forEach(p=>{
         const atoms=sbWholeAtoms(selected[String(p.id)].atoms);
