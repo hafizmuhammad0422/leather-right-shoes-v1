@@ -1071,6 +1071,58 @@
 }
 </style>
 
+
+<style id="customize-page-global-visible-v3">
+#layoutCustomizeBar.layout-customize-global-card,
+#layoutCustomizeBar{
+  position:fixed!important;
+  top:8px!important;
+  right:10px!important;
+  left:auto!important;
+  bottom:auto!important;
+  z-index:2147483646!important;
+  display:flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:visible!important;
+  transform:none!important;
+  margin:0!important;
+  padding:3px!important;
+  border:1px solid rgba(184,138,43,.75)!important;
+  border-radius:9px!important;
+  background:var(--card,#fff)!important;
+  box-shadow:0 3px 12px rgba(0,0,0,.22)!important;
+}
+#layoutCustomizeBar button{
+  display:inline-flex!important;
+  visibility:visible!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:27px!important;
+  min-height:27px!important;
+  max-height:27px!important;
+  margin:0!important;
+  padding:3px 8px!important;
+  border-radius:6px!important;
+  font-size:11px!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+  cursor:pointer!important;
+}
+</style>
+
 </head>
 <body>
 <div id="app">
@@ -9292,6 +9344,10 @@ document.addEventListener('click',e=>{});
 
 </script>
 
+
+<div id="layoutCustomizeBar" class="layout-customize-global-card" aria-label="Customize current page">
+  <button type="button" id="layoutCustomizeBtn">⚙ Customize Page</button>
+</div>
 <script id="page-layout-customizer-js">
 (()=>{
   const STORE='lr_page_layouts_v1';
@@ -9387,6 +9443,9 @@ document.addEventListener('click',e=>{});
       bar=document.createElement('div');bar.id='layoutCustomizeBar';
       bar.innerHTML='<button type="button" id="layoutCustomizeBtn">⚙ Customize Page</button>';
       document.body.appendChild(bar);
+    }
+    if(!bar.dataset.layoutBound){
+      bar.dataset.layoutBound='1';
       bar.addEventListener('click',e=>{
         const id=e.target.id;
         if(id==='layoutCustomizeBtn')startEdit();
@@ -9469,8 +9528,15 @@ document.addEventListener('click',e=>{});
     requestAnimationFrame(()=>{try{ensureBar();tagCards();if(!editing)applySaved()}finally{observerBusy=false}});
   }
   const mo=new MutationObserver(refresh);
-  window.addEventListener('DOMContentLoaded',()=>{const main=document.getElementById('main');if(main)mo.observe(main,{childList:true,subtree:true});refresh()});
-  if(document.readyState!=='loading'){const main=document.getElementById('main');if(main)mo.observe(main,{childList:true,subtree:true});refresh()}
+  function bootLayoutCustomizer(){
+    const main=document.getElementById('main');
+    if(main){try{mo.observe(main,{childList:true,subtree:true})}catch(e){}}
+    ensureBar();refresh();
+  }
+  /* Script is at the end of BODY, so mount synchronously now. Also keep the load hooks as fallback. */
+  bootLayoutCustomizer();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bootLayoutCustomizer,{once:true});
+  window.addEventListener('load',bootLayoutCustomizer,{once:true});
 })();
 </script>
 </body></html>
