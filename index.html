@@ -962,160 +962,47 @@
   .modal-card,.modal-content{max-height:90vh!important;overflow:auto!important}
 }
 </style>
-
-<style id="page-layout-customizer-css">
+<style id="batam-production-compact-layout-v2">
 @media (min-width:900px){
-  #layoutCustomizeBar{
-    position:absolute;top:6px;right:10px;z-index:80;display:flex;gap:5px;align-items:center;
-  }
-  #layoutCustomizeBar button{
-    min-height:25px!important;padding:3px 8px!important;font-size:11px!important;
-    border-radius:7px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer;
-  }
-  #layoutCustomizeBar .layout-save{background:#b88a2b;color:#fff;border-color:#b88a2b}
-  #layoutCustomizeBar .layout-danger{background:#8e3434;color:#fff;border-color:#8e3434}
-  body.layout-editing #main{outline:2px dashed rgba(184,138,43,.55);outline-offset:-3px}
-  body.layout-editing #main .card[data-layout-key]{
-    position:relative!important;
-    outline:1px dashed rgba(184,138,43,.85)!important;
-    resize:both!important;overflow:auto!important;
-    min-width:120px!important;min-height:55px!important;
-    max-width:100%!important;max-height:82vh!important;
-    cursor:grab!important;
-  }
-  body.layout-editing #main .card[data-layout-key]:active{cursor:grabbing!important}
-  body.layout-editing #main .card[data-layout-key]::after{
-    content:"↘";position:absolute;right:2px;bottom:0;font-size:13px;font-weight:900;
-    color:#b88a2b;pointer-events:none;
-  }
-  .layout-card-tools{
-    display:none;position:absolute;top:2px;right:3px;z-index:25;gap:3px;align-items:center;
-    background:rgba(20,20,20,.88);padding:2px 3px;border-radius:6px;
-  }
-  body.layout-editing .layout-card-tools{display:flex}
-  .layout-card-tools button{
-    width:22px;height:20px;min-height:20px!important;padding:0!important;border:0;border-radius:4px;
-    background:#fff;color:#111;font-size:11px!important;font-weight:800;cursor:pointer;
-  }
-  body.layout-editing #main .card.layout-dragging{opacity:.5!important}
-  body.layout-editing #main .card.layout-drop-target{outline:2px solid #b88a2b!important}
-  #layoutEditHint{
-    position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:9999;
-    background:rgba(20,20,20,.92);color:#fff;padding:6px 12px;border-radius:8px;font-size:11px;
-    box-shadow:0 4px 18px rgba(0,0,0,.25);
-  }
-}
-</style>
-
-<style id="page-layout-customizer-visible-fix">
-@media (min-width:900px){
-  /* Always-visible small Customize Page control */
-  #layoutCustomizeBar{
-    position:fixed!important;
-    top:8px!important;
-    right:14px!important;
-    left:auto!important;
-    z-index:2147483000!important;
-    display:flex!important;
-    visibility:visible!important;
-    opacity:1!important;
-    pointer-events:auto!important;
-    width:auto!important;
-    height:auto!important;
-    max-width:none!important;
-    max-height:none!important;
-    overflow:visible!important;
-  }
-  #layoutCustomizeBar button{
-    display:inline-flex!important;
-    align-items:center!important;
-    justify-content:center!important;
-    width:auto!important;
-    height:28px!important;
-    min-height:28px!important;
-    padding:3px 9px!important;
-    font-size:11px!important;
-    line-height:1!important;
-    white-space:nowrap!important;
-    visibility:visible!important;
-    opacity:1!important;
-  }
-
-  /* Do NOT clip normal pages/workers. Page can scroll until user customizes it. */
-  body:not(.layout-editing),
-  body:not(.layout-editing) .app,
-  body:not(.layout-editing) .main,
-  body:not(.layout-editing) #main{
-    max-height:none!important;
-  }
-  body:not(.layout-editing){
-    overflow-y:auto!important;
-    overflow-x:hidden!important;
-  }
-  body:not(.layout-editing) .main,
-  body:not(.layout-editing) #main{
-    height:auto!important;
-    min-height:100vh!important;
-    overflow:visible!important;
-  }
-
-  /* Keep enough top room so fixed Customize control doesn't cover content. */
-  body:not(.layout-editing) #main{
-    padding-top:40px!important;
-  }
-
-  /* Only when Customize Page is ON, show editable boundaries. */
-  body.layout-editing #main{
-    padding-top:40px!important;
-  }
-}
-</style>
-<style id="per-page-customizer-css">
-.page-customize-btn{margin-bottom:14px!important;margin-left:6px!important;padding:3px 8px!important;min-height:26px!important;font-size:11px!important;border:1px solid var(--line)!important;border-radius:7px!important}
-body.layout-editing #mainArea .card[data-layout-key]{position:relative!important;resize:both!important;overflow:auto!important;min-width:120px!important;min-height:55px!important;max-width:100%!important;outline:1px dashed #b88a2b!important;cursor:grab!important}
-.page-card-layout-tools{display:none;position:absolute;right:3px;top:3px;z-index:50;gap:3px;background:rgba(20,20,20,.85);padding:2px;border-radius:5px}
-body.layout-editing .page-card-layout-tools{display:flex}
-.page-card-layout-tools button{width:22px!important;height:20px!important;min-height:20px!important;padding:0!important;font-size:11px!important;border:0!important;border-radius:4px!important;background:#fff!important;color:#111!important}
-body.layout-editing .layout-dragging{opacity:.5!important}
-body.layout-editing .layout-drop-target{outline:2px solid #b88a2b!important}
-</style>
-<style id="batam-production-compact-layout-v1">
-@media (min-width:900px){
- .bm-compact-page{width:100%;max-width:none!important}
- .bm-page-title{margin:0 0 5px!important;font-size:19px!important;line-height:1!important}
+ /* True full available content width, matching the header/content edge. */
+ #mainArea:has(.bm-compact-page){max-width:none!important;width:auto!important;padding-left:14px!important;padding-right:14px!important;}
+ .bm-compact-page{display:block!important;width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box!important;}
+ .bm-page-title{margin:0 0 7px!important;font-size:20px!important;line-height:1.1!important}
+ .bm-main-compact-row,.bm-worker-card,.bm-entry-card{width:100%!important;max-width:none!important;min-width:0!important;box-sizing:border-box!important;}
  .bm-main-compact-row{
-   width:100%!important;box-sizing:border-box!important;margin:0 0 6px!important;padding:5px 7px!important;
-   display:grid!important;grid-template-columns:auto auto auto minmax(125px,1fr) minmax(135px,1fr) minmax(115px,.8fr) minmax(90px,.65fr) minmax(45px,.35fr)!important;
-   gap:5px!important;align-items:center!important;
+   margin:0 0 8px!important;padding:8px 10px!important;
+   display:grid!important;grid-template-columns:auto auto minmax(145px,1.1fr) minmax(155px,1.15fr) minmax(130px,.9fr) minmax(105px,.72fr) 1fr!important;
+   gap:7px!important;align-items:center!important;
  }
- .bm-top-card{height:30px!important;min-height:30px!important;padding:3px 7px!important;font-size:10.5px!important;white-space:nowrap!important}
- .bm-future-slot{height:30px;border:1px dashed var(--line);border-radius:7px;opacity:.55}
- .bm-worker-card{width:100%!important;box-sizing:border-box!important;margin:0 0 6px!important;padding:6px 8px!important}
- .bm-worker-card>h3{margin:0 0 5px!important;font-size:14px!important;line-height:1!important}
- .bm-worker-grid{display:grid!important;grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:4px!important;width:100%!important}
+ .bm-top-card{height:38px!important;min-height:38px!important;padding:5px 10px!important;font-size:12px!important;white-space:nowrap!important}
+ .bm-future-space{height:1px;min-width:20px}
+ .bm-worker-card{margin:0 0 8px!important;padding:9px 10px!important}
+ .bm-worker-card>h3{margin:0 0 7px!important;font-size:16px!important;line-height:1.05!important}
+ .bm-worker-grid{display:grid!important;grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:6px!important;width:100%!important;max-width:none!important}
  .bm-worker-box{
-   height:70px!important;min-height:70px!important;max-height:70px!important;padding:3px 2px!important;margin:0!important;
+   height:84px!important;min-height:84px!important;max-height:84px!important;padding:5px 3px!important;margin:0!important;
    display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;overflow:hidden!important;
  }
- .bm-worker-box .entity-photo{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;margin:0 auto!important;font-size:14px!important}
- .bm-worker-name{font-size:9px!important;font-weight:700!important;line-height:1.05!important;margin-top:3px!important;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
- .bm-selected-line{font-size:10px;color:var(--muted);margin-top:4px;line-height:1}
- .bm-entry-card{width:100%!important;box-sizing:border-box!important;margin:0!important;padding:6px 8px!important}
- .bm-entry-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
- .bm-entry-head h3{margin:0!important;font-size:14px!important;line-height:1!important}
- .bm-entry-head span{font-size:10px;color:var(--muted)}
+ .bm-worker-box .entity-photo{width:50px!important;height:50px!important;min-width:50px!important;min-height:50px!important;margin:0 auto!important;font-size:15px!important}
+ .bm-worker-name{font-size:10px!important;font-weight:700!important;line-height:1.08!important;margin-top:4px!important;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .bm-selected-line{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.05}
+ .bm-entry-card{margin:0!important;padding:9px 10px!important}
+ .bm-entry-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+ .bm-entry-head h3{margin:0!important;font-size:16px!important;line-height:1.05!important}
+ .bm-entry-head span{font-size:11px;color:var(--muted)}
  .bm-entry-row{
    display:grid!important;
-   grid-template-columns:minmax(150px,1.35fr) minmax(85px,.55fr) minmax(95px,.65fr) minmax(85px,.55fr) minmax(120px,1fr) auto auto minmax(35px,.25fr)!important;
-   gap:5px!important;align-items:end!important;
+   grid-template-columns:minmax(175px,1.4fr) minmax(105px,.65fr) minmax(115px,.72fr) minmax(100px,.62fr) minmax(135px,1fr) auto auto!important;
+   gap:7px!important;align-items:end!important;width:100%!important;
  }
- .bm-field label,.bm-entry-action label{display:block!important;font-size:9.5px!important;margin:0 0 2px!important;line-height:1!important}
- .bm-entry-row input,.bm-entry-row select,.bm-entry-row .btn{height:28px!important;min-height:28px!important;padding:3px 6px!important;font-size:10.5px!important}
+ .bm-field label,.bm-entry-action label{display:block!important;font-size:10.5px!important;margin:0 0 3px!important;line-height:1!important}
+ .bm-entry-row input,.bm-entry-row select,.bm-entry-row .btn,.bm-extra-item-row input,.bm-extra-item-row select,.bm-extra-item-row .btn{height:34px!important;min-height:34px!important;padding:4px 8px!important;font-size:11.5px!important}
  .bm-pending-display{width:100%!important}
- .bm-entry-future-slot{height:28px;border:1px dashed var(--line);border-radius:6px;opacity:.5}
- .bm-added-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;margin-top:5px}
- .bm-added-item{min-height:26px;border:1px solid var(--line);border-radius:6px;padding:3px 5px;display:grid;grid-template-columns:1fr auto auto;gap:5px;align-items:center;font-size:10px}
- .bm-added-item .btn{min-height:20px!important;height:20px!important;padding:1px 5px!important;font-size:9px!important}
+ .bm-extra-item-rows{margin-top:6px;display:grid;gap:5px}
+ .bm-extra-item-row{display:grid;grid-template-columns:minmax(175px,1.4fr) minmax(105px,.65fr) auto 3fr;gap:7px;align-items:end;width:100%;padding-top:5px;border-top:1px dashed var(--line)}
+ .bm-added-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:6px}
+ .bm-added-item{min-height:30px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;font-size:11px}
+ .bm-added-item .btn{min-height:23px!important;height:23px!important;padding:2px 6px!important;font-size:9.5px!important}
 }
 </style>
 </head>
@@ -2445,33 +2332,28 @@ function render(){
   else if(currentPage==='shoeSoleSupplier2') main.innerHTML = pageShoeSoleSupplierDetail(1);
   else if(currentPage==='shoeSoleReceive1') main.innerHTML = pageShoeSoleReceiveDetail(0);
   else if(currentPage==='shoeSoleReceive2') main.innerHTML = pageShoeSoleReceiveDetail(1);
-  if(currentPage==='dashboard'){
-    main.innerHTML = `<button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
-  }
   if(currentPage!=='dashboard'){
     if(currentPage==='batamMansProduction'){
       // This page owns its compact full-width navigation/action row.
     } else if(currentPage==='workerSummaryDetail'){
-      // Keep its own Back to Workers behavior; add only the page-local customizer.
-      main.innerHTML = `<button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
+      // The detail page renders its own Back to Workers button.
     } else if(currentPage==='shoeBoxSupplier1' || currentPage==='shoeBoxSupplier2'){
-      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeBoxSuppliers" style="margin-bottom:14px;">← Back to Shoe Box Suppliers</button><button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
+      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeBoxSuppliers" style="margin-bottom:14px;">← Back to Shoe Box Suppliers</button>` + main.innerHTML;
     } else if(currentPage==='shoeBoxReceive1' || currentPage==='shoeBoxReceive2'){
       const receiveSupplierIndex=currentPage==='shoeBoxReceive2'?1:0;
-      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeBoxSupplierDetail" data-receivesupplier="${receiveSupplierIndex}" style="margin-bottom:14px;">← Back to Supplier</button><button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
+      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeBoxSupplierDetail" data-receivesupplier="${receiveSupplierIndex}" style="margin-bottom:14px;">← Back to Supplier</button>` + main.innerHTML;
     } else if(currentPage==='shoeSoleSupplier1' || currentPage==='shoeSoleSupplier2'){
-      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeSoleSuppliers" style="margin-bottom:14px;">← Back to Shoe Sole Suppliers</button><button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
+      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeSoleSuppliers" style="margin-bottom:14px;">← Back to Shoe Sole Suppliers</button>` + main.innerHTML;
     } else if(currentPage==='shoeSoleReceive1' || currentPage==='shoeSoleReceive2'){
       const receiveSupplierIndex=currentPage==='shoeSoleReceive2'?1:0;
-      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeSoleSupplierDetail" data-receivesupplier="${receiveSupplierIndex}" style="margin-bottom:14px;">← Back to Supplier</button><button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
+      main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeSoleSupplierDetail" data-receivesupplier="${receiveSupplierIndex}" style="margin-bottom:14px;">← Back to Supplier</button>` + main.innerHTML;
     } else {
       const backBtnHtml = navHistory.length>0 ? `<button type="button" class="btn ghost small" id="btnBackPage" style="margin-bottom:14px;margin-right:8px;">← Back</button>` : '';
-      main.innerHTML = backBtnHtml + `<button type="button" class="btn ghost small" id="btnBackDashboard" style="margin-bottom:14px;">← Back to Dashboard</button><button type="button" class="btn ghost small page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>` + main.innerHTML;
+      main.innerHTML = backBtnHtml + `<button type="button" class="btn ghost small" id="btnBackDashboard" style="margin-bottom:14px;">← Back to Dashboard</button>` + main.innerHTML;
     }
   }
   attachPageHandlers();
   wireDashboardSearch();
-  window.__pageLayoutAfterRender?.();
 }
 
 function openWorkerHistory(workerId){
@@ -8472,9 +8354,11 @@ function printBatamMansHtml(html,title='Batam Mans Production'){
 function openBatamVoucher(id,printNow=false){const v=batamMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(printNow){printBatamMansHtml(batamVoucherHtml(v));return;}modal(`${batamVoucherHtml(v)}<div class="modal-actions"><button class="btn brass" id="bmModalPrintVoucher">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('bmModalPrintVoucher').onclick=()=>printBatamMansHtml(batamVoucherHtml(v));}
 function addBatamDraftItem(){
  if(!batamMansSelectedWorker){toast('Select Batam Man first.');return;}
- const articleId=document.getElementById('bmArticle')?.value,qty=Number(document.getElementById('bmReported')?.value);
- if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Select Production Article and enter positive whole Atoms.');return;}
- batamMansDraftItems.push({id:uid(),articleId,reportedQty:qty});render();
+ const host=document.getElementById('bmExtraItemRows');if(!host)return;
+ const row=document.createElement('div');row.className='bm-extra-item-row';
+ row.innerHTML=`<div class="bm-field"><label>Production Article</label><select data-bm-extra-article><option value="">Select Article</option>${(settings.batamMansProductionArticles||[]).map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div><div class="bm-field"><label>Quantity / Items</label><input data-bm-extra-qty type="number" min="1" step="1" placeholder="Atoms"></div><div class="bm-entry-action"><label>&nbsp;</label><button type="button" class="btn red small" data-bm-extra-remove>✕ Remove</button></div>`;
+ row.querySelector('[data-bm-extra-remove]')?.addEventListener('click',()=>row.remove());
+ host.appendChild(row);
 }
 function removeBatamDraftItem(id){batamMansDraftItems=batamMansDraftItems.filter(i=>String(i.id)!==String(id));render();}
 
@@ -8489,7 +8373,9 @@ function removeBatamDraftMaterial(id){batamMansDraftMaterials=batamMansDraftMate
 async function createBatamProductionVoucher(){
  if(!batamMansSelectedWorker){toast('Select Batam Man first.');return;}
  const currentArticle=document.getElementById('bmArticle')?.value||'',currentQty=Number(document.getElementById('bmReported')?.value);
- if(currentArticle&&Number.isInteger(currentQty)&&currentQty>0)batamMansDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});
+ if(currentArticle||document.getElementById('bmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole Atoms.');return;}batamMansDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
+ const extraRows=[...document.querySelectorAll('#bmExtraItemRows .bm-extra-item-row')];
+ for(const row of extraRows){const articleId=row.querySelector('[data-bm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-bm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole Atoms.');return;}batamMansDraftItems.push({id:uid(),articleId,reportedQty:qty});}
  if(!batamMansDraftItems.length){toast('Select Production Article and enter positive whole Atoms.');return;}
  const notes=document.getElementById('bmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('bmExpenseAmount')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=batamMansVoucherNo(),voucherId=uid();
  for(const dm of batamMansDraftMaterials){const mat=getBatamMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
@@ -8631,12 +8517,11 @@ function pageBatamMansProduction(){
  <div class="card bm-main-compact-row">
    <button type="button" class="btn ghost small bm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
    <button type="button" class="btn ghost small bm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
-   <button type="button" class="btn ghost small bm-top-card page-customize-btn" id="btnCustomizePage">⚙ Customize Page</button>
    <button type="button" class="btn brass small bm-top-card" id="bmOpenArticlesHub">👞 Production Articles</button>
    <button type="button" class="btn brass small bm-top-card" id="bmOpenMaterialsHub">📦 Production Materials</button>
    <button type="button" class="btn blue small bm-top-card" id="bmOpenProductionList">📋 Production List</button>
    <button type="button" class="btn ghost small bm-top-card" id="bmOpenPending">⏳ Pending</button>
-   <span class="bm-future-slot" aria-hidden="true"></span>
+   <span class="bm-future-space" aria-hidden="true"></span>
  </div>
 
  <div class="card bm-worker-card">
@@ -8655,8 +8540,8 @@ function pageBatamMansProduction(){
      <div class="bm-field bm-notes-field"><label>Notes (Optional)</label><input id="bmNotes" placeholder="Notes"></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="bmAddDraft">+ Add Item</button></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn brass" id="bmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
-     <span class="bm-entry-future-slot" aria-hidden="true"></span>
    </div>
+   <div id="bmExtraItemRows" class="bm-extra-item-rows"></div>
 
    ${batamMansDraftItems.length?`<div class="bm-added-items">${batamMansDraftItems.map((i,n)=>`<div class="bm-added-item"><span>${n+1}. <strong>${esc(batamMansArticleName(i.articleId))}</strong></span><span>${i.reportedQty} Atoms</span><button class="btn red small" data-bm-remove-draft="${esc(i.id)}">✕</button></div>`).join('')}</div>`:''}
  </div>
@@ -9385,57 +9270,5 @@ initApp();
 
 document.addEventListener('click',e=>{});
 
-</script>
-<script id="page-layout-customizer-js">
-(()=>{
- const STORE='lr_page_layouts_v2';
- let editing=false,snapshot=null,dragged=null;
- const main=()=>document.getElementById('mainArea');
- const page=()=>String(window.currentPage||'dashboard');
- const loadAll=()=>{try{return JSON.parse(localStorage.getItem(STORE)||'{}')}catch(e){return {}}};
- const saveAll=x=>localStorage.setItem(STORE,JSON.stringify(x));
- const cards=()=>main()?[...main().querySelectorAll('.card')].filter(c=>!c.closest('.modal,.modal-card,.modal-content')):[];
- const txt=x=>String(x||'').replace(/\s+/g,' ').trim().slice(0,50);
- function key(c,i){if(c.dataset.layoutKey)return c.dataset.layoutKey;const h=c.querySelector('h1,h2,h3,h4,.label,strong');c.dataset.layoutKey=`${page()}|${c.id||txt(h?.textContent)||'card'}|${i}`;return c.dataset.layoutKey}
- function tag(){
-   cards().forEach((c,i)=>{key(c,i);c.draggable=editing;if(!c.querySelector(':scope > .page-card-layout-tools')){const d=document.createElement('div');d.className='page-card-layout-tools';d.innerHTML='<button type="button" data-pcl="minus">−</button><button type="button" data-pcl="plus">+</button><button type="button" data-pcl="auto">↺</button>';c.appendChild(d)}});
- }
- function scale(c,n){n=Math.max(.65,Math.min(1.35,Number(n)||1));c.dataset.layoutScale=n;c.querySelectorAll('h1,h2,h3,h4,label,input,select,textarea,button,td,th,.label').forEach(el=>{if(!el.dataset.pclBase){const z=parseFloat(getComputedStyle(el).fontSize);if(Number.isFinite(z))el.dataset.pclBase=z}const b=Number(el.dataset.pclBase);if(b)el.style.fontSize=(b*n)+'px'})}
- function state(){return cards().map((c,i)=>({key:key(c,i),order:[...c.parentElement.children].indexOf(c),parent:parentId(c.parentElement),width:c.style.width||'',height:c.style.height||'',scale:c.dataset.layoutScale||1}))}
- function parentId(p){const m=main();if(p===m)return 'MAIN';if(p.id)return '#'+p.id;return `${p.tagName}:${[...p.parentElement.children].indexOf(p)}`}
- function apply(){
-   if(editing)return;tag();const arr=loadAll()[page()];if(!Array.isArray(arr))return;const map=new Map(cards().map((c,i)=>[key(c,i),c]));
-   arr.forEach(x=>{const c=map.get(x.key);if(!c)return;c.style.width=x.width;c.style.height=x.height;scale(c,x.scale)});
-   const groups=new Map();arr.forEach(x=>{const c=map.get(x.key);if(!c)return;const p=c.parentElement;if(!groups.has(p))groups.set(p,[]);groups.get(p).push([x.order,c])});
-   groups.forEach(a=>a.sort((x,y)=>x[0]-y[0]).forEach(([,c])=>c.parentElement.appendChild(c)));
- }
- function start(){
-   if(editing)return;editing=true;tag();snapshot=state();document.body.classList.add('layout-editing');
-   cards().forEach(c=>c.draggable=true);
-   const b=document.getElementById('btnCustomizePage');if(b)b.outerHTML='<span id="pageCustomizeActions"><button type="button" class="btn brass small" id="btnSavePageLayout">✓ Save Layout</button> <button type="button" class="btn ghost small" id="btnCancelPageLayout">Cancel</button> <button type="button" class="btn red small" id="btnResetPageLayout">Reset</button></span>';
-   bindToolbar();
- }
- function finish(){editing=false;document.body.classList.remove('layout-editing');cards().forEach(c=>c.draggable=false);window.render()}
- function save(){const a=loadAll();a[page()]=state();saveAll(a);editing=false;document.body.classList.remove('layout-editing');window.render();if(window.toast)toast('Page layout saved')}
- function cancel(){
-   if(snapshot){const map=new Map(cards().map((c,i)=>[key(c,i),c]));snapshot.forEach(x=>{const c=map.get(x.key);if(c){c.style.width=x.width;c.style.height=x.height;scale(c,x.scale)}})}
-   editing=false;document.body.classList.remove('layout-editing');window.render();
- }
- function reset(){if(!confirm('Reset only this page layout to default?'))return;const a=loadAll();delete a[page()];saveAll(a);editing=false;document.body.classList.remove('layout-editing');window.render();if(window.toast)toast('Page layout reset')}
- function bindToolbar(){
-   document.getElementById('btnCustomizePage')?.addEventListener('click',start);
-   document.getElementById('btnSavePageLayout')?.addEventListener('click',save);
-   document.getElementById('btnCancelPageLayout')?.addEventListener('click',cancel);
-   document.getElementById('btnResetPageLayout')?.addEventListener('click',reset);
- }
- window.__pageLayoutAfterRender=function(){tag();bindToolbar();if(!editing)apply()};
-
- document.addEventListener('click',e=>{if(!editing)return;const b=e.target.closest('[data-pcl]');if(!b)return;e.preventDefault();e.stopPropagation();const c=b.closest('.card');if(!c)return;const s=Number(c.dataset.layoutScale)||1;if(b.dataset.pcl==='minus')scale(c,s-.05);if(b.dataset.pcl==='plus')scale(c,s+.05);if(b.dataset.pcl==='auto'){c.style.width='';c.style.height='';scale(c,1)}},true);
- document.addEventListener('dragstart',e=>{if(!editing)return;const c=e.target.closest?.('.card[data-layout-key]');if(!c)return;dragged=c;c.classList.add('layout-dragging');e.dataTransfer.effectAllowed='move'});
- document.addEventListener('dragover',e=>{if(!editing||!dragged)return;const c=e.target.closest?.('.card[data-layout-key]');if(!c||c===dragged||c.parentElement!==dragged.parentElement)return;e.preventDefault();c.classList.add('layout-drop-target')});
- document.addEventListener('dragleave',e=>e.target.closest?.('.card')?.classList.remove('layout-drop-target'));
- document.addEventListener('drop',e=>{if(!editing||!dragged)return;const c=e.target.closest?.('.card[data-layout-key]');if(!c||c===dragged||c.parentElement!==dragged.parentElement)return;e.preventDefault();const r=c.getBoundingClientRect();c.parentElement.insertBefore(dragged,e.clientY>r.top+r.height/2?c.nextSibling:c);c.classList.remove('layout-drop-target')});
- document.addEventListener('dragend',()=>{document.querySelectorAll('.layout-dragging,.layout-drop-target').forEach(x=>x.classList.remove('layout-dragging','layout-drop-target'));dragged=null});
-})();
 </script>
 </body></html>
