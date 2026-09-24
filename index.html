@@ -1551,6 +1551,7 @@ function normalizeShoeBoxSuppliers(){
         notes:String(purchase.notes||''),
         itemPrice:Math.max(0,Number(purchase.itemPrice ?? 0)||0),
         time:String(purchase.time||''),
+        voucherNo:String(purchase.voucherNo||''),
         editedAt:String(purchase.editedAt||'')
       })).filter(purchase=>purchase.productId && (purchase.items>0 || purchase.boxes>0 || purchase.amount>0)),
       account:{
