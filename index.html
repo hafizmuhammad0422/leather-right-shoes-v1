@@ -2074,6 +2074,7 @@ function render(){
   else if(currentPage==='archive') main.innerHTML = pageArchive();
   else if(currentPage==='gas') main.innerHTML = pageGasSupplier();
   else if(currentPage==='gasExtraBalance') main.innerHTML = pageGasExtraBalance();
+  else if(currentPage==='todayGasUsage') main.innerHTML = pageTodayGasUsage();
   else if(currentPage==='shoeBoxSuppliers') main.innerHTML = pageShoeBoxSuppliers();
   else if(currentPage==='shoeBoxSupplier1') main.innerHTML = pageShoeBoxSupplierDetail(0);
   else if(currentPage==='shoeBoxSupplier2') main.innerHTML = pageShoeBoxSupplierDetail(1);
@@ -6361,6 +6362,35 @@ function gasFieldValue(v, fieldId, previewMode=false){
   return (v.customFields||{})[fieldId] || '';
 }
 
+
+function gasWholeKg(value){
+  const n=Number(value);
+  return Number.isInteger(n) && n>0 ? n : null;
+}
+function nextUniqueGasVoucherNo(){
+  const used=new Set((gasVouchers||[]).map(v=>Number(v.voucherNo)).filter(Number.isFinite));
+  let n=Math.max(Number(settings.nextGasVoucherNo)||1001,1001);
+  while(used.has(n)) n++;
+  return n;
+}
+function gasDeepSnapshot(){
+  return {settings:JSON.stringify(settings),gasVouchers:JSON.stringify(gasVouchers),auditLog:JSON.stringify(auditLog)};
+}
+async function gasCriticalCommit(snapshot, failMessage){
+  if(await saveCriticalCloudState()) return true;
+  settings=JSON.parse(snapshot.settings);
+  gasVouchers=JSON.parse(snapshot.gasVouchers);
+  auditLog=JSON.parse(snapshot.auditLog);
+  await reconcileCloudAfterCriticalRollback();
+  toast(failMessage||'Gas change was NOT saved to D1. No balance change was kept.');
+  render();
+  return false;
+}
+function gasPaymentRecords(){
+  settings.gasPayments=Array.isArray(settings.gasPayments)?settings.gasPayments:[];
+  return settings.gasPayments;
+}
+
 /* ---- Gas Supplier Weekly Balance Ledger ---- */
 function getGasWeekKey(d){
   // Gas supplier weeks are payment-based. The legacy calendar-week helper is
@@ -6442,9 +6472,9 @@ function openEditGasBalanceModal(){
   modal(`
     <h3 style="margin-top:0;">Edit Supplier Balance — ${gasWeekRangeLabel(w.weekKey)}</h3>
     <div class="row">
-      <div><label>Opening Gas (KG)</label><input id="gbOpening" type="number" min="0" step="0.01" value="${gasWeekKg(w,'openingKg')}"></div>
-      <div><label>New Gas Amount (KG)</label><input id="gbNewGas" type="number" min="0" step="0.01" value="${gasWeekKg(w,'newGasKg')}" placeholder="This week's total gas quantity"></div>
-      <div><label>Pay Balance (KG)</label><input id="gbPay" type="number" min="0" step="0.01" value="${gasWeekKg(w,'payKg')}" placeholder="Gas quantity being settled"></div>
+      <div><label>Opening Gas (KG)</label><input id="gbOpening" type="number" min="1" step="1" value="${gasWeekKg(w,'openingKg')}"></div>
+      <div><label>New Gas Amount (KG)</label><input id="gbNewGas" type="number" min="1" step="1" value="${gasWeekKg(w,'newGasKg')}" placeholder="This week's total gas quantity"></div>
+      <div><label>Pay Balance (KG)</label><input id="gbPay" type="number" min="1" step="1" value="${gasWeekKg(w,'payKg')}" placeholder="Gas quantity being settled"></div>
     </div>
     <div style="font-size:12px;color:var(--muted);margin:6px 0 2px;">Remaining Balance = Opening Gas + New Gas − Paid Gas</div>
     <div id="gbPreview" style="font-weight:800;font-size:15px;margin-bottom:10px;">Remaining Balance: ${gasWeekKg(w,'remainingKg')} KG</div>
@@ -6496,77 +6526,83 @@ function openEditGasBalanceModal(){
   };
 }
 function openPayGasBalanceModal(){
-  const w = ensureCurrentGasWeek();
-  const currentRemaining = Math.max(0, Number(gasWeekKg(w,'remainingKg')) || 0);
-  modal(`
-    <h3 style="margin-top:0;">Pay Balance</h3>
+  const w=ensureCurrentGasWeek();
+  const currentRemaining=Math.max(0,Number(gasWeekKg(w,'remainingKg'))||0);
+  modal(`<h3 style="margin-top:0;">Pay Balance</h3>
     <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">Current Remaining Balance</div>
     <div style="font-size:22px;font-weight:800;color:var(--red);margin-bottom:12px;">${currentRemaining} KG</div>
-    <label>Enter Paid KG</label>
-    <input id="gasPayAmount" type="number" min="0" step="0.01" placeholder="e.g. 70" autofocus>
+    <label>Enter Paid KG (whole KG only)</label>
+    <input id="gasPayAmount" type="number" min="1" step="1" placeholder="e.g. 70" autofocus>
     <div id="gasPayPreview" style="font-weight:800;font-size:15px;margin:10px 0;">After Payment: ${currentRemaining} KG</div>
     <div id="gasPayAdvancePreview" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
-    <div class="modal-actions">
-      <button class="btn brass" id="gasPaySave">Pay Balance</button>
-      <button class="btn ghost" id="gasPayCancel">Cancel</button>
-    </div>
-  `);
-  const input=document.getElementById('gasPayAmount');
-  const preview=document.getElementById('gasPayPreview');
-  const advancePreview=document.getElementById('gasPayAdvancePreview');
-  const update=()=>{
-    const amount=Math.max(0,parseFloat(input.value)||0);
-    const carry=Math.max(0,currentRemaining-amount);
-    const advance=Math.max(0,amount-currentRemaining);
-    preview.textContent='After Payment: '+carry+' KG';
-    advancePreview.textContent=advance>0 ? ('Extra Advance: '+advance+' KG (future gas vouchers will deduct from this)') : '';
-  };
+    <div class="modal-actions"><button class="btn brass" id="gasPaySave">Pay Balance</button><button class="btn ghost" id="gasPayCancel">Cancel</button></div>`);
+  const input=document.getElementById('gasPayAmount'),saveBtn=document.getElementById('gasPaySave');
+  const update=()=>{const amount=Math.max(0,Number(input.value)||0),carry=Math.max(0,currentRemaining-amount),advance=Math.max(0,amount-currentRemaining);document.getElementById('gasPayPreview').textContent='After Payment: '+carry+' KG';document.getElementById('gasPayAdvancePreview').textContent=advance>0?('Extra Advance: '+advance+' KG (future gas vouchers will deduct from this)'):'';};
   input.addEventListener('input',update);
   document.getElementById('gasPayCancel').onclick=closeModal;
-  document.getElementById('gasPaySave').onclick=()=>{
-    const amount=Math.max(0,parseFloat(input.value)||0);
-    if(amount<=0){ toast('Please enter a valid KG amount'); return; }
-
+  saveBtn.onclick=async()=>{
+    if(saveBtn.disabled)return;
+    const amount=gasWholeKg(input.value);
+    if(!amount){toast('Only positive whole KG are allowed. Example: 1, 2, 3. Decimal KG are not allowed.');return;}
     const latestRemaining=Math.max(0,Number(gasWeekKg(w,'remainingKg'))||0);
-    const carryKg=Math.max(0,latestRemaining-amount);
-    const advanceKg=Math.max(0,amount-latestRemaining);
-    const paymentAt=new Date().toISOString();
-
-    w.closedAt=paymentAt;
-    w.paymentDate=paymentAt;
-    w.paidAtPaymentKg=amount;
-    w.remainingKg=0;
-
-    const weeks=settings.gasSupplierWeeks;
-    const nextWeek={
-      weekKey: paymentAt.slice(0,10),
-      weekId: uid(),
-      openingKg: Math.round((carryKg + Number.EPSILON)*100)/100,
-      newGasKg:0,
-      payKg:0,
-      advanceKg: Math.round((advanceKg + Number.EPSILON)*100)/100,
-      remainingKg: Math.round((carryKg + Number.EPSILON)*100)/100,
-      closedAt:null,
-      createdAt:paymentAt
-    };
-    weeks.push(nextWeek);
-
-    persistAll();
-    audit('Gas Supplier Balance Payment', `Paid ${amount} KG — Previous Balance ${latestRemaining} KG — New Opening ${carryKg} KG${advanceKg>0?` — Advance ${advanceKg} KG`:''}`);
-    closeModal();
-    render();
-    toast(advanceKg>0
-      ? `Payment recorded: ${amount} KG — Advance ${advanceKg} KG`
-      : `Payment recorded: ${amount} KG — New Opening ${carryKg} KG`);
+    const carryKg=Math.max(0,latestRemaining-amount),advanceKg=Math.max(0,amount-latestRemaining);
+    if(advanceKg>0 && !confirm(`Remaining is ${latestRemaining} KG.\nPayment is ${amount} KG.\nExtra ${advanceKg} KG will become Advance.\n\nContinue?`))return;
+    saveBtn.disabled=true;
+    const snap=gasDeepSnapshot(),paymentAt=new Date().toISOString(),weeks=settings.gasSupplierWeeks;
+    const payment={id:uid(),date:paymentAt,amountKg:amount,previousRemainingKg:latestRemaining,oldWeekId:w.weekId||null,oldWeekKey:w.weekKey||null,status:'Active'};
+    w.closedAt=paymentAt;w.paymentDate=paymentAt;w.paidAtPaymentKg=amount;w.payKg=amount;w.remainingKg=0;
+    const nextWeek={weekKey:paymentAt.slice(0,10),weekId:uid(),openingKg:carryKg,newGasKg:0,payKg:0,advanceKg:advanceKg,remainingKg:carryKg,closedAt:null,createdAt:paymentAt};
+    weeks.push(nextWeek);payment.nextWeekId=nextWeek.weekId;gasPaymentRecords().push(payment);
+    audit('Gas Supplier Balance Payment',`Paid ${amount} KG — Previous Balance ${latestRemaining} KG — New Opening ${carryKg} KG${advanceKg>0?` — Advance ${advanceKg} KG`:''}`);
+    if(!await gasCriticalCommit(snap,'Gas payment was NOT saved to D1. Payment, balance, advance and week change were rolled back.'))return;
+    closeModal();render();toast(advanceKg>0?`Payment recorded: ${amount} KG — Advance ${advanceKg} KG`:`Payment recorded: ${amount} KG — New Opening ${carryKg} KG`);
   };
   setTimeout(()=>input.focus(),50);
 }
 
+function openEditGasPaymentModal(paymentId){
+  const p=gasPaymentRecords().find(x=>String(x.id)===String(paymentId)&&x.status!=='Deleted');if(!p){toast('Payment record not found');return;}
+  modal(`<h3 style="margin-top:0;">Edit Gas Payment</h3><div>Old Payment: <strong>${Number(p.amountKg)||0} KG</strong></div><label style="margin-top:10px;">New Paid KG (whole KG only)</label><input id="editGasPaymentKg" type="number" min="1" step="1" value="${Number(p.amountKg)||0}"><div class="modal-actions"><button class="btn brass" id="saveEditGasPayment">Save</button><button class="btn ghost" id="cancelEditGasPayment">Cancel</button></div>`);
+  document.getElementById('cancelEditGasPayment').onclick=closeModal;
+  document.getElementById('saveEditGasPayment').onclick=async()=>{
+    const n=gasWholeKg(document.getElementById('editGasPaymentKg').value);if(!n){toast('Only positive whole KG are allowed');return;}
+    if(!confirm(`Change payment from ${p.amountKg} KG to ${n} KG?`))return;
+    const weeks=settings.gasSupplierWeeks||[],next=weeks.find(w=>String(w.weekId)===String(p.nextWeekId));
+    if(!next){toast('This legacy payment cannot be safely edited because its linked week is unavailable.');return;}
+    const snap=gasDeepSnapshot(),old=Number(p.amountKg)||0,base=Math.max(0,Number(p.previousRemainingKg)||0);
+    const carry=Math.max(0,base-n),adv=Math.max(0,n-base);
+    // Preserve gas received after this payment; only replace the opening/advance created by this payment.
+    next.openingKg=carry;next.advanceKg=adv;recalcGasWeekBalance(next);
+    p.amountKg=n;p.editedAt=new Date().toISOString();
+    audit('Gas Payment Edited',`${old} KG → ${n} KG`);
+    if(!await gasCriticalCommit(snap,'Gas payment edit was NOT saved to D1. Original payment was restored.'))return;
+    closeModal();render();toast('Gas payment updated');
+  };
+}
+function deleteGasPayment(paymentId){
+  const p=gasPaymentRecords().find(x=>String(x.id)===String(paymentId)&&x.status!=='Deleted');if(!p)return;
+  openConfirmModal(`Delete this ${p.amountKg} KG payment? The linked opening/advance will be reversed.`,async()=>{
+    const weeks=settings.gasSupplierWeeks||[],next=weeks.find(w=>String(w.weekId)===String(p.nextWeekId)),old=weeks.find(w=>String(w.weekId)===String(p.oldWeekId));
+    if(!next||!old){toast('This legacy payment cannot be safely deleted because its linked week is unavailable.');return;}
+    const snap=gasDeepSnapshot();
+    // Re-open the paid week and carry the later week's gas into it; do not destroy vouchers/history.
+    old.closedAt=null;old.paymentDate=null;old.paidAtPaymentKg=0;old.payKg=0;
+    old.newGasKg=gasWeekKg(old,'newGasKg')+gasWeekKg(next,'newGasKg');
+    old.advanceKg=gasWeekKg(old,'advanceKg')+gasWeekKg(next,'advanceKg');
+    recalcGasWeekBalance(old);
+    settings.gasSupplierWeeks=weeks.filter(w=>String(w.weekId)!==String(next.weekId));
+    (gasVouchers||[]).forEach(v=>{if(v.gasBalanceEffect&&String(v.gasBalanceEffect.weekId)===String(next.weekId)){v.gasBalanceEffect.weekId=old.weekId;v.gasBalanceEffect.weekKey=old.weekKey;}});
+    p.status='Deleted';p.deletedAt=new Date().toISOString();
+    audit('Gas Payment Deleted',`${p.amountKg} KG payment deleted and week boundary reversed`);
+    if(!await gasCriticalCommit(snap,'Gas payment deletion was NOT saved to D1. Original payment/week was restored.'))return;
+    closeModal();render();toast('Gas payment deleted — week and balance reversed');
+  });
+}
 function openGasWeekHistoryModal(){
   settings.gasSupplierWeeks = Array.isArray(settings.gasSupplierWeeks) ? settings.gasSupplierWeeks : [];
 settings.nextShoeBoxReceiveVoucherNo = Number(settings.nextShoeBoxReceiveVoucherNo) || 1001;
   const weeks = settings.gasSupplierWeeks.slice().sort((a,b)=> String(b.createdAt||b.weekKey).localeCompare(String(a.createdAt||a.weekKey)));
-  modal(`<h3 style="margin-top:0;">Gas Supplier — Weekly Balance History</h3>
+  modal(`<h3 style="margin-top:0;">Gas Supplier — Weekly Balance History</h3><div style="margin-bottom:10px;overflow-x:auto;">${gasPaymentRecords().filter(p=>p.status!=='Deleted').length?`<table><thead><tr><th>Payment Date/Time</th><th>Paid KG</th><th>Action</th></tr></thead><tbody>${gasPaymentRecords().filter(p=>p.status!=='Deleted').slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(p=>`<tr><td>${new Date(p.date).toLocaleString('en-GB')}</td><td>${p.amountKg} KG</td><td><button class="btn blue small" onclick="openEditGasPaymentModal('${p.id}')">Edit</button> <button class="btn red small" onclick="deleteGasPayment('${p.id}')">Delete</button></td></tr>`).join('')}</tbody></table>`:'<div style="font-size:12px;color:var(--muted);">No editable payment records yet.</div>'}</div>
     <div style="overflow-x:auto;">
     ${weeks.length? `
     <table>
@@ -6576,7 +6612,7 @@ settings.nextShoeBoxReceiveVoucherNo = Number(settings.nextShoeBoxReceiveVoucher
           <td>${fmtDate(w.createdAt||w.weekKey)}</td>
           <td>${gasWeekKg(w,'openingKg').toLocaleString('en-PK')} KG</td>
           <td>${gasWeekKg(w,'newGasKg').toLocaleString('en-PK')} KG</td>
-          <td>${gasWeekKg(w,'payKg').toLocaleString('en-PK')} KG</td>
+          <td>${Math.max(gasWeekKg(w,'payKg'),Number(w.paidAtPaymentKg)||0).toLocaleString('en-PK')} KG</td>
           <td style="font-weight:700;">${gasWeekKg(w,'remainingKg').toLocaleString('en-PK')} KG</td>
           <td>${w.closedAt? `<span class="lowstock-tag" style="background:#e9e5da;color:#6b6558;">Closed</span>` : `<span class="lowstock-tag" style="background:#d6ecdd;color:#1e5c37;">Current</span>`}</td>
         </tr>`).join('')}
@@ -6736,19 +6772,47 @@ function gasExtraBalanceTotal(){
 function openGasExtraBalanceModal(){
   modal(`<h3 style="margin-top:0;">Add Extra Balance</h3><div class="row"><div><label>Item / Details</label><input id="gasExtraDetails" placeholder="e.g. پانی لیا"></div><div><label>Amount (Rs.)</label><input id="gasExtraAmount" type="number" min="0" step="0.01" placeholder="500"></div></div><div class="modal-actions"><button type="button" class="btn brass" id="gasExtraSave">Save</button><button type="button" class="btn ghost" id="gasExtraCancel">Cancel</button></div>`);
   document.getElementById('gasExtraCancel').onclick=closeModal;
-  document.getElementById('gasExtraSave').onclick=()=>{
+  document.getElementById('gasExtraSave').onclick=async()=>{
     const details=document.getElementById('gasExtraDetails').value.trim(), amount=Math.max(0,Number(document.getElementById('gasExtraAmount').value)||0);
     if(!details){toast('Enter Item / Details');return;} if(amount<=0){toast('Enter a valid amount');return;}
-    const now=new Date(); settings.gasExtraBalances=settings.gasExtraBalances||[]; settings.gasExtraBalances.push({id:uid(),date:now.toISOString(),time:now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),details,amount});
-    persistAll(); closeModal(); render(); toast('Extra Balance saved');
+    const snap=gasDeepSnapshot(),now=new Date(); settings.gasExtraBalances=settings.gasExtraBalances||[]; settings.gasExtraBalances.push({id:uid(),date:now.toISOString(),time:now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),details,amount});
+    audit('Gas Extra Balance Created',`${details} — Rs. ${amount}`);
+    if(!await gasCriticalCommit(snap,'Extra Balance was NOT saved to D1. No change was kept.'))return;
+    closeModal(); render(); toast('Extra Balance saved');
   };
 }
 
+
+function openEditGasExtraBalanceModal(id){
+  const x=(settings.gasExtraBalances||[]).find(r=>String(r.id)===String(id));if(!x)return;
+  modal(`<h3 style="margin-top:0;">Edit Extra Balance</h3><div class="row"><div><label>Item / Details</label><input id="gasExtraEditDetails" value="${esc(x.details||'')}"></div><div><label>Amount (Rs.)</label><input id="gasExtraEditAmount" type="number" min="0.01" step="0.01" value="${Number(x.amount)||0}"></div></div><div class="modal-actions"><button class="btn brass" id="gasExtraEditSave">Save</button><button class="btn ghost" id="gasExtraEditCancel">Cancel</button></div>`);
+  document.getElementById('gasExtraEditCancel').onclick=closeModal;
+  document.getElementById('gasExtraEditSave').onclick=async()=>{
+    const details=document.getElementById('gasExtraEditDetails').value.trim(),amount=Number(document.getElementById('gasExtraEditAmount').value);
+    if(!details||!Number.isFinite(amount)||amount<=0){toast('Enter valid details and amount');return;}
+    if(!confirm(`Old Extra Balance: Rs. ${Number(x.amount).toLocaleString('en-PK')}\nNew Extra Balance: Rs. ${amount.toLocaleString('en-PK')}\n\nConfirm this change?`))return;
+    const snap=gasDeepSnapshot(),old=Number(x.amount)||0;x.details=details;x.amount=amount;x.editedAt=new Date().toISOString();audit('Gas Extra Balance Edited',`Rs. ${old} → Rs. ${amount}`);
+    if(!await gasCriticalCommit(snap,'Extra Balance edit was NOT saved to D1. Original value was restored.'))return;
+    closeModal();render();toast('Extra Balance updated');
+  };
+}
 function pageGasExtraBalance(){
   const total=gasExtraBalanceTotal(), list=(settings.gasExtraBalances||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
-  return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div><h2 class="page-title" style="margin-bottom:4px;">Extra Balance</h2><div style="font-size:12px;color:var(--muted);">Gas Supplier — Extra Balance records</div></div><button type="button" class="btn ghost" id="btnBackGasExtraBalance">← Back to Gas Supplier</button></div><div class="dashboard-financial-row" style="grid-template-columns:minmax(220px,320px);margin-bottom:12px;"><div class="financial-card"><div class="label">TOTAL EXTRA BALANCE</div><div class="amount">${formatMoney(total)}</div><div class="desc">All saved Extra Balance entries</div></div></div><div class="card" style="margin-bottom:12px;"><button type="button" class="btn brass" id="btnPageAddGasExtraBalance">+ Add Extra Balance</button></div><div class="card" style="overflow-x:auto;">${list.length?`<table><thead><tr><th>Date</th><th>Time</th><th>Details / Item</th><th>Amount</th><th>Action</th></tr></thead><tbody>${list.map(x=>`<tr><td>${new Date(x.date).toLocaleDateString('en-GB')}</td><td>${esc(x.time||'')}</td><td>${esc(x.details)}</td><td><strong>${formatMoney(x.amount)}</strong></td><td><button type="button" class="btn red small" data-page-deletegasextra="${esc(x.id)}">Delete</button></td></tr>`).join('')}</tbody></table>`:`<div class="empty">No Extra Balance entries yet.</div>`}</div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div><h2 class="page-title" style="margin-bottom:4px;">Extra Balance</h2><div style="font-size:12px;color:var(--muted);">Gas Supplier — Extra Balance records</div></div><button type="button" class="btn ghost" id="btnBackGasExtraBalance">← Back to Gas Supplier</button></div><div class="dashboard-financial-row" style="grid-template-columns:minmax(220px,320px);margin-bottom:12px;"><div class="financial-card"><div class="label">TOTAL EXTRA BALANCE</div><div class="amount">${formatMoney(total)}</div><div class="desc">All saved Extra Balance entries</div></div></div><div class="card" style="margin-bottom:12px;"><button type="button" class="btn brass" id="btnPageAddGasExtraBalance">+ Add Extra Balance</button></div><div class="card" style="overflow-x:auto;">${list.length?`<table><thead><tr><th>Date</th><th>Time</th><th>Details / Item</th><th>Amount</th><th>Action</th></tr></thead><tbody>${list.map(x=>`<tr><td>${new Date(x.date).toLocaleDateString('en-GB')}</td><td>${esc(x.time||'')}</td><td>${esc(x.details)}</td><td><strong>${formatMoney(x.amount)}</strong></td><td><button type="button" class="btn blue small" data-page-editgasextra="${esc(x.id)}">Edit</button> <button type="button" class="btn red small" data-page-deletegasextra="${esc(x.id)}">Delete</button></td></tr>`).join('')}</tbody></table>`:`<div class="empty">No Extra Balance entries yet.</div>`}</div>`;
 }
 
+
+function pageTodayGasUsage(){
+  const filter=gasHistoryFilter||'today',workerQ=String(gasHistoryWorkerQuery||'').trim(),selectedWorker=resolveGasHistoryWorker(workerQ);
+  const list=filterGasVouchersByWorker(getGasHistoryList(filter),workerQ).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const total=list.reduce((s,v)=>s+(Number(v.qtyKg)||0),0),amount=list.reduce((s,v)=>s+(Number(v.amount)||0),0);
+  const label=filter==='today'?'Today':filter==='week'?'This Week':filter==='month'?'This Month':filter==='custom'?'Custom Date':'All Time';
+  const showSummary=filter!=='today';
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><h2 class="page-title" style="margin:0;">Today Gas Usage</h2><button class="btn ghost" id="todayGasBack">← Back to Gas Supplier</button></div>
+  <div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:end;"><button class="btn ${filter==='today'?'brass':'ghost'} small" data-gasusagefilter="today">Today</button><button class="btn ${filter==='week'?'brass':'ghost'} small" data-gasusagefilter="week">This Week</button><button class="btn ${filter==='month'?'brass':'ghost'} small" data-gasusagefilter="month">This Month</button><button class="btn ${filter==='all'?'brass':'ghost'} small" data-gasusagefilter="all">All Time</button><button class="btn ${filter==='custom'?'brass':'ghost'} small" data-gasusagefilter="custom">Custom Date</button><div style="min-width:210px;flex:1;"><label>Worker</label><input id="todayGasPageWorker" value="${esc(workerQ)}" placeholder="Exact saved worker name"></div>${filter==='custom'?`<div><label>From</label><input id="todayGasPageStart" type="date" value="${esc(gasHistoryCustomStart)}"></div><div><label>To</label><input id="todayGasPageEnd" type="date" value="${esc(gasHistoryCustomEnd)}"></div>`:''}<button class="btn brass" id="todayGasPagePrint">🖨️ Print</button></div></div>
+  ${showSummary?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px;"><div class="gas-balance-item"><div class="gas-balance-label">${label} Gas</div><div class="gas-balance-value">${total} KG</div></div><div class="gas-balance-item"><div class="gas-balance-label">Total Amount</div><div class="gas-balance-value">${formatMoney(amount)}</div></div></div>`:''}
+  <div class="card" id="todayGasPagePrintArea"><div style="font-weight:800;margin-bottom:8px;">${label} — ${list.length} Vouchers — ${total} KG</div>${list.length?`<table><thead><tr><th>Voucher</th><th>Date</th><th>Time</th><th>Worker</th><th>KG</th><th>Amount</th><th>Action</th></tr></thead><tbody>${list.map(v=>`<tr><td>#${v.voucherNo}</td><td>${new Date(v.date).toLocaleDateString('en-GB')}</td><td>${new Date(v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(v.workerName||'')}</td><td>${v.qtyKg} KG</td><td>${v.amount!=null?formatMoney(v.amount):'—'}</td><td><button class="btn teal small" data-gasusageview="${v.id}">View / Print</button> <button class="btn red small" onclick="deleteGasVoucher('${v.id}')">Delete</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No gas vouchers.</div>'}</div>`;
+}
 function pageGasSupplier(){
   const gs = settings.gasSupplier||{};
   const gasWeek = ensureCurrentGasWeek();
@@ -7186,23 +7250,23 @@ function openCreateGasVoucherModal(){
     openGasVoucherSettingsModal();
   };
   document.getElementById('gvPreview').onclick=()=>openGasVoucherPreviewModal();
-  document.getElementById('gvSave').onclick=()=>{
+  document.getElementById('gvSave').onclick=async()=>{
+    const gasSaveBtn=document.getElementById('gvSave'); if(gasSaveBtn.disabled)return; gasSaveBtn.disabled=true;
+    const __gasCreateSnap=gasDeepSnapshot();
     const workerId = document.getElementById('gvWorker').value;
     const typedWorkerName = document.getElementById('gvWorkerSearch').value.trim();
     const worker = workers.find(w=>String(w.id)===String(workerId) && String(w.name||'').trim().toLowerCase()===typedWorkerName.toLowerCase());
-    const qtyKg = parseFloat(document.getElementById('gvQtyKg').value);
+    const qtyKg = gasWholeKg(document.getElementById('gvQtyKg').value);
     if(!worker){
-      toast('Please select a saved worker from the search results');
-      document.getElementById('gvWorkerSearch').focus();
-      return;
+      toast('Please select a saved worker from the search results'); document.getElementById('gvWorkerSearch').focus(); gasSaveBtn.disabled=false; return;
     }
-    if(!qtyKg || qtyKg<=0){ toast('Enter a valid quantity in KG'); return; }
+    if(!qtyKg){ toast('Only positive whole KG are allowed. Example: 1, 2, 3. Decimal KG are not allowed.'); gasSaveBtn.disabled=false; return; }
     const customFieldValues = {};
     document.querySelectorAll('.gvCustomField').forEach(inp=>{ customFieldValues[inp.dataset.cfid] = inp.value.trim(); });
     const extraBalanceAmount = gasExtraBalanceTotal();
     const voucher = {
       id: uid(),
-      voucherNo: settings.nextGasVoucherNo,
+      voucherNo: nextUniqueGasVoucherNo(),
       date: new Date().toISOString(),
       workerName: worker.name,
       workerRecordId: String(worker.id),
@@ -7216,7 +7280,7 @@ function openCreateGasVoucherModal(){
       status:'Issued'
     };
     gasVouchers.push(voucher);
-    settings.nextGasVoucherNo++;
+    settings.nextGasVoucherNo=voucher.voucherNo+1;
 
     // Link every newly created gas voucher to the active supplier balance.
     // First consume any KG that was paid in advance. Only the portion not
@@ -7238,8 +7302,8 @@ function openCreateGasVoucherModal(){
       capturedAt: voucher.date
     };
 
-    persistAll();
     audit('Gas Voucher Created', `#${voucher.voucherNo} — ${worker.name} — ${qtyKg} KG`);
+    if(!await gasCriticalCommit(__gasCreateSnap,'Gas Voucher was NOT saved to D1. Voucher, balance, advance and voucher number were rolled back.'))return;
     closeModal();
     showGasVoucherReceipt(voucher);
   };
@@ -7396,7 +7460,8 @@ function deleteGasVoucher(voucherId){
 
   openConfirmModal(
     `Delete Gas Voucher #${voucher.voucherNo}? The supplier balance will be reversed exactly.`,
-    ()=>{
+    async()=>{
+      const __gasDeleteSnap=gasDeepSnapshot();
       const effect = voucher.gasBalanceEffect || {};
       const weeks = Array.isArray(settings.gasSupplierWeeks) ? settings.gasSupplierWeeks : [];
 
@@ -7459,11 +7524,11 @@ function deleteGasVoucher(voucherId){
       voucher.deletedAt = new Date().toISOString();
       voucher.status = 'Deleted';
 
-      persistAll();
       audit(
         'Gas Voucher Deleted',
         `#${voucher.voucherNo} — ${voucher.workerName||''} — ${Number(voucher.qtyKg)||0} KG`
       );
+      if(!await gasCriticalCommit(__gasDeleteSnap,'Gas Voucher deletion was NOT saved to D1. Voucher and supplier balance were restored.'))return;
 
       closeModal();
       render();
@@ -7962,10 +8027,15 @@ function attachPageHandlers(){
   document.getElementById('btnBackGasExtraBalance')?.addEventListener('click', ()=>goto('gas'));
   document.getElementById('btnPageAddGasExtraBalance')?.addEventListener('click', openGasExtraBalanceModal);
   document.querySelectorAll('[data-page-deletegasextra]').forEach(btn=>btn.addEventListener('click',()=>{ const id=btn.dataset.pageDeletegasextra; openConfirmModal('Delete this Extra Balance entry?',()=>{ settings.gasExtraBalances=(settings.gasExtraBalances||[]).filter(x=>String(x.id)!==String(id)); persistAll(); render(); }); }));
-  document.getElementById('todayGasCard')?.addEventListener('click', (e)=>{
-    if(e.target.closest('button,a,input,select,textarea')) return;
-    openTodayGasHistoryModal();
-  });
+  document.getElementById('todayGasCard')?.addEventListener('click',(e)=>{if(e.target.closest('button,a,input,select,textarea'))return;gasHistoryFilter='today';goto('todayGasUsage');});
+  document.getElementById('todayGasBack')?.addEventListener('click',()=>goto('gas'));
+  document.querySelectorAll('[data-gasusagefilter]').forEach(b=>b.addEventListener('click',()=>{gasHistoryFilter=b.dataset.gasusagefilter;render();}));
+  document.getElementById('todayGasPageWorker')?.addEventListener('change',e=>{gasHistoryWorkerQuery=e.target.value.trim();render();});
+  document.getElementById('todayGasPageStart')?.addEventListener('change',e=>{gasHistoryCustomStart=e.target.value;render();});
+  document.getElementById('todayGasPageEnd')?.addEventListener('change',e=>{gasHistoryCustomEnd=e.target.value;render();});
+  document.getElementById('todayGasPagePrint')?.addEventListener('click',()=>printGasVoucherHistory(gasHistoryFilter||'today'));
+  document.querySelectorAll('[data-gasusageview]').forEach(b=>b.addEventListener('click',()=>{const v=gasVouchers.find(x=>String(x.id)===String(b.dataset.gasusageview));if(v)showGasVoucherReceipt(v);}));
+  document.querySelectorAll('[data-page-editgasextra]').forEach(btn=>btn.addEventListener('click',()=>openEditGasExtraBalanceModal(btn.dataset.pageEditgasextra)));
   // Clickable transaction rows (history page + worker history page)
   document.querySelectorAll('[data-opentx]').forEach(row=>row.addEventListener('click', ()=>{
     const tx = transactions.find(t=>t.id===row.dataset.opentx);
