@@ -3006,6 +3006,7 @@ function pageWorkers(){
       <button type="button" class="btn ghost" data-worker-summary="baqi" style="min-height:38px;">Total BAQI <strong style="margin-left:4px;">Rs. ${getFilteredWorkerSummaryList().reduce((s,w)=>s+getWorkerSummaryAmount(w,'baqi'),0).toLocaleString('en-PK')}</strong></button>
       <button type="button" class="btn ghost" data-worker-summary="additionalAdvance" style="min-height:38px;">Total Additional Advance <strong style="margin-left:4px;">Rs. ${getFilteredWorkerSummaryList().reduce((s,w)=>s+getWorkerSummaryAmount(w,'additionalAdvance'),0).toLocaleString('en-PK')}</strong></button>
       <button type="button" class="btn brass" id="btnDistributeUpper" style="min-height:38px;">📦 Distribute Upper</button>
+      <button type="button" class="btn brass" id="btnBatamMansProduction" style="min-height:38px;">👞 Batam Mans Production</button>
     </div>
     <div class="card worker-table-wrap">
       ${shown.length? `
@@ -3067,7 +3068,6 @@ function pageDistributeUpper(){
       <button type="button" class="btn brass" id="btnAddUpperMaterial" style="min-height:48px;">+ Add Upper Material</button>
       <button type="button" class="btn ghost" id="btnUpperMaterialList" style="min-height:48px;">📦 Upper Materials</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;">
     <div class="card"><h3 style="margin-top:0;">Upper Distribution</h3>
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">1 Atom = 12 pairs.</div>
       <label>Select Worker</label>
@@ -3075,18 +3075,6 @@ function pageDistributeUpper(){
         ${upperWorkers.length?upperWorkers.map(w=>{const todayKey=new Date().toISOString().slice(0,10),completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id)&&String(d.date||'').slice(0,10)===todayKey);return `<button type="button" class="pick-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="width:86px;height:86px;margin:auto;font-size:24px;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div style="position:absolute;top:4px;right:4px;background:#1f9d55;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:800;line-height:1.2;">✓ Completed</div>`:''}<div style="font-size:12px;font-weight:700;margin-top:6px;line-height:1.2;">${esc(w.name||'')}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
       <div id="upperWorkerInfo" style="font-size:12px;color:var(--muted);margin-top:10px;">${selectedWorker?`Selected Worker: <strong>${esc(selectedWorker.name||'')}</strong><br>Worker Type: <strong>${esc(selectedWorker.category||'')}</strong>`:''}</div>
-    </div>
-    <div class="card" style="cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;" onclick="goto('batamMansProduction')">
-      <div>
-        <h3 style="margin-top:0;">Batam Mans Production</h3>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Reported Production → Physical Verification → Verified Production</div>
-        <div style="padding:12px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.45);">
-          <div style="font-weight:900;margin-bottom:5px;">Production & Verification</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.6;">Enter reported pairs, print a verification slip, then confirm only the physically verified quantity.</div>
-        </div>
-      </div>
-      <button type="button" class="btn brass" style="width:100%;margin-top:14px;" onclick="event.stopPropagation();goto('batamMansProduction')">Open Batam Mans Production</button>
-    </div>
     </div>
     <div style="margin-bottom:8px;"><input type="text" id="upperWorkerSearch" placeholder="Search Worker" autocomplete="off" style="width:100%;max-width:320px;"></div>
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><h3 style="margin:0;">Upper Distribution Details</h3><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost small" id="btnAddUpperArticleRow" ${articles.length?'':'disabled'}>+ Add Article</button><button type="button" class="btn ghost small" id="btnAddUpperMaterialRow" ${materials.length?'':'disabled'}>+ Add Material</button></div></div>
@@ -8095,6 +8083,7 @@ function attachPageHandlers(){
 
   // Workers
   document.getElementById('btnDistributeUpper')?.addEventListener('click', ()=>goto('distributeUpper'));
+  document.getElementById('btnBatamMansProduction')?.addEventListener('click',()=>goto('batamMansProduction'));
   document.querySelectorAll('[data-worker-summary]').forEach(b=>b.addEventListener('click', ()=>openWorkerSummaryDetail(b.dataset.workerSummary)));
   document.getElementById('btnBackWorkerSummary')?.addEventListener('click', ()=>goBack());
   document.getElementById('btnPrintWorkerSummary')?.addEventListener('click', ()=>printWorkerSummary(workerSummaryDetailType));
