@@ -1312,6 +1312,24 @@
 .upper-summary-controls,.upper-summary-filter-row,.upper-article-summary-controls,.upper-material-summary-controls{display:flex!important;flex-wrap:nowrap!important;gap:4px!important;align-items:center!important;overflow-x:auto!important}
 .upper-summary-controls>*,.upper-summary-filter-row>*,.upper-article-summary-controls>*,.upper-material-summary-controls>*{flex:0 0 auto!important;margin:0!important}
 </style>
+<style id="production-layout-v18">
+/* Upper Mans Production: remove global duplicate nav row; compact row becomes the top row */
+body:has(#main .upper-compact-v15) #pageBackBar,
+body:has(#main .upper-compact-v15) .page-back-bar,
+body:has(#main .upper-compact-v15) .global-page-nav,
+body:has(#main .upper-compact-v15) .subpage-nav{display:none!important}
+.upper-compact-v15>.upper-main-compact-row{margin-top:0!important}
+
+/* Upper only: 11 worker cards per row */
+.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(11,minmax(0,1fr))!important}
+
+/* Weekly Kharcha transaction rows shorter */
+.upper-detail-row-v17{min-height:0!important;padding:3px 6px!important;line-height:1.05!important}
+.upper-detail-row-v17 .btn{min-height:25px!important;height:25px!important;padding:2px 6px!important;font-size:9px!important}
+
+/* Center Total BAQI heading for all three production worker selectors */
+.production-total-baqi-v18{text-align:center;font-size:11px;font-weight:800;white-space:nowrap}
+</style>
 </head>
 <body>
 <div id="app">
@@ -3612,9 +3630,9 @@ function pageDistributeUpper(){
   const selectedWorker=upperWorkers.find(w=>String(w.id)===String(upperSelWorker))||null;
   if(!selectedWorker) upperSelWorker=null;
   const todayKey=new Date().toISOString().slice(0,10);
-  const todayRecords=(settings.upperDistributions||[]).filter(d=>String(d.date||d.createdAt||'').slice(0,10)===todayKey);
-  let todayArticle=0,todayMaterial=0;
-  todayRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)todayArticle+=q;if(l.materialId||l.materialName)todayMaterial+=q;}));
+  const allUpperRecords=(settings.upperDistributions||[]);
+  let totalArticle=0,totalMaterial=0;
+  allUpperRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)totalArticle+=q;if(l.materialId||l.materialName)totalMaterial+=q;}));
   const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0);
   const pendingTotal=upperPendingWorkerAccounts().reduce((n,a)=>n+(Number(a.qty)||0),0);
   const totalBaqi=upperWorkers.reduce((n,w)=>n+(Number(getWorkerSummaryAmount(w,'baqi'))||0),0);
@@ -3627,12 +3645,12 @@ function pageDistributeUpper(){
       <button type="button" class="btn brass small bm-top-card" id="btnUpperMaterialList">📦 Upper Materials</button>
       <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard">⏳ Pending</button>
       <button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>Weekly Kharcha</span><strong>${upperMoney(weeklyAmount)}</strong></button>
-      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>Today Articles</span><strong>${todayArticle} ATOMS</strong></button>
-      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayMaterialsCard"><span>Today Materials</span><strong>${todayMaterial} ATOMS</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>Total Articles</span><strong>${totalArticle} ATOMS</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayMaterialsCard"><span>Total Materials</span><strong>${totalMaterial} ATOMS</strong></button>
     </div>
 
     <div class="card bm-worker-card">
-      <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="upper-total-baqi">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
+      <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
       <div class="bm-worker-grid" id="upperWorkerCards">
         ${upperWorkers.length?upperWorkers.map(w=>{const completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id)&&String(d.date||d.createdAt||'').slice(0,10)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
@@ -9159,7 +9177,8 @@ function pageBatamMansProduction(){
  const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
  const backDisabled=navHistory.length?'':'disabled';
 
- return `<div class="bm-compact-page">
+ const productionTotalBaqi=(batamWorkers||[]).reduce((n,w)=>n+(Number(getWorkerSummaryAmount(w,'baqi'))||0),0);
+  return `<div class="bm-compact-page">
  <h2 class="page-title bm-page-title">Batam Mans Production</h2>
 
  <div class="card bm-main-compact-row">
@@ -9174,7 +9193,7 @@ function pageBatamMansProduction(){
  </div>
 
  <div class="card bm-worker-card">
-   <div class="bm-worker-heading"><h3>Select Batam Man</h3><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
+   <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Batam Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
    <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map(w=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
@@ -9896,7 +9915,8 @@ function pageFinishedMansProduction(){
  const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
  const backDisabled=navHistory.length?'':'disabled';
 
- return `<div class="bm-compact-page">
+ const productionTotalBaqi=(finishedWorkers||[]).reduce((n,w)=>n+(Number(getWorkerSummaryAmount(w,'baqi'))||0),0);
+  return `<div class="bm-compact-page">
  <h2 class="page-title bm-page-title">Finished Mans Production</h2>
 
  <div class="card bm-main-compact-row">
@@ -9911,7 +9931,7 @@ function pageFinishedMansProduction(){
  </div>
 
  <div class="card bm-worker-card">
-   <div class="bm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
+   <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Finished Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
    <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map(w=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
