@@ -1510,19 +1510,27 @@ function normalizeShoeBoxSuppliers(){
           payAtom:Math.max(0,Number(product.atomBalance.payAtom)||0),
           advanceAtom:Math.max(0,Number(product.atomBalance.advanceAtom)||0),
           settledPurchaseIds:Array.isArray(product.atomBalance.settledPurchaseIds)?product.atomBalance.settledPurchaseIds.map(String):[],
-          lastSettlementAt:String(product.atomBalance.lastSettlementAt||'')
-        }:{openingAtom:0,payAtom:0,advanceAtom:0,settledPurchaseIds:[],lastSettlementAt:''},
+          lastSettlementAt:String(product.atomBalance.lastSettlementAt||''),
+          paymentHistory:Array.isArray(product.atomBalance.paymentHistory)?product.atomBalance.paymentHistory:[]
+        }:{openingAtom:0,payAtom:0,advanceAtom:0,settledPurchaseIds:[],lastSettlementAt:'',paymentHistory:[]},
         customFields:Array.isArray(product.customFields) ? product.customFields.filter(f=>f&&typeof f==='object').map(f=>({
           id:String(f.id||uid()), name:String(f.name||'').trim(), value:String(f.value??'')
         })).filter(f=>f.name) : []
       })).filter(product=>product.name),
+      deletedAt:String(src.deletedAt||''),
+      extraBalances:Array.isArray(src.extraBalances)?src.extraBalances:[],
       receiveVouchers: receiveVouchers.filter(v=>v&&typeof v==='object').map(v=>({
         id:String(v.id||uid()),
         voucherNo:String(v.voucherNo||''),
         date:String(v.date||new Date().toISOString()),
         purchaseIds:Array.isArray(v.purchaseIds)?v.purchaseIds.map(String):[],
         notes:String(v.notes||''),
-        createdAt:String(v.createdAt||new Date().toISOString())
+        createdAt:String(v.createdAt||new Date().toISOString()),
+        balanceSnapshot:v.balanceSnapshot&&typeof v.balanceSnapshot==='object'?v.balanceSnapshot:null,
+        workerTotalBoxesSnapshot:Number.isFinite(Number(v.workerTotalBoxesSnapshot))?Number(v.workerTotalBoxesSnapshot):null,
+        rateSnapshot:Number.isFinite(Number(v.rateSnapshot))?Number(v.rateSnapshot):null,
+        amountSnapshot:Number.isFinite(Number(v.amountSnapshot))?Number(v.amountSnapshot):null,
+        deletedAt:String(v.deletedAt||'')
       })),
       purchases: purchases.filter(x=>x&&typeof x==='object').map(purchase=>({
         id:String(purchase.id||uid()),
@@ -1535,7 +1543,8 @@ function normalizeShoeBoxSuppliers(){
         amount:Math.max(0,Number(purchase.amount)||0),
         notes:String(purchase.notes||''),
         itemPrice:Math.max(0,Number(purchase.itemPrice ?? 0)||0),
-        time:String(purchase.time||'')
+        time:String(purchase.time||''),
+        editedAt:String(purchase.editedAt||'')
       })).filter(purchase=>purchase.productId && (purchase.items>0 || purchase.boxes>0 || purchase.amount>0)),
       account:{
         openingAmount:Math.max(0,Number(sourceAccount.openingAmount)||0),
@@ -4307,6 +4316,31 @@ function openManageColumnsModal(){
   document.getElementById('colClose').onclick=closeModal;
 }
 
+
+/* Shoe Box Supplier audit safety helpers */
+function sbWholeAtoms(value){const n=Number(value);return Number.isInteger(n)&&n>0?n:null;}
+function sbSnapshot(){return {settings:JSON.stringify(settings),auditLog:JSON.stringify(auditLog)};}
+async function sbCriticalCommit(snapshot,message){
+  if(await saveCriticalCloudState()) return true;
+  settings=JSON.parse(snapshot.settings); auditLog=JSON.parse(snapshot.auditLog);
+  await reconcileCloudAfterCriticalRollback();
+  toast(message||'Shoe Box change was not saved to D1. No balance/stock change was kept.');
+  render(); return false;
+}
+function sbUniqueReceiveVoucherNo(){
+  const used=new Set();
+  getShoeBoxSuppliers().forEach(s=>(s.receiveVouchers||[]).forEach(v=>used.add(String(v.voucherNo||''))));
+  let n=Math.max(1001,Number(settings.nextShoeBoxReceiveVoucherNo)||1001);
+  while(used.has(`RV-${String(n).padStart(4,'0')}`)||used.has(String(n))) n++;
+  return n;
+}
+function sbPaymentHistory(product){
+  product.atomBalance=product.atomBalance&&typeof product.atomBalance==='object'?product.atomBalance:{};
+  product.atomBalance.paymentHistory=Array.isArray(product.atomBalance.paymentHistory)?product.atomBalance.paymentHistory:[];
+  return product.atomBalance.paymentHistory;
+}
+function sbExtraBalances(supplier){supplier.extraBalances=Array.isArray(supplier.extraBalances)?supplier.extraBalances:[];return supplier.extraBalances;}
+
 /* ============ SHOE BOX SUPPLIERS ============ */
 function getShoeBoxSuppliers(){
   return normalizeShoeBoxSuppliers();
@@ -4360,73 +4394,110 @@ function shoeBoxQuantityDisplay(value){const n=Number(value)||0;return Number.is
 function openShoeBoxProductAtomOpeningModal(supplierIndex,productId){
   const supplier=getShoeBoxSuppliers()[supplierIndex],product=supplier?.products?.find(p=>String(p.id)===String(productId)); if(!supplier||!product)return;
   const b=shoeBoxProductAtomBalanceForSupplier(supplier,product);
-  modal(`<h3>${esc(product.name)} — Opening Atoms</h3><label>Opening Atoms</label><input id="sbAtomOpeningOnly" type="number" min="0" step="any" value="${b.opening}"><div style="font-size:12px;color:var(--muted);margin-top:8px;">یہ quantity صرف اسی Product کے Opening Atoms کو تبدیل کرے گی۔</div><div class="modal-actions"><button type="button" class="btn brass" id="sbAtomOpeningSave">Save</button><button type="button" class="btn ghost" id="sbAtomOpeningCancel">Cancel</button></div>`);
+  modal(`<h3>${esc(product.name)} — Opening Atoms</h3><label>Opening Atoms</label><input id="sbAtomOpeningOnly" type="number" min="1" step="1" value="${b.opening}"><div style="font-size:12px;color:var(--muted);margin-top:8px;">یہ quantity صرف اسی Product کے Opening Atoms کو تبدیل کرے گی۔</div><div class="modal-actions"><button type="button" class="btn brass" id="sbAtomOpeningSave">Save</button><button type="button" class="btn ghost" id="sbAtomOpeningCancel">Cancel</button></div>`);
   document.getElementById('sbAtomOpeningCancel').onclick=closeModal;
   document.getElementById('sbAtomOpeningSave').onclick=()=>{const value=Math.max(0,Number(document.getElementById('sbAtomOpeningOnly').value)||0);const existing=(product.atomBalance&&typeof product.atomBalance==='object')?product.atomBalance:{};product.atomBalance={...existing,openingAtom:value,settledPurchaseIds:Array.isArray(existing.settledPurchaseIds)?existing.settledPurchaseIds:[]};persistAll();closeModal();render();toast(`${product.name} Opening Atoms saved`);};
 }
 function openShoeBoxProductAtomPayModal(supplierIndex,productId){
-  const supplier=getShoeBoxSuppliers()[supplierIndex];
-  const product=supplier?.products?.find(p=>String(p.id)===String(productId));
-  if(!supplier||!product)return;
-  const b=shoeBoxProductAtomBalanceForSupplier(supplier,product);
-  const payable=Math.max(0,b.opening+b.newAtom);
-
-  modal(`<h3>${esc(product.name)} — Pay Atoms</h3>
-    <div style="display:grid;gap:5px;font-size:13px;margin-bottom:10px;">
-      <div>Opening Atoms: <strong>${shoeBoxQuantityDisplay(b.opening)}</strong></div>
-      <div>New Atoms: <strong>${shoeBoxQuantityDisplay(b.newAtom)}</strong></div>
-      <div>Total Payable: <strong>${shoeBoxQuantityDisplay(payable)} Atoms</strong></div>
-    </div>
-    <label>Pay Atoms</label>
-    <input id="sbAtomPayOnly" type="number" min="0" step="any" value="0" autofocus>
-    <div id="sbAtomPayPreview" style="font-size:13px;font-weight:800;margin-top:9px;">Remaining: ${shoeBoxQuantityDisplay(payable)} Atoms</div>
-    <div id="sbAtomAdvancePreview" style="font-size:12px;color:var(--muted);margin-top:5px;"></div>
-    <div class="modal-actions">
-      <button type="button" class="btn brass" id="sbAtomPaySave">Save Payment</button>
-      <button type="button" class="btn ghost" id="sbAtomPayCancel">Cancel</button>
-    </div>`);
-
-  const input=document.getElementById('sbAtomPayOnly');
-  const preview=document.getElementById('sbAtomPayPreview');
-  const advancePreview=document.getElementById('sbAtomAdvancePreview');
-
-  const update=()=>{
-    const pay=Math.max(0,Number(input.value)||0);
-    const remaining=Math.max(0,payable-pay);
-    const extra=Math.max(0,pay-payable);
-    preview.textContent=`Remaining: ${shoeBoxQuantityDisplay(remaining)} Atoms`;
-    advancePreview.textContent=extra>0?`Advance Atoms: ${shoeBoxQuantityDisplay(extra)} Atoms`:'';
-  };
-  input.addEventListener('input',update);
+  const supplier=getShoeBoxSuppliers()[supplierIndex],product=supplier?.products?.find(p=>String(p.id)===String(productId));if(!supplier||!product)return;
+  const b=shoeBoxProductAtomBalanceForSupplier(supplier,product),payable=Math.max(0,b.opening+b.newAtom);
+  modal(`<h3>${esc(product.name)} — Pay Atoms</h3><div style="display:grid;gap:5px;font-size:13px;margin-bottom:10px;"><div>Opening Atoms: <strong>${shoeBoxQuantityDisplay(b.opening)}</strong></div><div>New Atoms: <strong>${shoeBoxQuantityDisplay(b.newAtom)}</strong></div><div>Total Payable: <strong>${shoeBoxQuantityDisplay(payable)} Atoms</strong></div></div><label>Pay Atoms</label><input id="sbAtomPayOnly" type="number" min="1" step="1" value="0" autofocus><div id="sbAtomPayPreview" style="font-size:13px;font-weight:800;margin-top:9px;">Remaining: ${shoeBoxQuantityDisplay(payable)} Atoms</div><div id="sbAtomAdvancePreview" style="font-size:12px;color:var(--muted);margin-top:5px;"></div><div class="modal-actions"><button type="button" class="btn brass" id="sbAtomPaySave">Save Payment</button><button type="button" class="btn ghost" id="sbAtomPayCancel">Cancel</button></div>`);
+  const input=document.getElementById('sbAtomPayOnly'),save=document.getElementById('sbAtomPaySave');
+  input.oninput=()=>{const n=Math.max(0,Number(input.value)||0);document.getElementById('sbAtomPayPreview').textContent=`Remaining: ${shoeBoxQuantityDisplay(Math.max(0,payable-n))} Atoms`;document.getElementById('sbAtomAdvancePreview').textContent=n>payable?`Advance Atoms: ${shoeBoxQuantityDisplay(n-payable)} Atoms`:'';};
   document.getElementById('sbAtomPayCancel').onclick=closeModal;
-
-  document.getElementById('sbAtomPaySave').onclick=()=>{
-    const pay=Math.max(0,Number(input.value)||0);
-    if(pay<=0){toast('Enter Pay Atoms');return;}
-
-    // Settle the current Opening + New balance exactly once.
-    // After payment, New Atoms are consumed into the settlement and only
-    // the unpaid remainder becomes the next Opening Atoms.
-    const remaining=Math.max(0,payable-pay);
-    const advance=Math.max(0,pay-payable);
-    const purchaseIds=(Array.isArray(supplier.purchases)?supplier.purchases:[])
-      .filter(p=>String(p.productId||'')===String(product.id))
-      .map(p=>String(p.id));
-
-    product.atomBalance={
-      openingAtom:remaining,
-      advanceAtom:advance,
-      payAtom:0,
-      settledPurchaseIds:purchaseIds,
-      lastSettlementAt:new Date().toISOString()
-    };
-
-    persistAll();
-    closeModal();
-    render();
-    toast(`${product.name} payment settled`);
+  save.onclick=async()=>{
+    if(save.disabled)return;const amount=sbWholeAtoms(input.value);if(!amount){toast('Only positive whole Atoms are allowed. Decimal, zero and minus are not allowed.');return;}
+    const advance=Math.max(0,amount-payable);if(advance>0&&!confirm(`Remaining: ${shoeBoxQuantityDisplay(payable)} Atoms\nPayment: ${amount} Atoms\nExtra Advance: ${advance} Atoms\n\nConfirm payment?`))return;
+    save.disabled=true;const snap=sbSnapshot(),remaining=Math.max(0,payable-amount);
+    const purchaseIds=(supplier.purchases||[]).filter(p=>String(p.productId||'')===String(product.id)).map(p=>String(p.id));
+    const payment={id:uid(),date:new Date().toISOString(),amount,previousOpening:b.opening,previousNew:b.newAtom,previousAdvance:b.advance,status:'Active'};
+    product.atomBalance={...(product.atomBalance||{}),openingAtom:remaining,advanceAtom:advance,payAtom:0,settledPurchaseIds:purchaseIds,lastSettlementAt:payment.date};
+    sbPaymentHistory(product).push(payment);audit('Shoe Box Payment Created',`${shoeBoxSupplierDisplayName(supplier,supplierIndex)} — ${product.name} — ${amount} Atoms`);
+    if(!await sbCriticalCommit(snap,'Shoe Box payment was not saved to D1. Payment and balance were rolled back.'))return;
+    closeModal();render();toast(`${product.name} payment settled`);
   };
-  setTimeout(()=>input.focus(),50);
+}
+
+
+function recalcShoeBoxProductFromPaymentHistory(supplier,product){
+  const history=sbPaymentHistory(product)
+    .filter(x=>x.status!=='Deleted')
+    .slice()
+    .sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
+
+  // No active settlement => all unsettled purchases are payable again.
+  if(!history.length){
+    product.atomBalance={
+      ...(product.atomBalance||{}),
+      openingAtom:0,
+      payAtom:0,
+      advanceAtom:0,
+      settledPurchaseIds:[],
+      lastSettlementAt:''
+    };
+    return shoeBoxProductAtomBalanceForSupplier(supplier,product);
+  }
+
+  // Replay settlements in chronological order from recorded pre-payment state.
+  // Each edit/delete therefore changes the accounting effect, not only the history row.
+  let opening=Math.max(0,Number(history[0].previousOpening)||0);
+  let newAtom=Math.max(0,Number(history[0].previousNew)||0);
+  let advance=Math.max(0,Number(history[0].previousAdvance)||0);
+  let settledIds=[];
+
+  for(const rec of history){
+    const payable=Math.max(0,opening+newAtom);
+    const amount=Math.max(0,Number(rec.amount)||0);
+    const remaining=Math.max(0,payable-amount);
+    advance=Math.max(0,amount-payable);
+    opening=remaining;
+    newAtom=0;
+
+    // Purchases that existed up to this settlement are considered settled.
+    const at=new Date(rec.date||0).getTime();
+    settledIds=(supplier.purchases||[])
+      .filter(p=>String(p.productId||'')===String(product.id))
+      .filter(p=>new Date(p.date||p.createdAt||0).getTime()<=at)
+      .map(p=>String(p.id));
+  }
+
+  const last=history[history.length-1];
+  product.atomBalance={
+    ...(product.atomBalance||{}),
+    openingAtom:opening,
+    payAtom:0,
+    advanceAtom:advance,
+    settledPurchaseIds:settledIds,
+    lastSettlementAt:last.date||''
+  };
+  return shoeBoxProductAtomBalanceForSupplier(supplier,product);
+}
+
+function openShoeBoxPaymentHistoryModal(supplierIndex,productId){
+ const supplier=getShoeBoxSuppliers()[supplierIndex],product=supplier?.products?.find(p=>String(p.id)===String(productId));if(!product)return;
+ const rows=sbPaymentHistory(product).filter(p=>p.status!=='Deleted').slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+ modal(`<h3>${esc(product.name)} — Payment History</h3>${rows.length?`<table><thead><tr><th>Date/Time</th><th>Atoms</th><th>Actions</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${new Date(p.date).toLocaleString('en-GB')}</td><td>${p.amount}</td><td><button class="btn blue small" onclick="editShoeBoxPayment(${supplierIndex},'${product.id}','${p.id}')">Edit</button> <button class="btn red small" onclick="deleteShoeBoxPayment(${supplierIndex},'${product.id}','${p.id}')">Delete</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No payments yet.</div>'}<div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Close</button></div>`);
+}
+function editShoeBoxPayment(si,pid,paymentId){
+ const s=getShoeBoxSuppliers()[si],p=s?.products?.find(x=>String(x.id)===String(pid)),h=p&&sbPaymentHistory(p),rec=h?.find(x=>String(x.id)===String(paymentId)&&x.status!=='Deleted');if(!rec)return;
+ const n=prompt(`Old Payment: ${rec.amount} Atoms\nEnter new whole Atoms:`,rec.amount);if(n===null)return;
+ const amount=sbWholeAtoms(n);if(!amount){toast('Only positive whole Atoms are allowed');return;}
+ const old=Number(rec.amount)||0;
+ if(!confirm(`Old Payment: ${old} Atoms\nNew Payment: ${amount} Atoms\n\nConfirm this change?`))return;
+ const snap=sbSnapshot();
+ rec.amount=amount;rec.editedAt=new Date().toISOString();
+ recalcShoeBoxProductFromPaymentHistory(s,p);
+ audit('Shoe Box Payment Edited',`${old} → ${amount} Atoms`);
+ sbCriticalCommit(snap,'Payment edit was not saved to D1. Original payment and balance were restored.').then(ok=>{if(ok){closeModal();render();toast('Payment and balance updated');}});
+}
+function deleteShoeBoxPayment(si,pid,paymentId){
+ const s=getShoeBoxSuppliers()[si],p=s?.products?.find(x=>String(x.id)===String(pid)),rec=p&&sbPaymentHistory(p).find(x=>String(x.id)===String(paymentId)&&x.status!=='Deleted');if(!rec)return;
+ if(!confirm(`Delete ${rec.amount} Atoms payment?\n\nIts accounting effect will be reversed and the current balance recalculated.`))return;
+ const snap=sbSnapshot(),old=Number(rec.amount)||0;
+ rec.status='Deleted';rec.deletedAt=new Date().toISOString();
+ recalcShoeBoxProductFromPaymentHistory(s,p);
+ audit('Shoe Box Payment Deleted',`${old} Atoms — balance recalculated`);
+ sbCriticalCommit(snap,'Payment deletion was not saved to D1. Original payment and balance were restored.').then(ok=>{if(ok){closeModal();render();toast('Payment deleted — balance recalculated');}});
 }
 function shoeBoxDateKey(value){
   if(!value) return '';
@@ -4436,6 +4507,10 @@ function shoeBoxDateKey(value){
 }
 function formatMoney(amount){
   return 'Rs. '+(Math.round((Number(amount)||0)*100)/100).toLocaleString('en-PK');
+}
+
+function deleteShoeBoxSupplier(index){
+ const s=getShoeBoxSuppliers()[index];if(!s||s.deletedAt)return;if(!confirm(`Delete ${shoeBoxSupplierDisplayName(s,index)} from the active supplier page?\n\nOld vouchers, payments and audit history will remain saved and viewable/printable.`))return;const snap=sbSnapshot();s.deletedAt=new Date().toISOString();audit('Shoe Box Supplier Deleted',shoeBoxSupplierDisplayName(s,index));sbCriticalCommit(snap,'Supplier deletion was not saved to D1. Supplier was restored.').then(ok=>{if(ok){goto('shoeBoxSuppliers');toast('Supplier removed from active list; history preserved');}});
 }
 function pageShoeBoxSuppliers(){
   const suppliers=getShoeBoxSuppliers();
@@ -4466,6 +4541,12 @@ function pageShoeBoxSuppliers(){
   </div>`;
 }
 
+
+function openShoeBoxExtraBalanceModal(si,id){
+ const s=getShoeBoxSuppliers()[si];if(!s)return;const list=sbExtraBalances(s),x=id?list.find(r=>String(r.id)===String(id)):null;
+ modal(`<h3>${x?'Edit':'Add'} Extra Balance</h3><label>Details</label><input id="sbExtraDetails" value="${esc(x?.details||'')}"><label>Amount (Rs.)</label><input id="sbExtraAmount" type="number" min="0.01" step="0.01" value="${Number(x?.amount)||0}"><div class="modal-actions"><button class="btn brass" id="sbExtraSave">Save</button><button class="btn ghost" id="sbExtraCancel">Cancel</button></div>`);
+ document.getElementById('sbExtraCancel').onclick=closeModal;document.getElementById('sbExtraSave').onclick=async()=>{const details=document.getElementById('sbExtraDetails').value.trim(),amount=Number(document.getElementById('sbExtraAmount').value);if(!details||!Number.isFinite(amount)||amount<=0){toast('Enter valid details and amount');return;}if(x&&!confirm(`Old Amount: Rs. ${Number(x.amount).toLocaleString('en-PK')}\nNew Amount: Rs. ${amount.toLocaleString('en-PK')}\n\nConfirm change?`))return;const snap=sbSnapshot(),old=Number(x?.amount)||0;if(x){x.details=details;x.amount=amount;x.editedAt=new Date().toISOString();audit('Shoe Box Extra Balance Edited',`Rs. ${old} → Rs. ${amount}`);}else{list.push({id:uid(),details,amount,date:new Date().toISOString()});audit('Shoe Box Extra Balance Created',`Rs. ${amount}`);}if(!await sbCriticalCommit(snap,'Extra Balance was not saved to D1. Original value was restored.'))return;closeModal();render();};
+}
 function pageShoeBoxSupplierDetail(index){
   const suppliers=getShoeBoxSuppliers();
   const supplier=suppliers[index];
@@ -4475,7 +4556,7 @@ function pageShoeBoxSupplierDetail(index){
   return `<div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
       <div><h2 class="page-title" style="margin-bottom:4px;">📦 ${esc(displayName)}</h2><div style="font-size:12px;color:var(--muted);">Supplier ${index+1} — complete Shoe Box Supplier details, products and receiving.</div></div>
-      <button type="button" class="btn blue small" data-editsbs="${index}">✏️ Edit Supplier</button>
+      <div style="display:flex;gap:6px;"><button type="button" class="btn blue small" data-editsbs="${index}">✏️ Edit Supplier</button><button type="button" class="btn red small" onclick="deleteShoeBoxSupplier(${index})">Delete Supplier</button></div>
     </div>
 
     <div class="card" style="margin-bottom:16px;">
@@ -4515,6 +4596,8 @@ function pageShoeBoxSupplierDetail(index){
         <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.2;">Click Product for actions</div>
       </div>`;}).join('')}</div>`:'<div class="empty">No products added yet. Add the supplier’s first product.</div>'}
     </div>
+
+    <div class="card" style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;font-size:17px;">Extra Balance</h3><button class="btn brass small" onclick="openShoeBoxExtraBalanceModal(${index},null)">＋ Add</button></div><div style="margin-top:8px;">${sbExtraBalances(supplier).length?sbExtraBalances(supplier).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line);"><span>${esc(x.details)} — ${formatMoney(x.amount)}</span><button class="btn blue small" onclick="openShoeBoxExtraBalanceModal(${index},'${x.id}')">Edit</button></div>`).join(''):'<div style="font-size:12px;color:var(--muted);">No extra balance.</div>'}</div></div>
 
     <div class="card" style="margin-bottom:16px;cursor:pointer;" data-open-sbs-receive="${index}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
@@ -4622,7 +4705,7 @@ function pageShoeBoxReceiveDetail(index){
       <div style="display:flex;gap:7px;flex-wrap:wrap;"><button class="btn blue small" id="sbsPrintReceiveSummary">🖨️ Print</button><button class="btn brass small" id="sbsCreateReceiveVoucher">＋ Create Receive Voucher</button></div>
     </div>
     <div class="card" style="margin-bottom:14px;"><div style="display:flex;gap:6px;flex-wrap:wrap;">
-      <button class="btn ${filter.filter==='today'?'brass':'ghost'} small" id="sbsReceiveToday">Today</button><button class="btn ${filter.filter==='weekly'?'brass':'ghost'} small" id="sbsReceiveWeekly">Weekly</button><button class="btn ${filter.filter==='monthly'?'brass':'ghost'} small" id="sbsReceiveMonthly">Monthly</button><button class="btn ${filter.filter==='custom'?'brass':'ghost'} small" id="sbsReceiveCustom">Custom Date</button>
+      <button class="btn ${filter.filter==='today'?'brass':'ghost'} small" id="sbsReceiveToday">Today</button><button class="btn ${filter.filter==='weekly'?'brass':'ghost'} small" id="sbsReceiveWeekly">Weekly</button><button class="btn ${filter.filter==='monthly'?'brass':'ghost'} small" id="sbsReceiveMonthly">Monthly</button><button class="btn ${filter.filter==='all'?'brass':'ghost'} small" id="sbsReceiveAll">All Time</button><button class="btn ${filter.filter==='custom'?'brass':'ghost'} small" id="sbsReceiveCustom">Custom Date</button>
     </div>${filter.filter==='custom'?`<div class="row" style="margin-top:10px;"><div><label>Start Date</label><input id="sbsReceiveStart" type="date" value="${esc(filter.start||'')}"></div><div><label>End Date</label><input id="sbsReceiveEnd" type="date" value="${esc(filter.end||'')}"></div><div style="display:flex;align-items:flex-end;"><button class="btn blue small" id="sbsReceiveApply">Apply</button></div></div>`:''}</div>
     <div class="card" style="margin-bottom:14px;"><div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px;">Article-wise Received Summary</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;">${(supplier.products||[]).map(product=>{const pid=String(product?.id||product?.name||'');const qty=rows.filter(p=>String(p.productId||p.productName||'')===pid || (!p.productId && String(p.productName||'')===String(product?.name||''))).reduce((sum,p)=>sum+shoeBoxPurchaseItems(p),0);return `<div class="entity-card" style="padding:8px;text-align:center;min-width:0;"><div style="font-weight:800;font-size:12px;line-height:1.2;overflow-wrap:anywhere;">${esc(product?.name||'Product')}</div><div style="font-size:10px;color:var(--muted);margin-top:4px;">Received</div><div style="font-size:16px;font-weight:900;color:var(--brass-dark);margin-top:2px;">${shoeBoxQuantityDisplay(qty)} Atoms</div></div>`;}).join('')||'<div class="empty">No products added yet.</div>'}</div></div>
     <div class="card" style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><div style="font-size:12px;color:var(--muted);font-weight:700;">TOTAL ITEMS RECEIVED</div><div style="font-size:18px;font-weight:900;color:var(--brass-dark);margin-top:3px;">${shoeBoxQuantityDisplay(rows.reduce((sum,p)=>sum+shoeBoxPurchaseItems(p),0))} Items</div></div></div></div>
@@ -4630,7 +4713,7 @@ function pageShoeBoxReceiveDetail(index){
       <div style="display:grid;gap:8px;">${vouchers.length?vouchers.map(v=>`<div class="entity-card" style="padding:11px;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(90px,.7fr) minmax(110px,.8fr) auto;gap:10px;align-items:center;">
         <div><div style="font-weight:800;">${esc(v.voucherNo)}</div><div style="font-size:11px;color:var(--muted);margin-top:3px;">${fmtDate(v.date)} • ${esc(displayName)}</div></div>
         <div><div style="font-size:11px;color:var(--muted);">Total Atoms</div><strong>${shoeBoxQuantityDisplay(v.totalAtoms)} Atoms</strong></div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;"><button type="button" class="btn ghost small" data-sbsreceivevoucher-group="${esc(v.id)}" data-purchaseids="${esc(v.purchaseIds.join(','))}">View</button><button type="button" class="btn blue small" data-sbsprintvoucher="${esc(v.id)}" data-purchaseids="${esc(v.purchaseIds.join(','))}">Print</button><button type="button" class="btn red small" data-sbsdeletevoucher="${esc(v.id)}" data-purchaseids="${esc(v.purchaseIds.join(','))}">Delete</button></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;"><button type="button" class="btn ghost small" data-sbsreceivevoucher-group="${esc(v.id)}" data-purchaseids="${esc(v.purchaseIds.join(','))}">View</button><button type="button" class="btn blue small" data-sbsprintvoucher="${esc(v.id)}" data-purchaseids="${esc(v.purchaseIds.join(','))}">Print</button><button type="button" class="btn blue small" data-sbseditvoucher="${esc(v.id)}" data-purchaseids="${esc(v.purchaseIds.join(','))}">Edit</button><button type="button" class="btn red small" data-sbsdeletevoucher="${esc(v.id)}" data-purchaseids="${esc(v.purchaseIds.join(','))}">Delete</button></div>
       </div>`).join(''):'<div class="empty">No receiving found for the selected period.</div>'}</div>
       <div style="display:flex;justify-content:flex-end;gap:18px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--line);font-size:13px;"><strong>Total Atoms: ${shoeBoxQuantityDisplay(totals.totalAtoms)} Atoms</strong></div>
     </div>
@@ -4838,7 +4921,14 @@ function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=fals
   if(autoPrint) setTimeout(()=>document.getElementById('sbsVoucherPrint')?.click(),120);
 }
 
-function deleteShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
+async 
+function editShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
+ const s=getShoeBoxSuppliers()[supplierIndex];if(!s)return;const v=(s.receiveVouchers||[]).find(x=>String(x.id)===String(voucherId));const ids=(v?.purchaseIds||purchaseIds||[]).map(String),rows=(s.purchases||[]).filter(p=>ids.includes(String(p.id)));
+ if(rows.length!==1){toast('For multi-product vouchers, edit the individual receiving entries.');return;}const row=rows[0],old=Number(row.atoms??row.items)||0,n=prompt(`Old Quantity: ${old} Atoms\nEnter new whole Atoms:`,old);if(n===null)return;const qty=sbWholeAtoms(n);if(!qty){toast('Only positive whole Atoms are allowed');return;}if(!confirm(`Change ${old} Atoms to ${qty} Atoms?`))return;
+ const snap=sbSnapshot(),product=(s.products||[]).find(p=>String(p.id)===String(row.productId)),diff=qty-old;if(product){product.stockItems=Math.max(0,shoeBoxProductStockItems(product)+diff);product.stockBoxes=Math.max(0,(Number(product.stockBoxes)||0)+diff);}row.atoms=row.items=row.boxes=qty;row.editedAt=new Date().toISOString();audit('Shoe Box Voucher Edited',`${row.voucherNo||v?.voucherNo||''}: ${old} → ${qty} Atoms`);
+ sbCriticalCommit(snap,'Shoe Box voucher edit was not saved to D1. Original quantity and stock were restored.').then(ok=>{if(ok){render();toast('Voucher updated');}});
+}
+async function deleteShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
   const supplier=getShoeBoxSuppliers()[supplierIndex];
   if(!supplier) return;
   const ids=(purchaseIds||[]).map(String);
@@ -4850,7 +4940,7 @@ function deleteShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
   if(!rows.length){toast('Receive voucher not found');return;}
   const totalAtoms=rows.reduce((sum,p)=>sum+(Number(p.atoms ?? p.items)||0),0);
   const voucherNo=voucher?.voucherNo||rows[0].voucherNo||'Receive Voucher';
-  if(!confirm(`Delete ${voucherNo}?\n\nAtoms: ${shoeBoxQuantityDisplay(totalAtoms)} Atoms\n\nAll stock effects of this voucher will be reversed.`)) return;
+  if(!confirm(`Delete ${voucherNo}?\n\nAtoms: ${shoeBoxQuantityDisplay(totalAtoms)} Atoms\n\nAll stock effects of this voucher will be reversed.`)) return;const __snap=sbSnapshot();
   rows.forEach(p=>{
     const product=(supplier.products||[]).find(x=>String(x.id)===String(p.productId));
     const atoms=Math.max(0,Number(p.atoms ?? p.items)||0);
@@ -4861,8 +4951,7 @@ function deleteShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
   });
   const idSet=new Set(finalIds);
   supplier.purchases=purchases.filter(p=>!idSet.has(String(p.id)));
-  supplier.receiveVouchers=vouchers.filter(v=>String(v.id)!==String(voucherId));
-  persistAll(); render(); toast(`${voucherNo} deleted — stock and receiving effects reversed`);
+  supplier.receiveVouchers=vouchers.filter(v=>String(v.id)!==String(voucherId));audit('Shoe Box Voucher Deleted',`${voucherNo} — ${totalAtoms} Atoms`);if(!await sbCriticalCommit(__snap,'Shoe Box voucher deletion was not saved to D1. Stock and voucher were restored.'))return;render();toast(`${voucherNo} deleted — stock and receiving effects reversed`);
 }
 
 function deleteShoeBoxReceiving(supplierIndex,purchaseId){
@@ -5020,13 +5109,13 @@ function openShoeBoxProductActionModal(supplierIndex,productId){
       <button type="button" class="btn blue" id="sbProductActionEdit">✏️ Edit</button>
       <button type="button" class="btn ghost" id="sbProductActionFields">⚙️ Fields</button>
       <button type="button" class="btn brass" id="sbProductActionReceive">＋ Receive</button>
-      <button type="button" class="btn red" id="sbProductActionDelete">🗑️ Delete</button>
+      <button type="button" class="btn red" id="sbProductActionDelete">🗑️ Delete</button><button type="button" class="btn ghost" id="sbProductActionPayments">📜 Payment History</button>
     </div>
     <div class="modal-actions"><button type="button" class="btn ghost" id="sbProductActionClose">Close</button></div>`);
   document.getElementById('sbProductActionClose').onclick=closeModal;
   document.getElementById('sbProductActionEdit').onclick=()=>{closeModal();openShoeBoxProductModal(supplierIndex,productId);};
   document.getElementById('sbProductActionFields').onclick=()=>{closeModal();openShoeBoxProductCustomFieldsModal(supplierIndex,productId);};
-  document.getElementById('sbProductActionReceive').onclick=()=>{closeModal();openShoeBoxPurchaseModal(supplierIndex,productId);};
+  document.getElementById('sbProductActionReceive').onclick=()=>{closeModal();openShoeBoxPurchaseModal(supplierIndex,productId);};document.getElementById('sbProductActionPayments').onclick=()=>openShoeBoxPaymentHistoryModal(supplierIndex,productId);
   document.getElementById('sbProductActionDelete').onclick=()=>{
     if(!confirm(`کیا آپ اس Product کو Delete کرنا چاہتے ہیں؟\n\n${product.name}`)) return;
     const liveSupplier=getShoeBoxSuppliers()[supplierIndex];
@@ -5077,7 +5166,7 @@ function openShoeBoxReceiveSession(supplierIndex){
           return `<div style="display:grid;grid-template-columns:26px minmax(0,1fr) 110px;gap:8px;align-items:center;padding:9px;border-bottom:1px solid var(--line);">
             <input type="checkbox" data-rscheck="${esc(key)}" ${checked?'checked':''}>
             <div style="min-width:0;"><strong>${esc(p.name)}</strong><div style="font-size:11px;color:var(--muted);">${esc(shoeBoxProductDisplayUnit(p))}</div></div>
-            <input type="number" min="0" step="any" data-rsqty="${esc(key)}" value="${qty}" ${checked?'':'disabled'} placeholder="Atoms">
+            <input type="number" min="1" step="1" data-rsqty="${esc(key)}" value="${qty}" ${checked?'':'disabled'} placeholder="Atoms">
           </div>`;
         }).join('')}
       </div>
@@ -5093,26 +5182,25 @@ function openShoeBoxReceiveSession(supplierIndex){
     document.querySelectorAll('[data-rsqty]').forEach(inp=>inp.onchange=()=>{
       const key=String(inp.dataset.rsqty);
       if(!selected[key]) selected[key]={atoms:0};
-      selected[key].atoms=Math.max(0,Number(inp.value)||0);
+      selected[key].atoms=Number(inp.value)||0;
       renderSession();
     });
     document.getElementById('rsNotes').oninput=e=>{notes=e.target.value;};
     document.getElementById('rsCancel').onclick=closeModal;
     document.getElementById('rsCustomize').onclick=()=>openShoeBoxReceiveVoucherCustomizeModal(renderSession);
-    document.getElementById('rsSave').onclick=()=>{
-      const chosenNow=products.filter(p=>selected[String(p.id)] && Math.max(0,Number(selected[String(p.id)].atoms)||0)>0);
-      if(!chosenNow.length){toast('Select at least one product and enter Atoms');return;}
+    document.getElementById('rsSave').onclick=async()=>{const __btn=document.getElementById('rsSave');if(__btn.disabled)return;__btn.disabled=true;const __snap=sbSnapshot();
+      const chosenNow=products.filter(p=>selected[String(p.id)] && sbWholeAtoms(selected[String(p.id)].atoms));
+      if(!chosenNow.length){toast('Select products and enter positive whole Atoms only');__btn.disabled=false;return;}
       const dateValue=document.getElementById('rsDate').value;
-      if(!dateValue){toast('Select receive date');return;}
+      if(!dateValue){toast('Select receive date');__btn.disabled=false;return;}
       const now=new Date();
       const parts=dateValue.split('-').map(Number);
       const localReceiveDate=new Date(parts[0],parts[1]-1,parts[2],now.getHours(),now.getMinutes(),now.getSeconds(),now.getMilliseconds());
       const iso=localReceiveDate.toISOString();
-      const voucherNo=`RV-${String(settings.nextShoeBoxReceiveVoucherNo||1001).padStart(4,'0')}`;
-      settings.nextShoeBoxReceiveVoucherNo=(Number(settings.nextShoeBoxReceiveVoucherNo)||1001)+1;
+      const __voucherN=sbUniqueReceiveVoucherNo();const voucherNo=`RV-${String(__voucherN).padStart(4,'0')}`;settings.nextShoeBoxReceiveVoucherNo=__voucherN+1;
       const purchaseIds=[];
       chosenNow.forEach(p=>{
-        const atoms=Math.max(0,Number(selected[String(p.id)].atoms)||0);
+        const atoms=sbWholeAtoms(selected[String(p.id)].atoms);
         const currentItems=shoeBoxProductStockItems(p);
         p.stockItems=currentItems+atoms;
         p.stockBoxes=Math.max(0,Number(p.stockBoxes)||0)+atoms;
@@ -5120,8 +5208,11 @@ function openShoeBoxReceiveSession(supplierIndex){
         supplier.purchases.push(purchase); purchaseIds.push(String(purchase.id));
       });
       supplier.receiveVouchers=supplier.receiveVouchers||[];
-      supplier.receiveVouchers.push({id:uid(),voucherNo,date:iso,purchaseIds,notes:document.getElementById('rsNotes').value.trim(),createdAt:iso});
-      persistAll();
+      const workerTotalBoxesSnapshot=purchaseIds.reduce((sum,id)=>{const q=supplier.purchases.find(x=>String(x.id)===String(id));return sum+(Number(q?.atoms??q?.items)||0);},0);
+      const totalAmount=purchaseIds.reduce((sum,id)=>{const q=supplier.purchases.find(x=>String(x.id)===String(id));return sum+(Number(q?.amount)||0);},0);
+      supplier.receiveVouchers.push({id:uid(),voucherNo,date:iso,purchaseIds,notes:document.getElementById('rsNotes').value.trim(),createdAt:iso,workerTotalBoxesSnapshot,balanceSnapshot:{capturedAt:iso},amountSnapshot:totalAmount});
+      audit('Shoe Box Receive Voucher Created',`${voucherNo} — ${workerTotalBoxesSnapshot} Atoms`);
+      if(!await sbCriticalCommit(__snap,'Shoe Box voucher was not saved to D1. Voucher, stock and voucher number were rolled back.'))return;
       closeModal();
       render();
       openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds);
@@ -5143,7 +5234,7 @@ function openShoeBoxPurchaseModal(supplierIndex,productId){
   modal(`<h3>Receive Shoe Box — ${esc(product.name)}</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Supplier: ${esc(shoeBoxSupplierDisplayName(supplier,supplierIndex))}</div>
     <label>Quantity (Atoms)</label>
-    <input id="sbPurchaseItems" type="number" min="0" step="any" value="0">
+    <input id="sbPurchaseItems" type="number" min="1" step="1" value="0">
     <label>Date</label>
     <input id="sbPurchaseDate" type="date" value="${new Date().toISOString().slice(0,10)}">
     <label>Notes / Receiving Details</label>
@@ -5157,17 +5248,16 @@ function openShoeBoxPurchaseModal(supplierIndex,productId){
   const itemsEl=document.getElementById('sbPurchaseItems');
   document.getElementById('sbPurchaseCancel').onclick=closeModal;
 
-  document.getElementById('sbPurchaseSave').onclick=()=>{
-    const atoms=Math.max(0,Number(itemsEl.value)||0);
-    if(atoms<=0){toast('Enter receiving quantity in Atoms');return;}
+  document.getElementById('sbPurchaseSave').onclick=async()=>{const __btn=document.getElementById('sbPurchaseSave');if(__btn.disabled)return;__btn.disabled=true;const __snap=sbSnapshot();
+    const atoms=sbWholeAtoms(itemsEl.value);if(!atoms){toast('Only positive whole Atoms are allowed');__btn.disabled=false;return;}
 
     const dateValue=document.getElementById('sbPurchaseDate').value;
-    if(!dateValue){toast('Select receiving date');return;}
+    if(!dateValue){toast('Select receiving date');__btn.disabled=false;return;}
 
     const now=new Date();
     const date=new Date(dateValue+'T12:00:00').toISOString();
     const time=now.toISOString();
-    const voucherNo=`RV-${String(settings.nextShoeBoxReceiveVoucherNo||1001).padStart(4,'0')}`;
+    const __voucherN=sbUniqueReceiveVoucherNo();const voucherNo=`RV-${String(__voucherN).padStart(4,'0')}`;
     const notes=document.getElementById('sbPurchaseNotes').value.trim();
 
     const currentItems=shoeBoxProductStockItems(product);
@@ -5202,7 +5292,7 @@ function openShoeBoxPurchaseModal(supplierIndex,productId){
 
     settings.nextShoeBoxReceiveVoucherNo=(Number(settings.nextShoeBoxReceiveVoucherNo)||1001)+1;
 
-    persistAll();
+    audit('Shoe Box Receiving Created',`${voucherNo} — ${atoms} Atoms`);if(!await sbCriticalCommit(__snap,'Shoe Box receiving was not saved to D1. Stock and account were rolled back.'))return;
     closeModal();
     render();
     openShoeBoxReceiveVoucherModal(supplierIndex,[String(purchase.id)]);
@@ -6058,7 +6148,7 @@ function openShoeSoleReceiveSession(supplierIndex){
           return `<div style="display:grid;grid-template-columns:26px minmax(0,1fr) 110px;gap:8px;align-items:center;padding:9px;border-bottom:1px solid var(--line);">
             <input type="checkbox" data-rscheck="${esc(key)}" ${checked?'checked':''}>
             <div style="min-width:0;"><strong>${esc(p.name)}</strong><div style="font-size:11px;color:var(--muted);">${esc(shoeSoleProductDisplayUnit(p))}</div></div>
-            <input type="number" min="0" step="any" data-rsqty="${esc(key)}" value="${qty}" ${checked?'':'disabled'} placeholder="Atoms">
+            <input type="number" min="1" step="1" data-rsqty="${esc(key)}" value="${qty}" ${checked?'':'disabled'} placeholder="Atoms">
           </div>`;
         }).join('')}
       </div>
@@ -7898,6 +7988,7 @@ function attachPageHandlers(){
     window.__shoeBoxReceiveFilters=window.__shoeBoxReceiveFilters||{}; window.__shoeBoxReceiveFilters[idx]={filter:'weekly',start:'',end:''}; render();
   });
   document.getElementById('sbsReceiveMonthly')?.addEventListener('click',()=>{
+  document.getElementById('sbsReceiveAll')?.addEventListener('click',()=>{window.__shoeBoxReceiveFilters=window.__shoeBoxReceiveFilters||{};window.__shoeBoxReceiveFilters[currentPage==='shoeBoxReceive2'?1:0]={filter:'all',start:'',end:''};render();});
     const idx=currentPage==='shoeBoxReceive2'?1:0;
     window.__shoeBoxReceiveFilters=window.__shoeBoxReceiveFilters||{}; window.__shoeBoxReceiveFilters[idx]={filter:'monthly',start:'',end:''}; render();
   });
@@ -7932,6 +8023,7 @@ function attachPageHandlers(){
     const ids=String(b.dataset.purchaseids||'').split(',').filter(Boolean);
     openShoeBoxReceiveVoucherModal(idx,ids,true);
   }));
+  document.querySelectorAll('[data-sbseditvoucher]').forEach(btn=>btn.addEventListener('click',()=>editShoeBoxReceiveVoucher(currentPage==='shoeBoxReceive2'?1:0,btn.dataset.sbseditvoucher,String(btn.dataset.purchaseids||'').split(',').filter(Boolean))));
   document.querySelectorAll('[data-sbsdeletevoucher]').forEach(b=>b.addEventListener('click',(e)=>{
     e.stopPropagation();
     const idx=currentPage==='shoeBoxReceive2'?1:0;
