@@ -1447,7 +1447,7 @@ function normalizeUpperFeatureState(){
   settings.upperMaterials=settings.upperMaterials.filter(m=>m&&typeof m==='object').map(m=>({id:String(m.id||uid()),name:String(m.name||'').trim(),stock:Math.max(0,Number(m.stock)||0),photo:String(m.photo||''),createdAt:String(m.createdAt||new Date().toISOString()),updatedAt:String(m.updatedAt||m.createdAt||new Date().toISOString())})).filter(m=>m.name);
   settings.upperDistributions=Array.isArray(settings.upperDistributions)?settings.upperDistributions:[];
   settings.upperDistributions=settings.upperDistributions.filter(d=>d&&typeof d==='object').map(d=>({id:String(d.id||uid()),voucherNo:Number(d.voucherNo)||0,date:String(d.date||new Date().toISOString()),workerId:String(d.workerId||''),workerName:String(d.workerName||''),workerCategory:String(d.workerCategory||''),lines:Array.isArray(d.lines)?d.lines.filter(l=>l&&typeof l==='object').map(l=>({articleId:String(l.articleId||''),articleName:String(l.articleName||''),articleStockBefore:Math.max(0,Number(l.articleStockBefore)||0),materialId:String(l.materialId||''),materialName:String(l.materialName||''),materialStockBefore:Math.max(0,Number(l.materialStockBefore)||0),qty:Math.max(0,Number(l.qty)||0),labourExpense:Math.max(0,Number(l.labourExpense??l.lineTotal)||0),lineTotal:Math.max(0,Number(l.lineTotal??l.labourExpense)||0),rate:Math.max(0,Number(l.rate)||0)})).filter(l=>(l.articleId&&l.articleName)||(l.materialId&&l.materialName)):[],totalItems:Math.max(0,Number(d.totalItems)||0),totalAmount:Math.max(0,Number(d.totalAmount)||0)})).filter(d=>d.workerId&&d.lines.length);
-  settings.upperPendingRecords=Array.isArray(settings.upperPendingRecords)?settings.upperPendingRecords:[];settings.upperPendingRecords=settings.upperPendingRecords.filter(p=>p&&typeof p==='object').map(p=>({id:String(p.id||uid()),date:String(p.date||new Date().toISOString()),workerId:String(p.workerId||''),workerName:String(p.workerName||''),workerCategory:String(p.workerCategory||''),qty:Math.max(0,Number(p.qty)||0)})).filter(p=>p.workerId&&p.qty>0);
+  settings.upperPendingRecords=Array.isArray(settings.upperPendingRecords)?settings.upperPendingRecords:[];settings.upperPendingRecords=settings.upperPendingRecords.filter(p=>p&&typeof p==='object').map(p=>{const legacyQty=Math.max(0,Number(p.qty)||0),delta=Number.isFinite(Number(p.delta))?Number(p.delta):legacyQty;return {id:String(p.id||uid()),date:String(p.date||new Date().toISOString()),workerId:String(p.workerId||''),workerName:String(p.workerName||''),workerCategory:String(p.workerCategory||''),qty:Math.abs(delta),delta,action:String(p.action||(delta<0?'minus':'add')),editedAt:String(p.editedAt||'')};}).filter(p=>p.workerId&&Number(p.delta)!==0);
   const upperVoucherFields=['factoryName','title','voucherNo','date','time','worker','workerType','articleMaterial','quantity','labourWeeklyKharcha','receivingSummary','totalItems'];
   settings.upperVoucherCustomization=(settings.upperVoucherCustomization&&typeof settings.upperVoucherCustomization==='object')?settings.upperVoucherCustomization:{};
   upperVoucherFields.forEach(id=>{const f=settings.upperVoucherCustomization[id];settings.upperVoucherCustomization[id]={show:f&&f.show!==undefined?!!f.show:true,bold:f&&f.bold!==undefined?!!f.bold:false};});
@@ -3066,7 +3066,7 @@ function pageDistributeUpper(){
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><h3 style="margin:0;">Upper Distribution Details</h3><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost small" id="btnAddUpperArticleRow" ${articles.length?'':'disabled'}>+ Add Article</button><button type="button" class="btn ghost small" id="btnAddUpperMaterialRow" ${materials.length?'':'disabled'}>+ Add Material</button></div></div>
       <div id="upperDistributionRows" style="margin-top:12px;">${articles.length||materials.length?`<div class="upper-distribution-row" data-upper-row><div class="upper-search-wrap"><label>Search Upper Article</label><input type="text" class="upper-article-search" placeholder="Type article name..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div><div class="upper-search-wrap"><label>Select Upper Material</label><input type="text" class="upper-material-search" placeholder="Type material name..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div><div><label>Quantity (Atoms)</label><input class="upper-qty" type="number" min="1" step="1" placeholder="Atoms"></div><div><label>Labour Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div><div class="upper-remove-row"><button type="button" class="btn red small upper-remove" style="width:100%;">✕</button></div><div class="upper-row-stock-info" style="grid-column:1/-1;font-size:12px;color:var(--muted);"></div></div>`:`<div class="empty">Add an Article or Material row.</div>`}</div>
       <div class="upper-summary"><button type="button" class="upper-summary-item" id="upperArticleSummaryCard" style="text-align:left;cursor:pointer;"><div class="label">TODAY TOTAL ARTICLE ATOMS</div><div class="value" id="upperTotalArticleAtoms">0</div></button><button type="button" class="upper-summary-item" id="upperMaterialSummaryCard" style="text-align:left;cursor:pointer;"><div class="label">TODAY TOTAL MATERIAL ATOMS</div><div class="value" id="upperTotalMaterialAtoms">0</div></button><button type="button" class="upper-summary-item" id="upperTotalLabour" style="text-align:left;cursor:pointer;"><div class="label">TOTAL WEEKLY LABOUR KHARCHA</div><div class="value" id="upperTotalAmount">Rs. 0</div></button></div>
-    </div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;"><div class="card" style="flex:1 1 260px;display:flex;justify-content:flex-end;align-items:center;"><button type="button" class="btn brass" id="btnCreateUpperVoucher" ${articles.length||materials.length?'':'disabled'}>🧾 Create Voucher</button></div><div class="card" id="upperPendingCard" style="flex:1 1 260px;cursor:pointer;"><h3 style="margin:0 0 10px;">PENDING</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div><label>Worker</label><select id="upperPendingWorker"><option value="">Select Worker</option>${upperWorkers.map(w=>`<option value="${esc(w.id)}">${esc(w.name||'')}</option>`).join('')}</select></div><div><label>Pending Atoms</label><input id="upperPendingQty" type="number" min="1" step="1" placeholder="Atoms"></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px;"><button type="button" class="btn ghost" id="btnSaveUpperPending">Save Pending</button></div></div></div>`;
+    </div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;"><div class="card" style="flex:1 1 260px;display:flex;justify-content:flex-end;align-items:center;"><button type="button" class="btn brass" id="btnCreateUpperVoucher" ${articles.length||materials.length?'':'disabled'}>🧾 Create Voucher</button></div><div class="card" id="upperPendingCard" style="flex:1 1 260px;cursor:pointer;"><h3 style="margin:0 0 10px;">PENDING</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div><label>Worker</label><select id="upperPendingWorker"><option value="">Select Worker</option>${upperWorkers.map(w=>`<option value="${esc(w.id)}">${esc(w.name||'')}</option>`).join('')}</select></div><div><label>Pending Atoms</label><input id="upperPendingQty" type="number" min="1" step="1" placeholder="Atoms"></div><div><label>Pending Action</label><select id="upperPendingAction"><option value="add">Add Pending</option><option value="minus">Minus Pending</option></select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px;"><button type="button" class="btn ghost" id="btnSaveUpperPending">Save Pending</button></div></div></div>`;
 }
 function pageUpperArticles(){normalizeUpperFeatureState();const list=settings.upperArticles||[];return `<h2 class="page-title">Upper Articles</h2><div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><strong>Upper Articles</strong><div style="font-size:12px;color:var(--muted);margin-top:3px;">Used only inside Distribute Upper. 1 Atom = 12 pairs.</div></div><button type="button" class="btn brass" id="btnAddUpperArticle">+ Add Upper Article</button></div><div class="card">${list.length?`<div class="upper-article-grid">${list.map(a=>`<div class="upper-article-card"><div class="upper-article-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name)}">`:`<span style="font-size:28px;color:var(--muted);">👞</span>`}</div><div style="font-weight:800;font-size:16px;">${esc(a.name)}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">1 Item = 12 pairs</div><div style="font-size:16px;font-weight:800;color:var(--brass-dark);margin-top:8px;">${upperMoney(a.rate)} / Atom</div><div style="font-size:13px;margin-top:5px;">Stock: <strong>${a.stock} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button type="button" class="btn ghost small" data-edit-upper-article="${esc(a.id)}" style="flex:1;">Edit</button><button type="button" class="btn red small" data-delete-upper-article="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Upper Articles saved yet.</div>'}</div>`;}
 function pageUpperMaterials(){normalizeUpperFeatureState();const list=settings.upperMaterials||[];return `<h2 class="page-title">Upper Materials</h2><div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><strong>Upper Materials</strong><div style="font-size:12px;color:var(--muted);margin-top:3px;">Belong only to Distribute Upper. Stock only — no rate or price.</div></div><button type="button" class="btn brass" id="btnAddUpperMaterialPage">+ Add Upper Material</button></div><div class="card">${list.length?`<div class="upper-material-grid">${list.map(m=>`<div class="upper-material-card"><div class="upper-material-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}">`:`<span style="font-size:28px;color:var(--muted);">📦</span>`}</div><div style="font-weight:800;font-size:16px;">${esc(m.name)}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${m.stock} Atoms</strong></div><div style="font-size:11px;color:var(--muted);margin-top:4px;">No rate / no price</div><div style="display:flex;gap:6px;margin-top:10px;"><button type="button" class="btn ghost small" data-edit-upper-material="${esc(m.id)}" style="flex:1;">Edit</button><button type="button" class="btn red small" data-delete-upper-material="${esc(m.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Upper Materials saved yet.</div>'}</div>`;}
@@ -3118,8 +3118,11 @@ async function createUpperDistribution(){if(window.__upperVoucherCreating){toast
   }finally{window.__upperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function getUpperPendingForWorker(workerId){
-  const list=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId)&&Number(p.qty)>0);
-  return list.length?list[list.length-1]:null;
+  const list=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId));
+  if(!list.length)return null;
+  const qty=Math.max(0,list.reduce((sum,p)=>sum+(Number.isFinite(Number(p.delta))?Number(p.delta):(Number(p.qty)||0)),0));
+  const last=list.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).pop();
+  return {workerId:String(workerId),workerName:last?.workerName||'',workerCategory:last?.workerCategory||'',qty};
 }
 function upperVoucherHtml(v){
   const s=settings,c=upperVoucherFieldStyle;
@@ -3181,33 +3184,61 @@ function pageUpperDistributionSummary(kind){
   return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><h2 class="page-title" style="margin:0;">${title}</h2><button class="btn ghost" id="upperSummaryBack">← Back to Distribute Upper</button></div><div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;"><div><label>Date Filter</label><select id="upperSummaryMode"><option value="today" ${mode==='today'?'selected':''}>Today</option><option value="week" ${mode==='week'?'selected':''}>This Week (Saturday–Thursday)</option><option value="month" ${mode==='month'?'selected':''}>This Month</option><option value="custom" ${mode==='custom'?'selected':''}>Custom Date</option></select></div><div><label>From</label><input id="upperSummaryFrom" type="date" value="${esc(window.__upperSummaryFrom||'')}"></div><div><label>To</label><input id="upperSummaryTo" type="date" value="${esc(window.__upperSummaryTo||'')}"></div><div style="flex:1;min-width:200px;"><label>Worker Search</label><input id="upperSummaryWorker" value="${esc(window.__upperSummaryWorkerQ||'')}" placeholder="Search Worker"></div><button class="btn brass" id="upperSummaryPrint">🖨️ Print</button></div></div>${articleBoxes}<div class="card"><div class="label">${title.toUpperCase()}</div><div style="font-size:28px;font-weight:900;">${total} ATOMS</div></div><div class="card" id="upperSummaryPrintArea"><table><thead><tr><th>Date</th><th>Worker</th><th>${isArticle?'Article':'Material'}</th><th>Atoms</th><th>Voucher #</th></tr></thead><tbody>${rows.length?rows.map(x=>`<tr><td>${esc(String(x.date).slice(0,10))}</td><td>${esc(x.workerName)}</td><td>${esc(x.name)}</td><td>${x.qty}</td><td><button class="btn ghost small" data-upper-summary-voucher="${esc(x.id)}">#${x.voucherNo}</button></td></tr>`).join(''):`<tr><td colspan="5" class="empty">No matching records.</td></tr>`}</tbody></table><div style="font-weight:900;margin-top:12px;">TOTAL: ${total} ATOMS</div></div>`;
 }
 function refreshUpperSummaryPage(){render();}
+function upperPendingWorkerAccounts(query=''){
+  const q=String(query||'').trim().toLowerCase(),map=new Map();
+  (settings.upperPendingRecords||[]).forEach(p=>{
+    const id=String(p.workerId||'');if(!id)return;
+    if(!map.has(id))map.set(id,{workerId:id,workerName:p.workerName||'',workerCategory:p.workerCategory||'',qty:0,lastDate:p.date||''});
+    const a=map.get(id);a.workerName=p.workerName||a.workerName;a.workerCategory=p.workerCategory||a.workerCategory;
+    a.qty+=Number.isFinite(Number(p.delta))?Number(p.delta):(Number(p.qty)||0);
+    if(String(p.date||'')>String(a.lastDate||''))a.lastDate=p.date||'';
+  });
+  return Array.from(map.values()).map(a=>({...a,qty:Math.max(0,a.qty)})).filter(a=>!q||String(a.workerName).toLowerCase().includes(q)).sort((a,b)=>String(a.workerName).localeCompare(String(b.workerName)));
+}
 function pageUpperPending(){
   normalizeUpperFeatureState();
-  const all=(settings.upperPendingRecords||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-  const todayStr=new Date().toISOString().slice(0,10);
-  const todayRecords=all.filter(p=>String(p.date||'').slice(0,10)===todayStr);
-  const todayTotal=todayRecords.reduce((sum,p)=>sum+(Number(p.qty)||0),0);
-  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><div><h2 class="page-title" style="margin-bottom:4px;">Pending</h2><div style="font-size:12px;color:var(--muted);">Pending records / history — no stock or distribution quantity is reduced.</div></div><button type="button" class="btn ghost" id="btnBackUpperPending">← Back to Distribute Upper</button></div>
-    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div><div class="label">TODAY PENDING</div><div style="font-size:26px;font-weight:900;">${todayTotal} ATOMS</div><div style="font-size:12px;color:var(--muted);">${todayRecords.length} record${todayRecords.length===1?'':'s'} today</div></div><button type="button" class="btn brass" id="btnPrintUpperPending">🖨️ Print Pending</button></div>
-    <div class="card"><label>Search Worker</label><input id="upperPendingSearch" type="text" placeholder="Search Worker" autocomplete="off"><div id="upperPendingPageList" style="margin-top:12px;"></div></div>
-    <div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;margin:12px auto 0;display:none;"></div>`;
+  const accounts=upperPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><div><h2 class="page-title" style="margin-bottom:4px;">Pending</h2><div style="font-size:12px;color:var(--muted);">Manual Pending account only — it does not change stock, vouchers, weekly items or labour calculations.</div></div><button type="button" class="btn ghost" id="btnBackUpperPending">← Back to Distribute Upper</button></div>
+  <div class="card"><div class="label">CURRENT TOTAL PENDING</div><div style="font-size:26px;font-weight:900;">${total} ATOMS</div></div>
+  <div class="card"><label>Search Worker</label><input id="upperPendingSearch" type="text" placeholder="Search Worker" autocomplete="off"><div id="upperPendingPageList" style="margin-top:12px;"></div></div>
+  <div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;margin:12px auto 0;display:none;"></div>`;
 }
 function renderUpperPendingPageList(query=''){
-  const host=document.getElementById('upperPendingPageList');
-  if(!host)return;
-  const q=String(query||'').trim().toLowerCase();
-  const list=(settings.upperPendingRecords||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).filter(p=>!q||String(p.workerName||'').toLowerCase().includes(q));
-  host.innerHTML=list.length?list.map(p=>`<div class="card" style="margin:8px 0;padding:10px;"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;"><div><strong>${esc(p.workerName||'')}</strong> <span style="font-size:12px;color:var(--muted);">| ${esc(p.workerCategory||'')}</span></div><strong>${esc(String(p.qty||0))} ATOMS</strong></div><div style="font-size:12px;color:var(--muted);margin-top:6px;">Date: ${esc(String(p.date||'').slice(0,10))} &nbsp; Time: ${esc(fmtTime(new Date(p.date)))}</div></div>`).join(''):'<div class="empty">No matching Pending records found.</div>';
+  const host=document.getElementById('upperPendingPageList');if(!host)return;
+  const list=upperPendingWorkerAccounts(query);
+  host.innerHTML=list.length?list.map(a=>`<div class="card" style="margin:8px 0;padding:10px;cursor:pointer;" data-upper-pending-worker="${esc(a.workerId)}"><div style="display:flex;justify-content:space-between;gap:10px;"><div><strong>${esc(a.workerName)}</strong> <span style="font-size:12px;color:var(--muted);">| ${esc(a.workerCategory||'')}</span></div><strong>${a.qty} ATOMS</strong></div><div style="font-size:12px;color:var(--muted);margin-top:5px;">Click to view Pending history / Edit / Delete</div></div>`).join(''):'<div class="empty">No matching Pending workers found.</div>';
+  document.querySelectorAll('[data-upper-pending-worker]').forEach(el=>el.onclick=()=>openUpperPendingWorkerDetail(el.dataset.upperPendingWorker));
+}
+function openUpperPendingWorkerDetail(workerId){
+  const rows=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const account=getUpperPendingForWorker(workerId),name=account?.workerName||rows[0]?.workerName||'Worker';
+  modal(`<h3>${esc(name)} — Pending</h3><div class="card" style="margin:0 0 10px;"><div class="label">CURRENT PENDING</div><div style="font-size:26px;font-weight:900;">${account?.qty||0} ATOMS</div></div>${rows.length?rows.map(r=>{const d=Number.isFinite(Number(r.delta))?Number(r.delta):(Number(r.qty)||0);return `<div style="border-top:1px solid var(--line);padding:9px 0;"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><strong>${d>=0?'+':''}${d} ATOMS</strong><div><button class="btn blue small" data-upper-pending-edit="${esc(r.id)}">Edit</button> <button class="btn red small" data-upper-pending-delete="${esc(r.id)}">Delete</button></div></div><div style="font-size:12px;color:var(--muted);">${esc(fmtDate(r.date))}</div></div>`}).join(''):'<div class="empty">No Pending history.</div>'}<div class="modal-actions"><button class="btn ghost" id="upperPendingDetailClose">Close</button></div>`);
+  document.getElementById('upperPendingDetailClose').onclick=closeModal;
+  document.querySelectorAll('[data-upper-pending-edit]').forEach(b=>b.onclick=()=>editUpperPendingEntry(b.dataset.upperPendingEdit));
+  document.querySelectorAll('[data-upper-pending-delete]').forEach(b=>b.onclick=()=>deleteUpperPendingEntry(b.dataset.upperPendingDelete));
+}
+async function editUpperPendingEntry(id){
+  const rec=(settings.upperPendingRecords||[]).find(p=>String(p.id)===String(id));if(!rec)return;
+  const old=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0),sign=old<0?-1:1;
+  const raw=prompt(`Old Pending Entry: ${old>=0?'+':''}${old} Atoms\nEnter new whole Atoms for this entry:`,Math.abs(old));if(raw===null)return;
+  const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}
+  const next=sign*qty;if(!confirm(`Change Pending entry ${old>=0?'+':''}${old} → ${next>=0?'+':''}${next} Atoms?\n\nOnly Pending balance will change.`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);rec.delta=next;rec.qty=Math.abs(next);rec.action=next<0?'minus':'add';rec.editedAt=new Date().toISOString();audit('Upper Pending Edited',`${rec.workerName}: ${old} → ${next} ATOMS`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved to D1. Original Pending was restored.');return;}
+  closeModal();render();toast('Pending entry updated');
+}
+async function deleteUpperPendingEntry(id){
+  const rec=(settings.upperPendingRecords||[]).find(p=>String(p.id)===String(id));if(!rec)return;
+  const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);
+  if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change. No voucher, stock, weekly item or expense calculation will change.`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.upperPendingRecords=settings.upperPendingRecords.filter(p=>String(p.id)!==String(id));audit('Upper Pending Deleted',`${rec.workerName}: ${d} ATOMS`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved to D1. Original Pending was restored.');return;}
+  closeModal();render();toast('Pending entry deleted');
 }
 function buildUpperPendingPrintHtml(query=''){
-  const q=String(query||'').trim().toLowerCase();
-  const todayStr=new Date().toISOString().slice(0,10);
-  const all=(settings.upperPendingRecords||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
-  const list=all.filter(p=>!q||String(p.workerName||'').toLowerCase().includes(q));
-  const todayTotal=all.filter(p=>String(p.date||'').slice(0,10)===todayStr).reduce((sum,p)=>sum+(Number(p.qty)||0),0);
-  return `<div style="text-align:center;font-weight:900;font-size:18px;">Leather Right Shoes by Abid</div><div class="sub" style="font-weight:800;">PENDING DETAILS</div><hr><div class="rline"><span>Today Pending:</span><strong>${todayTotal} ATOMS</strong></div><hr>${list.map(p=>`<div style="margin:7px 0;"><div class="rline"><strong>${esc(p.workerName||'')}</strong><strong>${esc(String(p.qty||0))} ATOMS</strong></div><div style="font-size:11px;">Worker Type: ${esc(p.workerCategory||'—')}</div><div style="font-size:11px;">Date: ${esc(String(p.date||'').slice(0,10))}</div><div style="font-size:11px;">Time: ${esc(fmtTime(new Date(p.date)))}</div></div>`).join('')||'<div class="empty">No Pending records found.</div>'}`;
+  const list=upperPendingWorkerAccounts(query),total=list.reduce((s,a)=>s+a.qty,0);
+  return `<div style="text-align:center;font-weight:900;font-size:18px;">Leather Right Shoes by Abid</div><div class="sub" style="font-weight:800;">CURRENT PENDING</div><hr>${list.map(a=>`<div class="rline"><strong>${esc(a.workerName)}</strong><strong>${a.qty} ATOMS</strong></div>`).join('')||'<div class="empty">No Pending found.</div>'}<hr><div class="rline"><strong>TOTAL:</strong><strong>${total} ATOMS</strong></div>`;
 }
-
 function openUpperTodayItemsDetail(){
   const records=upperTodayRecords();
   const grouped={};
@@ -7840,20 +7871,20 @@ function initials(name){
 
 async function saveUpperPending(){
   normalizeUpperFeatureState();
-  const workerId=String(document.getElementById('upperPendingWorker')?.value||'');
-  const qty=Math.max(0,parseInt(document.getElementById('upperPendingQty')?.value||'0',10)||0);
+  const workerId=String(document.getElementById('upperPendingWorker')?.value||''),raw=String(document.getElementById('upperPendingQty')?.value||'').trim(),qty=Number(raw),action=String(document.getElementById('upperPendingAction')?.value||'add');
   const worker=workers.find(w=>String(w.id)===workerId&&!w.archived&&String(w.category||'').trim().toUpperCase()==='UPPER MANS');
   if(!worker){toast('Please select an Upper Man Worker');return;}
-  if(qty<=0){toast('Please enter a valid Pending Atoms quantity');return;}
-  const before=JSON.stringify(settings);
-  settings.upperPendingRecords.push({id:uid(),date:new Date().toISOString(),workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty});
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Pending record was NOT saved to D1. Please check the connection and try again.');return;}
-
-  const w=document.getElementById('upperPendingWorker');if(w)w.value='';
-  const q=document.getElementById('upperPendingQty');if(q)q.value='';
-  toast(`Pending saved: ${worker.name} — ${qty} ATOMS`);
+  if(!Number.isInteger(qty)||qty<=0){toast('Please enter positive whole Pending Atoms');return;}
+  const current=getUpperPendingForWorker(workerId)?.qty||0,delta=action==='minus'?-qty:qty;
+  if(delta<0&&qty>current){toast(`Current Pending is ${current} Atoms. You cannot minus ${qty}.`);return;}
+  const next=current+delta;
+  if(!confirm(`${worker.name}\nCurrent Pending: ${current} Atoms\n${delta>0?'Add':'Minus'}: ${qty} Atoms\nNew Pending: ${next} Atoms\n\nOnly Pending balance will change. Confirm?`))return;
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();
+  settings.upperPendingRecords.push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});
+  audit(delta<0?'Upper Pending Reduced':'Upper Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
+  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
+  const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
-
 /* ============ PAGE EVENT WIRING ============ */
 function attachPageHandlers(){
   document.getElementById('btnBackDashboard')?.addEventListener('click', ()=>goto('dashboard'));
