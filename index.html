@@ -3534,7 +3534,7 @@ function openWorkerModal(id){
       <button class="btn ghost" id="wCancel">Cancel</button>
     </div>
   `);
-  const applyWorkerCrop=async cropped=>{if(!cropped)return;try{pendingPhoto=await compressImageDataUrl(cropped,800,.78);const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and applied');}catch(err){toast('Could not save cropped image');}};
+  const applyWorkerCrop=async cropped=>{if(!cropped)return;try{const compressed=await compressImageDataUrl(cropped,800,.78);const uploadedUrl=await uploadImageDataUrlToR2(compressed);pendingPhoto=uploadedUrl;const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
   const cropWorkerPhoto=()=>{if(pendingPhoto)openImageCropper(pendingPhoto,applyWorkerCrop);else{const file=document.getElementById('wPhoto').files?.[0];if(file)openImageCropper(file,applyWorkerCrop);else toast('پہلے Worker کی تصویر منتخب کریں');}};
   // Worker-name autocomplete: search the existing Workers data directly.
   // This is only a suggestion UI; it does not create a second worker list or database.
