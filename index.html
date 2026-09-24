@@ -1265,6 +1265,23 @@
 <style id="batam-finished-shared-baqi-v14">
 .bm-worker-baqi{font-size:8.5px;font-weight:800;line-height:1.05;margin-top:2px;white-space:nowrap;color:var(--brass-dark)}
 </style>
+<style id="upper-compact-layout-v15">
+.upper-compact-v15 .upper-main-compact-row{grid-template-columns:repeat(5,minmax(88px,1fr)) repeat(3,minmax(105px,.9fr))!important}
+.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(10,minmax(0,1fr))!important;gap:5px!important}
+.upper-compact-v15 .bm-worker-box{min-width:0!important;height:92px!important;padding:5px 3px!important}
+.upper-compact-v15 .bm-worker-box .entity-photo{width:42px!important;height:42px!important;font-size:15px!important}
+.upper-compact-v15 .bm-worker-name{font-size:9px!important;margin-top:3px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.upper-compact-v15 .bm-worker-baqi{font-size:8px!important}
+.upper-compact-search{height:28px!important;min-height:28px!important;width:220px!important;font-size:10px!important}
+.upper-entry-card{padding:8px!important}
+.upper-entry-card .bm-entry-head{margin-bottom:5px!important}
+.upper-one-row{display:grid!important;grid-template-columns:minmax(130px,1.25fr) minmax(130px,1.25fr) minmax(70px,.55fr) minmax(90px,.7fr) auto auto minmax(120px,.8fr)!important;gap:5px!important;align-items:end!important}
+.upper-one-row label{font-size:9px!important;margin-bottom:2px!important}
+.upper-one-row input{height:30px!important;min-height:30px!important;font-size:10px!important;padding:4px 6px!important}
+.upper-one-row .btn{height:30px!important;min-height:30px!important;padding:3px 7px!important;font-size:9px!important;white-space:nowrap}
+.upper-one-row .upper-row-stock-info:empty{display:none}
+@media(max-width:1100px){.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(10,minmax(72px,1fr))!important;overflow-x:auto}.upper-one-row{grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) 70px 90px auto auto 115px!important;overflow-x:auto}}
+</style>
 </head>
 <body>
 <div id="app">
@@ -3562,26 +3579,51 @@ function pageDistributeUpper(){
   const articles=settings.upperArticles||[],materials=settings.upperMaterials||[];
   const selectedWorker=upperWorkers.find(w=>String(w.id)===String(upperSelWorker))||null;
   if(!selectedWorker) upperSelWorker=null;
-  return `<h2 class="page-title">Distribute Upper</h2>
-    <div class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;">
-      <button type="button" class="btn brass" id="btnAddUpperArticles" style="min-height:48px;">+ Add Upper Articles</button>
-      <button type="button" class="btn ghost" id="btnUpperArticleList" style="min-height:48px;">📋 Upper Articles</button>
-      <button type="button" class="btn brass" id="btnAddUpperMaterial" style="min-height:48px;">+ Add Upper Material</button>
-      <button type="button" class="btn ghost" id="btnUpperMaterialList" style="min-height:48px;">📦 Upper Materials</button>
+  const todayKey=new Date().toISOString().slice(0,10);
+  const todayRecords=(settings.upperDistributions||[]).filter(d=>String(d.date||d.createdAt||'').slice(0,10)===todayKey);
+  let todayArticle=0,todayMaterial=0;
+  todayRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)todayArticle+=q;if(l.materialId||l.materialName)todayMaterial+=q;}));
+  const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0);
+  const pendingTotal=upperPendingWorkerAccounts().reduce((n,a)=>n+(Number(a.qty)||0),0);
+  const backDisabled=navHistory.length?'':'disabled';
+  return `<div class="bm-compact-page upper-compact-v15">
+    <h2 class="page-title bm-page-title">Distribute Upper</h2>
+
+    <div class="card bm-main-compact-row upper-main-compact-row">
+      <button type="button" class="btn ghost small bm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
+      <button type="button" class="btn ghost small bm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
+      <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList">👞 Upper Articles</button>
+      <button type="button" class="btn brass small bm-top-card" id="btnUpperMaterialList">📦 Upper Materials</button>
+      <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard">⏳ Pending</button>
+      <div class="bm-top-stat"><span>Weekly Kharcha</span><strong>${upperMoney(weeklyAmount)}</strong></div>
+      <div class="bm-top-stat"><span>Today Articles</span><strong>${todayArticle} ATOMS</strong></div>
+      <div class="bm-top-stat"><span>Today Materials</span><strong>${todayMaterial} ATOMS</strong></div>
     </div>
-    <div class="card"><h3 style="margin-top:0;">Upper Distribution</h3>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">1 Atom = 12 pairs.</div>
-      <label>Select Worker</label>
-      <div class="pick-grid" id="upperWorkerCards">
-        ${upperWorkers.length?upperWorkers.map(w=>{const todayKey=new Date().toISOString().slice(0,10),completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id)&&String(d.date||'').slice(0,10)===todayKey);return `<button type="button" class="pick-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="width:86px;height:86px;margin:auto;font-size:24px;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div style="position:absolute;top:4px;right:4px;background:#1f9d55;color:#fff;border-radius:999px;padding:2px 6px;font-size:10px;font-weight:800;line-height:1.2;">✓ Completed</div>`:''}<div style="font-size:12px;font-weight:700;margin-top:6px;line-height:1.2;">${esc(w.name||'')}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
+
+    <div class="card bm-worker-card">
+      <div class="bm-worker-heading"><h3>Select Upper Man</h3><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
+      <div style="margin-bottom:6px;"><input type="text" id="upperWorkerSearch" placeholder="Search Worker" autocomplete="off" class="upper-compact-search"></div>
+      <div class="bm-worker-grid" id="upperWorkerCards">
+        ${upperWorkers.length?upperWorkers.map(w=>{const completed=(settings.upperDistributions||[]).some(d=>String(d.workerId)===String(w.id)&&String(d.date||d.createdAt||'').slice(0,10)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
-      <div id="upperWorkerInfo" style="font-size:12px;color:var(--muted);margin-top:10px;">${selectedWorker?`Selected Worker: <strong>${esc(selectedWorker.name||'')}</strong><br>Worker Type: <strong>${esc(selectedWorker.category||'')}</strong>`:''}</div>
+      ${selectedWorker?`<div class="bm-selected-line">Selected: <strong>${esc(selectedWorker.name||'')}</strong></div>`:''}
     </div>
-    <div style="margin-bottom:8px;"><input type="text" id="upperWorkerSearch" placeholder="Search Worker" autocomplete="off" style="width:100%;max-width:320px;"></div>
-    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><h3 style="margin:0;">Upper Distribution Details</h3><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost small" id="btnAddUpperArticleRow" ${articles.length?'':'disabled'}>+ Add Article</button><button type="button" class="btn ghost small" id="btnAddUpperMaterialRow" ${materials.length?'':'disabled'}>+ Add Material</button></div></div>
-      <div id="upperDistributionRows" style="margin-top:12px;">${articles.length||materials.length?`<div class="upper-distribution-row" data-upper-row><div class="upper-search-wrap"><label>Search Upper Article</label><input type="text" class="upper-article-search" placeholder="Type article name..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div><div class="upper-search-wrap"><label>Select Upper Material</label><input type="text" class="upper-material-search" placeholder="Type material name..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div><div><label>Quantity (Atoms)</label><input class="upper-qty" type="number" min="1" step="1" placeholder="Atoms"></div><div><label>Labour Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div><div class="upper-remove-row"><button type="button" class="btn red small upper-remove" style="width:100%;">✕</button></div><div class="upper-row-stock-info" style="grid-column:1/-1;font-size:12px;color:var(--muted);"></div></div>`:`<div class="empty">Add an Article or Material row.</div>`}</div>
-      <div class="upper-summary"><button type="button" class="upper-summary-item" id="upperArticleSummaryCard" style="text-align:left;cursor:pointer;"><div class="label">TODAY TOTAL ARTICLE ATOMS</div><div class="value" id="upperTotalArticleAtoms">0</div></button><button type="button" class="upper-summary-item" id="upperMaterialSummaryCard" style="text-align:left;cursor:pointer;"><div class="label">TODAY TOTAL MATERIAL ATOMS</div><div class="value" id="upperTotalMaterialAtoms">0</div></button><button type="button" class="upper-summary-item" id="upperTotalLabour" style="text-align:left;cursor:pointer;"><div class="label">TOTAL WEEKLY LABOUR KHARCHA</div><div class="value" id="upperTotalAmount">Rs. 0</div></button></div>
-    </div><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;"><div class="card" style="flex:1 1 260px;display:flex;justify-content:flex-end;align-items:center;"><button type="button" class="btn brass" id="btnCreateUpperVoucher" ${articles.length||materials.length?'':'disabled'}>🧾 Create Voucher</button></div><div class="card" id="upperPendingCard" style="flex:1 1 260px;cursor:pointer;"><h3 style="margin:0 0 10px;">PENDING</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><div><label>Worker</label><select id="upperPendingWorker"><option value="">Select Worker</option>${upperWorkers.map(w=>`<option value="${esc(w.id)}">${esc(w.name||'')}</option>`).join('')}</select></div><div><label>Pending Atoms</label><input id="upperPendingQty" type="number" min="1" step="1" placeholder="Atoms"></div><div><label>Pending Action</label><select id="upperPendingAction"><option value="add">Add Pending</option><option value="minus">Minus Pending</option></select></div></div><div style="display:flex;justify-content:flex-end;margin-top:10px;"><button type="button" class="btn ghost" id="btnSaveUpperPending">Save Pending</button></div></div></div>`;
+
+    <div class="card bm-entry-card upper-entry-card">
+      <div class="bm-entry-head"><h3>Enter Upper Distribution Details</h3>${selectedWorker?`<span>Worker: <strong>${esc(selectedWorker.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Upper Man above first</span>'}</div>
+      <div id="upperDistributionRows" class="upper-compact-rows">${articles.length||materials.length?`<div class="upper-distribution-row upper-one-row" data-upper-row>
+        <div class="upper-search-wrap"><label>Upper Article</label><input type="text" class="upper-article-search" placeholder="Select article..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>
+        <div class="upper-search-wrap"><label>Upper Material</label><input type="text" class="upper-material-search" placeholder="Select material..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>
+        <div><label>Quantity</label><input class="upper-qty" type="number" min="1" step="1" placeholder="Atoms"></div>
+        <div><label>Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div>
+        <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn ghost small" id="btnAddUpperArticleRow">+ Article</button></div>
+        <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn ghost small" id="btnAddUpperMaterialRow">+ Material</button></div>
+        <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn brass" id="btnCreateUpperVoucher" ${selectedWorker?'':'disabled'}>🧾 Create Voucher</button></div>
+        <div class="upper-remove-row" style="display:none;"><button type="button" class="btn red small upper-remove">✕</button></div>
+        <div class="upper-row-stock-info" style="grid-column:1/-1;font-size:10px;color:var(--muted);"></div>
+      </div>`:`<div class="empty">Add Upper Articles or Materials first.</div>`}</div>
+    </div>
+  </div>`;
 }
 function pageUpperArticles(){normalizeUpperFeatureState();const list=settings.upperArticles||[];return `<h2 class="page-title">Upper Articles</h2><div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><strong>Upper Articles</strong><div style="font-size:12px;color:var(--muted);margin-top:3px;">Used only inside Distribute Upper. 1 Atom = 12 pairs.</div></div><button type="button" class="btn brass" id="btnAddUpperArticle">+ Add Upper Article</button></div><div class="card">${list.length?`<div class="upper-article-grid">${list.map(a=>`<div class="upper-article-card"><div class="upper-article-photo">${a.photo?`<img src="${a.photo}" alt="${esc(a.name)}">`:`<span style="font-size:28px;color:var(--muted);">👞</span>`}</div><div style="font-weight:800;font-size:16px;">${esc(a.name)}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">1 Item = 12 pairs</div><div style="font-size:16px;font-weight:800;color:var(--brass-dark);margin-top:8px;">${upperMoney(a.rate)} / Atom</div><div style="font-size:13px;margin-top:5px;">Stock: <strong>${a.stock} Atoms</strong></div><div style="display:flex;gap:6px;margin-top:10px;"><button type="button" class="btn ghost small" data-edit-upper-article="${esc(a.id)}" style="flex:1;">Edit</button><button type="button" class="btn red small" data-delete-upper-article="${esc(a.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Upper Articles saved yet.</div>'}</div>`;}
 function pageUpperMaterials(){normalizeUpperFeatureState();const list=settings.upperMaterials||[];return `<h2 class="page-title">Upper Materials</h2><div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><strong>Upper Materials</strong><div style="font-size:12px;color:var(--muted);margin-top:3px;">Belong only to Distribute Upper. Stock only — no rate or price.</div></div><button type="button" class="btn brass" id="btnAddUpperMaterialPage">+ Add Upper Material</button></div><div class="card">${list.length?`<div class="upper-material-grid">${list.map(m=>`<div class="upper-material-card"><div class="upper-material-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}">`:`<span style="font-size:28px;color:var(--muted);">📦</span>`}</div><div style="font-weight:800;font-size:16px;">${esc(m.name)}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${m.stock} Atoms</strong></div><div style="font-size:11px;color:var(--muted);margin-top:4px;">No rate / no price</div><div style="display:flex;gap:6px;margin-top:10px;"><button type="button" class="btn ghost small" data-edit-upper-material="${esc(m.id)}" style="flex:1;">Edit</button><button type="button" class="btn red small" data-delete-upper-material="${esc(m.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Upper Materials saved yet.</div>'}</div>`;}
