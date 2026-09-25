@@ -10883,7 +10883,7 @@ function mb20LocalPhotoSet(v){let s=mb20s();s.supplier=s.supplier||{};s.supplier
 function mb20today(){return new Date().toISOString().slice(0,10)}
 function mb20ws(){let x=new Date();x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+1)%7));return x.toISOString().slice(0,10)}
 function mb20we(){let x=new Date(mb20ws()+'T00:00:00');x.setDate(x.getDate()+5);return x.toISOString().slice(0,10)}
-function mb20new(pid){let s=mb20s(),a=0;s.vouchers.forEach(v=>{let d=mb20d(v.date);if(d>=mb20ws()&&d<=mb20we())(v.lines||[]).forEach(l=>{if(String(l.productId)===String(pid))a+=Number(l.amount)||0})});return a}
+function mb20new(pid){let s=mb20s(),a=0,ws=mb20ws(),we=mb20we(),today=mb20today();s.vouchers.forEach(v=>{let d=mb20d(v.date);if(d>=ws&&(d<=we||d===today))(v.lines||[]).forEach(l=>{if(String(l.productId)===String(pid))a+=Number(l.amount)||0})});return a}
 function mb20paid(pid){return mb20s().payments.filter(x=>String(x.productId)===String(pid)&&mb20d(x.date)>=mb20ws()&&mb20d(x.date)<=mb20we()).reduce((a,x)=>a+(Number(x.amount)||0),0)}
 function mb20bal(pid){let s=mb20s(),o=Math.max(0,Number(s.opening[pid])||0),n=mb20new(pid),p=mb20paid(pid),adv=Math.max(0,Number(s.advance[pid])||0),remaining=Math.max(0,o+n-adv);return{opening:o,newAmount:n,paid:p,remaining,advance:adv}}
 function mb20todayTotal(){let q=0;mb20s().vouchers.filter(v=>mb20d(v.date)===mb20today()).forEach(v=>(v.lines||[]).forEach(l=>q+=Number(l.qty)||0));return q}
