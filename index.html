@@ -1387,6 +1387,13 @@ body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard
 .mb20-hist{min-height:43px!important;font-size:11px!important;padding:7px 8px!important}
 .mb20-hist strong{font-size:12px!important}.mb20-hist b{font-size:13px!important}
 </style>
+<style id="cloud-safe-indicators-style">
+#cloudSafeIndicators{display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:5px;font:700 10px/1.2 Arial,sans-serif}
+.cloud-safe-pill{padding:3px 7px;border-radius:999px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.08);color:#ddd;white-space:nowrap}
+.cloud-safe-pill.ok{background:#e9f7ee;color:#176b38;border-color:#b9dfc5}
+.cloud-safe-pill.busy{background:#fff6dc;color:#7b5b00;border-color:#ead69a}
+.cloud-safe-pill.bad{background:#fdeaea;color:#9b2525;border-color:#e9b6b6}
+</style>
 </head>
 <body>
 <div id="app">
@@ -1410,7 +1417,7 @@ body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard
     </div>
     <div class="topbar-right">
       <div id="liveDate">Mon, 14 Sept 2026</div>
-      <div id="liveTime">09:28:48 PM</div>
+      <div id="liveTime">09:28:48 PM</div><div id="cloudSafeIndicators"><span id="d1SafeIndicator" class="cloud-safe-pill">D1 CHECK</span><span id="r2SafeIndicator" class="cloud-safe-pill">R2 READY</span></div>
     </div>
   </div>
   <div id="appBody">
@@ -1605,7 +1612,8 @@ function scheduleCloudRetry(){
 }
 
 async function syncCloudNow(snapshot, revision){
-  if(!cloudReady) return false;
+  if(!cloudReady){setD1SafeIndicator('bad');return false;}
+  setD1SafeIndicator('busy');
   if(criticalCloudSaveActive){
     deferredCloudSync=true;
     return false;
@@ -1623,6 +1631,7 @@ async function syncCloudNow(snapshot, revision){
     cloudRetryCount=0;
     clearTimeout(cloudRetryTimer);
     cloudRetryTimer=null;
+    setD1SafeIndicator('ok');
 
     // If a newer change appeared while this request was in flight, flush it too.
     if(hasUnsavedCloudChanges() && !criticalCloudSaveActive){
@@ -1631,6 +1640,7 @@ async function syncCloudNow(snapshot, revision){
     return true;
   }catch(e){
     console.error('Cloud sync failed',e);
+    setD1SafeIndicator('bad');
     toast('Cloud save failed. Retrying automatically; do not close the app yet.');
     scheduleCloudRetry();
     return false;
@@ -1638,7 +1648,8 @@ async function syncCloudNow(snapshot, revision){
 }
 
 function scheduleCloudSync(markChange=true){
-  if(!cloudReady) return;
+  if(!cloudReady){setD1SafeIndicator('bad');return;}
+  setD1SafeIndicator('busy');
   if(markChange) cloudChangeRevision++;
 
   if(criticalCloudSaveActive){
@@ -1870,13 +1881,17 @@ function cleanupReplacedR2ImagesAfterSave(){
   }
 }
 async function uploadImageDataUrlToR2(dataUrl){
-  if(!r2RefsBeforePendingUpload) r2RefsBeforePendingUpload=collectR2ImageUrls(getCurrentState());
-  await ensureR2ImageSession();
-  const form=new FormData();form.append('file',dataUrlToR2File(dataUrl));
-  const res=await fetch('./api/r2-image',{method:'POST',credentials:'same-origin',body:form});
-  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||'R2 image upload failed');}
-  const out=await res.json();if(!out.key)throw new Error('R2 image key missing');
-  return `./api/r2-image?key=${encodeURIComponent(out.key)}`;
+  setR2SafeIndicator('busy');
+  try{
+    if(!r2RefsBeforePendingUpload) r2RefsBeforePendingUpload=collectR2ImageUrls(getCurrentState());
+    await ensureR2ImageSession();
+    const form=new FormData();form.append('file',dataUrlToR2File(dataUrl));
+    const res=await fetch('./api/r2-image',{method:'POST',credentials:'same-origin',body:form});
+    if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error||'R2 image upload failed');}
+    const out=await res.json();if(!out.key)throw new Error('R2 image key missing');
+    setR2SafeIndicator('ok');
+    return `./api/r2-image?key=${encodeURIComponent(out.key)}`;
+  }catch(e){setR2SafeIndicator('bad');throw e;}
 }
 
 function compressImageFile(file, maxSide=800, startQuality=.72){
@@ -2639,6 +2654,8 @@ let workerSummaryDetailType = 'baqi';
 function applyWallpaper(){
   document.documentElement.style.setProperty('--app-wallpaper', settings.wallpaper ? `url(${settings.wallpaper})` : 'none');
 }
+function setD1SafeIndicator(state){const el=document.getElementById('d1SafeIndicator');if(!el)return;el.className='cloud-safe-pill '+(state==='ok'?'ok':state==='busy'?'busy':'bad');el.textContent=state==='ok'?'D1 SAVED':state==='busy'?'D1 SAVING':'D1 OFFLINE'}
+function setR2SafeIndicator(state){const el=document.getElementById('r2SafeIndicator');if(!el)return;el.className='cloud-safe-pill '+(state==='ok'?'ok':state==='busy'?'busy':'bad');el.textContent=state==='ok'?'R2 READY':state==='busy'?'R2 SAVING':'R2 ERROR'}
 function updateTopbar(){
   document.getElementById('topFactoryName').textContent = settings.factoryName || 'Factory';
   const logoImg = document.getElementById('topLogo');
@@ -2657,6 +2674,7 @@ function updateTopbar(){
     if(settings.ownerPhoto){ ownerImg.src=settings.ownerPhoto; ownerImg.style.display='block'; ownerPlaceholder.style.display='none'; }
     else { ownerImg.style.display='none'; ownerPlaceholder.style.display='flex'; }
   }
+  setD1SafeIndicator(cloudReady && !hasUnsavedCloudChanges() ? 'ok' : cloudReady ? 'busy' : 'bad');
 }
 
 function updateClock(){
@@ -10896,6 +10914,6 @@ ${pending>0?`<div class="rline" style="margin-top:8px;font-weight:900;"><strong>
 <div class="rline" style="font-weight:800;"><span>TOTAL AMOUNT:</span><span>${mb20m(amount)}</span></div>
 ${settings.receiptFooter?`<div class="footer">${esc(settings.receiptFooter)}</div>`:''}${settings.thankYou?`<div class="footer">${esc(settings.thankYou)}</div>`:''}
 </div>`}
-function bindMB20(){document.getElementById('mb20back')?.addEventListener('click',()=>{currentPage='home';render()});document.getElementById('mb20dash')?.addEventListener('click',()=>{currentPage='home';render()});document.getElementById('mb20products')?.addEventListener('click',()=>{currentPage='magziBatavaProducts';render()});document.getElementById('mb20history')?.addEventListener('click',()=>{currentPage='magziBatavaHistory';render()});document.getElementById('mb20editSupplier')?.addEventListener('click',mb20supplier);document.getElementById('mb20voucher')?.addEventListener('click',()=>{currentPage='magziBatavaVoucher';render()});document.querySelectorAll('[data-mb20opening]').forEach(x=>x.onclick=()=>mb20opening(x.dataset.mb20opening));document.querySelectorAll('[data-mb20pay]').forEach(x=>x.onclick=()=>mb20pay(x.dataset.mb20pay));document.getElementById('mb20pback')?.addEventListener('click',()=>{window.__mb20EditProductId='';currentPage='magziBatavaSupplier';render()});document.getElementById('mb20ProductSave')?.addEventListener('click',mb20SaveProductForm);document.getElementById('mb20ProductCancel')?.addEventListener('click',()=>{window.__mb20EditProductId='';render()});document.querySelectorAll('[data-mb20pe]').forEach(x=>x.onclick=()=>{window.__mb20EditProductId=x.dataset.mb20pe;render()});document.querySelectorAll('[data-mb20pd]').forEach(x=>x.onclick=()=>{let s=mb20s();if(s.vouchers.some(v=>(v.lines||[]).some(l=>String(l.productId)===String(x.dataset.mb20pd))))return toast('Product has voucher history');if(confirm('Delete product?')){s.products=s.products.filter(p=>String(p.id)!==String(x.dataset.mb20pd));persistAll();render()}});document.getElementById('mb20hback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20view]').forEach(x=>x.onclick=()=>{let v=mb20s().vouchers.find(a=>String(a.id)===String(x.dataset.mb20view));if(v)printBatamMansHtml(mb20voucherHtml(v),'Magzi & Batava Voucher')});document.querySelectorAll('[data-mb20delv]').forEach(x=>x.onclick=()=>{if(confirm('Delete voucher?')){let s=mb20s();s.vouchers=s.vouchers.filter(v=>String(v.id)!==String(x.dataset.mb20delv));persistAll();render()}});document.querySelectorAll('[data-mb20f]').forEach(x=>x.onclick=()=>{let mode=x.dataset.mb20f,td=mb20today(),ws=mb20ws(),now=new Date(),ms=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);document.querySelectorAll('[data-mb20hr]').forEach(r=>{let d=r.dataset.date;r.style.display=mode==='all'||mode==='today'&&d===td||mode==='week'&&d>=ws&&d<=mb20we()||mode==='month'&&d>=ms&&d<=td?'grid':'none'})});document.getElementById('mb20custom')?.addEventListener('change',e=>document.querySelectorAll('[data-mb20hr]').forEach(r=>r.style.display=!e.target.value||r.dataset.date===e.target.value?'grid':'none'));document.getElementById('mb20print')?.addEventListener('click',()=>printBatamMansHtml(`<div class="receipt-paper" style="width:80mm;margin:auto"><h3>Magzi & Batava Receive History</h3>${mb20s().vouchers.map(v=>`<div class="rline"><span>${mb20d(v.date)} ${(v.lines||[]).map(l=>esc(l.productName)+' '+l.qty).join(', ')}</span><b>${mb20m((v.lines||[]).reduce((a,l)=>a+(Number(l.amount)||0),0))}</b></div>`).join('')}</div>`,'Magzi & Batava History'));document.getElementById('mb20vback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20vq]').forEach(x=>x.oninput=()=>{let p=mb20s().products.find(a=>String(a.id)===String(x.dataset.mb20vq)),o=document.querySelector(`[data-mb20va="${CSS.escape(String(x.dataset.mb20vq))}"]`);if(o)o.textContent=mb20m((Number(x.value)||0)*(Number(p?.rate)||0))});document.getElementById('mb20savev')?.addEventListener('click',mb20saveVoucher);document.querySelector('[data-mb20-supplier-photo]')?.addEventListener('click',()=>{let u=mb20s().supplier?.photo||mb20LocalPhotoGet()||'';if(u)openImageLightbox(u)})}
+function bindMB20(){document.getElementById('mb20back')?.addEventListener('click',()=>goBack());document.getElementById('mb20dash')?.addEventListener('click',()=>goto('dashboard'));document.getElementById('mb20products')?.addEventListener('click',()=>{currentPage='magziBatavaProducts';render()});document.getElementById('mb20history')?.addEventListener('click',()=>{currentPage='magziBatavaHistory';render()});document.getElementById('mb20editSupplier')?.addEventListener('click',mb20supplier);document.getElementById('mb20voucher')?.addEventListener('click',()=>{currentPage='magziBatavaVoucher';render()});document.querySelectorAll('[data-mb20opening]').forEach(x=>x.onclick=()=>mb20opening(x.dataset.mb20opening));document.querySelectorAll('[data-mb20pay]').forEach(x=>x.onclick=()=>mb20pay(x.dataset.mb20pay));document.getElementById('mb20pback')?.addEventListener('click',()=>{window.__mb20EditProductId='';currentPage='magziBatavaSupplier';render()});document.getElementById('mb20ProductSave')?.addEventListener('click',mb20SaveProductForm);document.getElementById('mb20ProductCancel')?.addEventListener('click',()=>{window.__mb20EditProductId='';render()});document.querySelectorAll('[data-mb20pe]').forEach(x=>x.onclick=()=>{window.__mb20EditProductId=x.dataset.mb20pe;render()});document.querySelectorAll('[data-mb20pd]').forEach(x=>x.onclick=()=>{let s=mb20s();if(s.vouchers.some(v=>(v.lines||[]).some(l=>String(l.productId)===String(x.dataset.mb20pd))))return toast('Product has voucher history');if(confirm('Delete product?')){s.products=s.products.filter(p=>String(p.id)!==String(x.dataset.mb20pd));persistAll();render()}});document.getElementById('mb20hback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20view]').forEach(x=>x.onclick=()=>{let v=mb20s().vouchers.find(a=>String(a.id)===String(x.dataset.mb20view));if(v)printBatamMansHtml(mb20voucherHtml(v),'Magzi & Batava Voucher')});document.querySelectorAll('[data-mb20delv]').forEach(x=>x.onclick=()=>{if(confirm('Delete voucher?')){let s=mb20s();s.vouchers=s.vouchers.filter(v=>String(v.id)!==String(x.dataset.mb20delv));persistAll();render()}});document.querySelectorAll('[data-mb20f]').forEach(x=>x.onclick=()=>{let mode=x.dataset.mb20f,td=mb20today(),ws=mb20ws(),now=new Date(),ms=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);document.querySelectorAll('[data-mb20hr]').forEach(r=>{let d=r.dataset.date;r.style.display=mode==='all'||mode==='today'&&d===td||mode==='week'&&d>=ws&&d<=mb20we()||mode==='month'&&d>=ms&&d<=td?'grid':'none'})});document.getElementById('mb20custom')?.addEventListener('change',e=>document.querySelectorAll('[data-mb20hr]').forEach(r=>r.style.display=!e.target.value||r.dataset.date===e.target.value?'grid':'none'));document.getElementById('mb20print')?.addEventListener('click',()=>printBatamMansHtml(`<div class="receipt-paper" style="width:80mm;margin:auto"><h3>Magzi & Batava Receive History</h3>${mb20s().vouchers.map(v=>`<div class="rline"><span>${mb20d(v.date)} ${(v.lines||[]).map(l=>esc(l.productName)+' '+l.qty).join(', ')}</span><b>${mb20m((v.lines||[]).reduce((a,l)=>a+(Number(l.amount)||0),0))}</b></div>`).join('')}</div>`,'Magzi & Batava History'));document.getElementById('mb20vback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20vq]').forEach(x=>x.oninput=()=>{let p=mb20s().products.find(a=>String(a.id)===String(x.dataset.mb20vq)),o=document.querySelector(`[data-mb20va="${CSS.escape(String(x.dataset.mb20vq))}"]`);if(o)o.textContent=mb20m((Number(x.value)||0)*(Number(p?.rate)||0))});document.getElementById('mb20savev')?.addEventListener('click',mb20saveVoucher);document.querySelector('[data-mb20-supplier-photo]')?.addEventListener('click',()=>{let u=mb20s().supplier?.photo||mb20LocalPhotoGet()||'';if(u)openImageLightbox(u)})}
 </script>
 </body></html>
