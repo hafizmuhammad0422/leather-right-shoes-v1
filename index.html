@@ -2624,7 +2624,17 @@ updateClock();
 setInterval(updateClock, 1000);
 
 function render(){
- if(['magziBatavaSupplier','magziBatavaProducts','magziBatavaHistory','magziBatavaVoucher'].includes(currentPage)){const m=document.getElementById('main');if(m){m.innerHTML=currentPage==='magziBatavaSupplier'?pageMagziBatavaSupplier():currentPage==='magziBatavaProducts'?pageMagziBatavaProducts():currentPage==='magziBatavaHistory'?pageMagziBatavaHistory():pageMagziBatavaVoucher();setTimeout(bindMB20,0);return;}}
+ if(['magziBatavaSupplier','magziBatavaProducts','magziBatavaHistory','magziBatavaVoucher'].includes(currentPage)){
+  updateTopbar();
+  applyWallpaper();
+  renderNav();
+  const m=document.getElementById('mainArea');
+  if(m){
+   m.innerHTML=currentPage==='magziBatavaSupplier'?pageMagziBatavaSupplier():currentPage==='magziBatavaProducts'?pageMagziBatavaProducts():currentPage==='magziBatavaHistory'?pageMagziBatavaHistory():pageMagziBatavaVoucher();
+   setTimeout(bindMB20,0);
+   return;
+  }
+ }
 
   updateTopbar();
   applyWallpaper();
