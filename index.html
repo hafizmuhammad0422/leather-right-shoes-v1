@@ -2213,86 +2213,8 @@ function normalizeShoeBoxSuppliers(){
 }
 normalizeShoeBoxSuppliers();
 function normalizeShoeSoleSuppliers(){
-  const existing = Array.isArray(settings.shoeSoleSuppliers) ? settings.shoeSoleSuppliers : [];
-  const defaults = [
-    {id:'supplier1', name:'', ownerName:'', mobile:'', whatsapp:'', address:'', location:'', photo:'', notes:'', customFields:[], products:[], purchases:[], account:{openingAmount:0,payments:[]}},
-    {id:'supplier2', name:'', ownerName:'', mobile:'', whatsapp:'', address:'', location:'', photo:'', notes:'', customFields:[], products:[], purchases:[], account:{openingAmount:0,payments:[]}}
-  ];
-  settings.shoeSoleSuppliers = [0,1].map(i=>{
-    const src = existing[i] && typeof existing[i]==='object' ? existing[i] : {};
-    const base = defaults[i];
-    const customFields = Array.isArray(src.customFields) ? src.customFields : [];
-    const products = Array.isArray(src.products) ? src.products : [];
-    const purchases = Array.isArray(src.purchases) ? src.purchases : [];
-    const sourceAccount = src.account && typeof src.account==='object' ? src.account : {};
-    const payments = Array.isArray(sourceAccount.payments) ? sourceAccount.payments : [];
-    const receiveVouchers = Array.isArray(src.receiveVouchers) ? src.receiveVouchers : [];
-    return {
-      ...base,
-      ...src,
-      id: base.id,
-      customFields: customFields.filter(f=>f && typeof f==='object').map(f=>({
-        id: String(f.id || uid()),
-        name: String(f.name || '').trim(),
-        value: String(f.value ?? '')
-      })).filter(f=>f.name),
-      products: products.filter(p=>p&&typeof p==='object').map(product=>({
-        id:String(product.id||uid()),
-        name:String(product.name||'').trim(),
-        photo:String(product.photo||''),
-        unit:String(product.unit||'Box'),
-        customUnit:String(product.customUnit||''),
-        itemPrice:Math.max(0,Number(product.itemPrice ?? product.purchaseItemPrice ?? product.purchasePrice ?? 0)||0),
-        stockBoxes:Math.max(0,Number(product.stockBoxes ?? product.stock ?? 0)||0),
-        stockItems:Math.max(0,Number(product.stockItems ?? product.stockBoxes ?? product.stock ?? 0)||0),
-        notes:String(product.notes||''),
-        itemBalance:(product.itemBalance&&typeof product.itemBalance==='object')?{
-          openingItem:Math.max(0,Number(product.itemBalance.openingItem)||0),
-          payItem:Math.max(0,Number(product.itemBalance.payItem)||0)
-        }:{openingItem:0,payItem:0},
-        atomBalance:(product.atomBalance&&typeof product.atomBalance==='object')?{
-          openingAtom:Math.max(0,Number(product.atomBalance.openingAtom)||0),
-          payAtom:Math.max(0,Number(product.atomBalance.payAtom)||0),
-          advanceAtom:Math.max(0,Number(product.atomBalance.advanceAtom)||0),
-          settledPurchaseIds:Array.isArray(product.atomBalance.settledPurchaseIds)?product.atomBalance.settledPurchaseIds.map(String):[],
-          lastSettlementAt:String(product.atomBalance.lastSettlementAt||'')
-        }:{openingAtom:0,payAtom:0,advanceAtom:0,settledPurchaseIds:[],lastSettlementAt:''},
-        customFields:Array.isArray(product.customFields) ? product.customFields.filter(f=>f&&typeof f==='object').map(f=>({
-          id:String(f.id||uid()), name:String(f.name||'').trim(), value:String(f.value??'')
-        })).filter(f=>f.name) : []
-      })).filter(product=>product.name),
-      receiveVouchers: receiveVouchers.filter(v=>v&&typeof v==='object').map(v=>({
-        id:String(v.id||uid()),
-        voucherNo:String(v.voucherNo||''),
-        date:String(v.date||new Date().toISOString()),
-        purchaseIds:Array.isArray(v.purchaseIds)?v.purchaseIds.map(String):[],
-        notes:String(v.notes||''),
-        createdAt:String(v.createdAt||new Date().toISOString())
-      })),
-      purchases: purchases.filter(x=>x&&typeof x==='object').map(purchase=>({
-        id:String(purchase.id||uid()),
-        productId:String(purchase.productId||''),
-        productName:String(purchase.productName||''),
-        date:String(purchase.date||new Date().toISOString()),
-        boxes:Math.max(0,Number(purchase.boxes)||0),
-        atoms:Math.max(0,Number(purchase.atoms)||0),
-        items:Math.max(0,Number(purchase.items ?? purchase.boxes ?? 0)||0),
-        amount:Math.max(0,Number(purchase.amount)||0),
-        notes:String(purchase.notes||''),
-        itemPrice:Math.max(0,Number(purchase.itemPrice ?? 0)||0),
-        time:String(purchase.time||'')
-      })).filter(purchase=>purchase.productId && (purchase.items>0 || purchase.boxes>0 || purchase.amount>0)),
-      account:{
-        openingAmount:Math.max(0,Number(sourceAccount.openingAmount)||0),
-        currentPaid:Math.max(0,Number(sourceAccount.currentPaid)||0),
-        cycleStart:String(sourceAccount.cycleStart||''),
-        advanceBalance:Math.max(0,Number(sourceAccount.advanceBalance)||0),
-        payments:payments.filter(x=>x&&typeof x==='object').map(payment=>({
-          id:String(payment.id||uid()), date:String(payment.date||new Date().toISOString()), amount:Math.max(0,Number(payment.amount)||0), notes:String(payment.notes||'')
-        })).filter(payment=>payment.amount>0)
-      }
-    };
-  });
+  // Dynamic suppliers keep their identities, nested records and live object references.
+  if(!Array.isArray(settings.shoeSoleSuppliers)) settings.shoeSoleSuppliers=[];
   return settings.shoeSoleSuppliers;
 }
 normalizeShoeSoleSuppliers();
@@ -2780,6 +2702,9 @@ function render(){
   else if(currentPage==='shoeBoxReceive1') main.innerHTML = pageShoeBoxReceiveDetail(0);
   else if(currentPage==='shoeBoxReceive2') main.innerHTML = pageShoeBoxReceiveDetail(1);
   else if(currentPage==='shoeSoleSuppliers') main.innerHTML = pageShoeSoleSuppliers();
+  else if(currentPage==='shoeSoleToday') main.innerHTML = pageShoeSoleToday();
+  else if(currentPage==='shoeSoleSupplierDetail') main.innerHTML = pageShoeSoleSupplierDetail(shoeSoleSelectedIndex());
+  else if(currentPage==='shoeSoleReceiveDetail') main.innerHTML = pageShoeSoleReceiveDetail(shoeSoleSelectedIndex());
   else if(currentPage==='shoeSoleSupplier1') main.innerHTML = pageShoeSoleSupplierDetail(0);
   else if(currentPage==='shoeSoleSupplier2') main.innerHTML = pageShoeSoleSupplierDetail(1);
   else if(currentPage==='shoeSoleReceive1') main.innerHTML = pageShoeSoleReceiveDetail(0);
@@ -2794,10 +2719,12 @@ function render(){
     } else if(currentPage==='shoeBoxReceive1' || currentPage==='shoeBoxReceive2'){
       const receiveSupplierIndex=currentPage==='shoeBoxReceive2'?1:0;
       main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeBoxSupplierDetail" data-receivesupplier="${receiveSupplierIndex}" style="margin-bottom:14px;">← Back to Supplier</button>` + main.innerHTML;
-    } else if(currentPage==='shoeSoleSupplier1' || currentPage==='shoeSoleSupplier2'){
+    } else if(currentPage==='shoeSoleSuppliers'||currentPage==='shoeSoleToday'){
+      // These Shoe Sole pages own their compact navigation.
+    } else if(currentPage==='shoeSoleSupplier1' || currentPage==='shoeSoleSupplier2'||currentPage==='shoeSoleSupplierDetail'){
       main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeSoleSuppliers" style="margin-bottom:14px;">← Back to Shoe Sole Suppliers</button>` + main.innerHTML;
-    } else if(currentPage==='shoeSoleReceive1' || currentPage==='shoeSoleReceive2'){
-      const receiveSupplierIndex=currentPage==='shoeSoleReceive2'?1:0;
+    } else if(currentPage==='shoeSoleReceive1' || currentPage==='shoeSoleReceive2'||currentPage==='shoeSoleReceiveDetail'){
+      const receiveSupplierIndex=shoeSoleRouteIndex();
       main.innerHTML = `<button type="button" class="btn ghost small" id="btnBackShoeSoleSupplierDetail" data-receivesupplier="${receiveSupplierIndex}" style="margin-bottom:14px;">← Back to Supplier</button>` + main.innerHTML;
     } else {
       const backBtnHtml = navHistory.length>0 ? `<button type="button" class="btn ghost small" id="btnBackPage" style="margin-bottom:14px;margin-right:8px;">← Back</button>` : '';
@@ -3753,6 +3680,7 @@ function pageDistributeUpper(){
   localDayStart.setHours(0,0,0,0);
   const nextLocalDayStart=new Date(localDayStart);
   nextLocalDayStart.setDate(nextLocalDayStart.getDate()+1);
+  const upperCards=upperWorkers.map((w,originalIndex)=>({w,originalIndex,completed:(settings.upperDistributions||[]).some(d=>{const date=new Date(d.date||d.createdAt||'');return String(d.workerId)===String(w.id)&&date>=localDayStart&&date<nextLocalDayStart;})})).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex);
   const allUpperRecords=(settings.upperDistributions||[]).filter(record=>{const distributedAt=new Date(record.date);return distributedAt>=localDayStart&&distributedAt<nextLocalDayStart;});
   let totalArticle=0,totalMaterial=0;
   allUpperRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)totalArticle+=q;if(l.materialId||l.materialName)totalMaterial+=q;}));
@@ -3775,7 +3703,7 @@ function pageDistributeUpper(){
     <div class="card bm-worker-card">
       <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
       <div class="bm-worker-grid" id="upperWorkerCards">
-        ${upperWorkers.length?upperWorkers.map(w=>{const completed=!upperIsFriday&&(settings.upperDistributions||[]).some(d=>{const dk=String(d.date||d.createdAt||'').slice(0,10);return String(d.workerId)===String(w.id)&&dk>=upperWeekStartKey&&dk<=todayKey;});return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
+        ${upperWorkers.length?upperCards.map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
       ${selectedWorker?`<div class="bm-selected-line">Selected: <strong>${esc(selectedWorker.name||'')}</strong></div>`:''}
     </div>
@@ -6404,33 +6332,104 @@ function shoeSoleDateKey(value){
 function formatMoney(amount){
   return 'Rs. '+(Math.round((Number(amount)||0)*100)/100).toLocaleString('en-PK');
 }
+function shoeSoleSelectedIndex(){
+  return getShoeSoleSuppliers().findIndex(s=>String(s.id)===String(window.__soleSelectedId||''));
+}
+function shoeSoleRouteIndex(){
+  if(currentPage==='shoeSoleSupplier1'||currentPage==='shoeSoleReceive1')return 0;
+  if(currentPage==='shoeSoleSupplier2'||currentPage==='shoeSoleReceive2')return 1;
+  return shoeSoleSelectedIndex();
+}
+function shoeSoleTodayRows(supplier,now=new Date()){
+  const start=new Date(now);start.setHours(0,0,0,0);
+  const end=new Date(start);end.setDate(end.getDate()+1);
+  return (supplier?.purchases||[]).filter(p=>{
+    const date=new Date(p.date),qty=Number(p.atoms??p.items??p.boxes);
+    return p.id&&p.productId&&p.deleted!==true&&!p.deletedAt&&!p.voided&&Number.isFinite(qty)&&qty>0&&date>=start&&date<end;
+  });
+}
+function shoeSoleEmptyPlaceholders(suppliers){
+  if(suppliers.length!==2||suppliers[0]?.id!=='supplier1'||suppliers[1]?.id!=='supplier2')return false;
+  if(suppliers[0].name!=='Waseem World Life Sole Center'||suppliers[1].name)return false;
+  return suppliers.every(s=>{
+    if((s.products||[]).length)return false;
+    const meaningful=v=>Array.isArray(v)?v.length>0:v&&typeof v==='object'?Object.values(v).some(meaningful):typeof v==='number'?v!==0:typeof v==='string'?v.trim()!==''&&v!=='0':v===true;
+    return !Object.entries(s).some(([key,value])=>/purchas|voucher|payment|settle|receipt|history|account|balance/i.test(key)&&meaningful(value));
+  });
+}
+async function resetShoeSolePlaceholders(){
+  if(!cloudReady||window.__soleResetAttempted||!shoeSoleEmptyPlaceholders(getShoeSoleSuppliers()))return;
+  window.__soleResetAttempted=true;
+  const before=JSON.stringify(settings);
+  settings.shoeSoleSuppliers=[];
+  if(!await saveCriticalCloudState()){
+    settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Sole supplier reset was not saved. Existing suppliers were restored.');return;
+  }
+  window.__soleSelectedId='';render();
+}
 function pageShoeSoleSuppliers(){
-  const suppliers=getShoeSoleSuppliers();
-  return `<div>
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:20px;">
-      <div><h2 class="page-title" style="margin-bottom:4px;">📦 Shoe Sole Suppliers</h2><div style="font-size:12px;color:var(--muted);">Select a supplier to open its complete supplier page.</div></div>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:nowrap;margin-bottom:20px;width:100%;box-sizing:border-box;">
-      ${suppliers.map((supplier,index)=>{
-        const displayName=shoeSoleSupplierDisplayName(supplier,index);
-        const products=Array.isArray(supplier.products)?supplier.products:[];
-        return `<div class="card shoe-box-main-card" data-opensss="${index}" id="shoeSoleSupplierCard${index}" style="flex:0 0 calc(50% - 4px);width:calc(50% - 4px);min-width:0;margin:0;box-sizing:border-box;cursor:pointer;transition:transform .15s,box-shadow .15s;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-            <h3 style="margin:0;font-size:18px;">Supplier ${index+1}</h3>
-            <span style="font-size:11px;color:var(--muted);">Click to Open →</span>
-          </div>
-          <div style="display:flex;gap:14px;align-items:center;min-width:0;">
-            <div class="entity-photo ${supplier.photo?'zoomable':''}" data-lightboxphoto="shoeSoleSupplier" data-sssindex="${index}" style="width:82px;height:82px;font-size:22px;border-radius:10px;flex-shrink:0;cursor:${supplier.photo?'zoom-in':'default'};">${supplier.photo?`<img src="${supplier.photo}" alt="${esc(displayName)}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">`:`<span>${esc(initials(displayName)||'SB')}</span>`}</div>
-            <div style="min-width:0;flex:1;">
-              <div style="font-size:18px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(displayName)}</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:5px;">${esc(supplier.ownerName||'Owner / Contact not added')}</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:3px;">${products.length} Product${products.length===1?'':'s'}</div>
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
+  const suppliers=getShoeSoleSuppliers(),index=shoeSoleSelectedIndex(),selected=suppliers[index];
+  const now=new Date(),supplierCards=suppliers.map((supplier,i)=>({supplier,i,rows:shoeSoleTodayRows(supplier,now)})).sort((a,b)=>Number(b.rows.length>0)-Number(a.rows.length>0)||a.i-b.i),todayTotal=suppliers.reduce((sum,s)=>sum+shoeSoleTodayRows(s,now).reduce((n,p)=>n+Number(p.atoms??p.items??p.boxes),0),0);
+  return `<div class="sole-supplier-page">
+    <div class="card sole-supplier-actions"><button class="btn ghost small" id="soleBack">Back</button><button class="btn ghost small" id="soleDashboard">Back to Dashboard</button><button class="btn brass small" id="soleAddSupplier">+ Add Supplier</button><button class="btn brass small" id="soleAddArticle" ${selected?'':'disabled'}>+ Add Articles</button><button class="btn ghost small" id="soleToday">Today Receive Sole <strong>${shoeSoleQuantityDisplay(todayTotal)} ATOMS</strong></button></div>
+    <div class="card"><h3>Select Sole Supplier</h3><div class="sole-supplier-grid">${suppliers.length?supplierCards.map(({supplier,i,rows})=>{const qty=rows.reduce((n,p)=>n+Number(p.atoms??p.items??p.boxes),0);return `<button type="button" class="sole-supplier-card ${i===index?'selected':''}" data-sole-select="${esc(supplier.id)}" aria-pressed="${i===index}"><strong title="${esc(shoeSoleSupplierDisplayName(supplier,i))}">${esc(shoeSoleSupplierDisplayName(supplier,i))}</strong><span>Today: ${shoeSoleQuantityDisplay(qty)} ATOMS</span>${rows.length?'<span class="sole-supplier-completed">Completed</span>':''}</button>`;}).join(''):'<div class="empty">Add a Sole Supplier to begin.</div>'}</div></div>
+    ${selected?`<div class="card"><div class="sole-entry-heading"><h3>Receive Sole - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="soleSupplierDetails">Supplier Details / History</button></div><div class="sole-receive-entry"><div><label for="soleArticle">Select Article</label><select id="soleArticle"><option value="">Select Article</option>${(selected.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ATOMS in stock</option>`).join('')}</select></div><div><label for="soleQuantity">Quantity / ATOMS</label><input id="soleQuantity" type="number" min="0" step="any" placeholder="ATOMS"></div><button class="btn brass" id="soleReceive">Receive / Save</button></div>${(selected.products||[]).length?'':'<div class="sole-entry-hint">Add Articles for this supplier before receiving.</div>'}</div>`:'<div class="card empty">Select a supplier to receive soles.</div>'}
   </div>`;
+}
+let shoeSoleReportRange=null;
+function shoeSoleReportDateKey(date=new Date()){return String(date.getFullYear()).padStart(4,'0')+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0')}
+function shoeSoleReportDay(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;const [y,m,d]=value.split('-').map(Number),date=new Date(y,m-1,d);return shoeSoleReportDateKey(date)===value?date:null}
+function shoeSoleReportRows(suppliers,from,to){const start=shoeSoleReportDay(from),last=shoeSoleReportDay(to);if(!start||!last||start>last)return null;const end=new Date(last);end.setDate(end.getDate()+1);return suppliers.flatMap((supplier,index)=>(supplier.purchases||[]).filter(p=>{const date=new Date(p.date),qty=Number(p.atoms??p.items??p.boxes);return p.id&&p.productId&&p.deleted!==true&&!p.deletedAt&&!p.voided&&Number.isFinite(qty)&&qty>0&&date>=start&&date<end;}).map(p=>({supplier,index,p}))).sort((a,b)=>new Date(b.p.date)-new Date(a.p.date))}
+function shoeSoleReportTable(rows,total,actions=false){return '<table style="width:100%;table-layout:fixed;border-collapse:collapse"><thead><tr><th style="text-align:left">Supplier Name</th><th style="text-align:left">Article Name</th><th style="text-align:right">Quantity</th></tr></thead><tbody>'+ (rows.length?rows.map(({supplier,index,p})=>'<tr><td style="overflow-wrap:anywhere">'+esc(shoeSoleSupplierDisplayName(supplier,index))+'</td><td style="overflow-wrap:anywhere">'+esc(p.productName||(supplier.products||[]).find(a=>String(a.id)===String(p.productId))?.name||'Article')+(actions?'<div><button class="btn ghost small" data-sole-view="'+esc(p.id)+'" data-sole-supplier="'+esc(supplier.id)+'">View</button> <button class="btn red small" data-sole-delete="'+esc(p.id)+'" data-sole-supplier="'+esc(supplier.id)+'">Delete</button></div>':'')+'</td><td style="text-align:right">'+shoeSoleQuantityDisplay(p.atoms??p.items??p.boxes)+'</td></tr>').join(''):'<tr><td colspan="3">No sole receipts in this range.</td></tr>')+'</tbody><tfoot><tr><th colspan="2" style="text-align:left">Total Quantity</th><th style="text-align:right">'+shoeSoleQuantityDisplay(total)+' ATOMS</th></tr></tfoot></table>'}
+function pageShoeSoleToday(){
+  const today=shoeSoleReportDateKey(),range=shoeSoleReportRange||{from:today,to:today},filtered=shoeSoleReportRows(getShoeSoleSuppliers(),range.from,range.to),rows=filtered||[],total=rows.reduce((n,r)=>n+Number(r.p.atoms??r.p.items??r.p.boxes),0);
+  return '<div class="sole-supplier-page"><div class="card sole-supplier-actions"><button class="btn ghost small" id="soleTodayBack">Back to Sole Suppliers</button><h3>Today Receive Sole</h3><button class="btn small" id="soleReportToday">Today</button><label style="font-size:11px">From Date <input type="date" id="soleReportFrom" value="'+esc(range.from)+'" style="width:140px;padding:4px"></label><label style="font-size:11px">To Date <input type="date" id="soleReportTo" value="'+esc(range.to)+'" style="width:140px;padding:4px"></label><button class="btn brass small" id="soleReportPrint" '+(filtered?'':'disabled')+'>Print</button></div>'+(filtered?'':'<div class="card">Choose valid dates with From Date on or before To Date.</div>')+'<div class="card sole-receive-today">'+shoeSoleReportTable(rows,total,true)+'</div><div hidden><div id="soleAggregatePrintArea" class="receipt-paper"><h3>Shoe Sole Receive Report</h3><p>'+esc(range.from)+' to '+esc(range.to)+'</p>'+shoeSoleReportTable(rows,total)+'</div></div></div>';
+}
+async function saveShoeSoleReceiving(supplierId,productId,atoms,date,notes='',time=date,request={}){
+  if(request.saved||request.saving||window.__soleReceiveSaving)return null;
+  const supplier=getShoeSoleSuppliers().find(s=>String(s.id)===String(supplierId)),product=supplier?.products?.find(p=>String(p.id)===String(productId));
+  if(!product||!Number.isFinite(atoms)||atoms<=0||!Number.isFinite(new Date(date).getTime())){toast('Select an article and enter a valid positive ATOMS quantity.');return null;}
+  request.saving=true;window.__soleReceiveSaving=true;
+  const before=JSON.stringify(settings);
+  try{
+    const voucherNo=`RV-${String(settings.nextShoeSoleReceiveVoucherNo||1001).padStart(4,'0')}`;
+    product.stockItems=shoeSoleProductStockItems(product)+atoms;
+    product.stockBoxes=Math.max(0,Number(product.stockBoxes)||0)+atoms;
+    const purchase={id:uid(),productId:product.id,productName:product.name,date,items:atoms,atoms,boxes:atoms,voucherNo,notes,time};
+    supplier.purchases=supplier.purchases||[];supplier.receiveVouchers=supplier.receiveVouchers||[];
+    supplier.purchases.push(purchase);
+    supplier.receiveVouchers.push({id:uid(),voucherNo,date,purchaseIds:[String(purchase.id)],notes,createdAt:time});
+    settings.nextShoeSoleReceiveVoucherNo=(Number(settings.nextShoeSoleReceiveVoucherNo)||1001)+1;
+    if(!await saveCriticalCloudState()){
+      settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Sole receiving was not saved. Stock and receipt were restored.');return null;
+    }
+    request.saved=true;
+    return {supplierIndex:getShoeSoleSuppliers().findIndex(s=>String(s.id)===String(supplierId)),purchaseId:String(purchase.id),voucherNo};
+  }finally{request.saving=false;window.__soleReceiveSaving=false;}
+}
+function bindShoeSoleLanding(){
+  document.getElementById('soleBack')?.addEventListener('click',()=>goBack());
+  document.getElementById('soleDashboard')?.addEventListener('click',()=>goto('dashboard'));
+  document.getElementById('soleAddSupplier')?.addEventListener('click',()=>openShoeSoleSupplierModal());
+  document.getElementById('soleAddArticle')?.addEventListener('click',()=>{const i=shoeSoleSelectedIndex();if(i>=0)openShoeSoleProductModal(i,null);});
+  document.getElementById('soleToday')?.addEventListener('click',()=>{shoeSoleReportRange=null;goto('shoeSoleToday');});
+  document.getElementById('soleTodayBack')?.addEventListener('click',()=>{shoeSoleReportRange=null;goto('shoeSoleSuppliers');});
+  document.getElementById('soleReportToday')?.addEventListener('click',()=>{shoeSoleReportRange=null;render();});
+  ['soleReportFrom','soleReportTo'].forEach(id=>document.getElementById(id)?.addEventListener('change',()=>{shoeSoleReportRange={from:document.getElementById('soleReportFrom').value,to:document.getElementById('soleReportTo').value};render();}));
+  document.getElementById('soleReportPrint')?.addEventListener('click',()=>printElement('soleAggregatePrintArea'));
+  document.getElementById('soleSupplierDetails')?.addEventListener('click',()=>goto('shoeSoleSupplierDetail'));
+  document.querySelectorAll('[data-sole-select]').forEach(b=>b.addEventListener('click',()=>{window.__soleSelectedId=b.dataset.soleSelect;render();}));
+  const request={};
+  document.getElementById('soleReceive')?.addEventListener('click',async()=>{
+    const supplierId=window.__soleSelectedId,productId=document.getElementById('soleArticle')?.value,atoms=Number(document.getElementById('soleQuantity')?.value),now=new Date().toISOString();
+    const result=await saveShoeSoleReceiving(supplierId,productId,atoms,now,'',now,request);
+    if(result){render();openShoeSoleReceiveVoucherModal(result.supplierIndex,[result.purchaseId]);toast(result.voucherNo+' saved');}
+  });
+  document.querySelectorAll('[data-sole-view],[data-sole-delete]').forEach(b=>b.addEventListener('click',()=>{
+    const i=getShoeSoleSuppliers().findIndex(s=>String(s.id)===String(b.dataset.soleSupplier));if(i<0)return;
+    if(b.dataset.soleDelete)deleteShoeSoleReceiving(i,b.dataset.soleDelete);else openShoeSoleReceiveVoucherModal(i,[b.dataset.soleView]);
+  }));
+  if(currentPage==='shoeSoleSuppliers')void resetShoeSolePlaceholders();
 }
 
 function pageShoeSoleSupplierDetail(index){
@@ -6861,12 +6860,12 @@ function deleteShoeSoleReceiving(supplierIndex,purchaseId){
   toast('Receiving deleted — stock and supplier account reversed');
 }
 
-function openShoeSoleSupplierModal(index){
-  const suppliers = getShoeSoleSuppliers();
-  const supplier = suppliers[index];
+function openShoeSoleSupplierModal(index=null){
+  const suppliers = getShoeSoleSuppliers(),isNew=index===null;
+  const supplier = isNew?{id:uid(),name:'',ownerName:'',mobile:'',whatsapp:'',address:'',location:'',photo:'',notes:'',customFields:[],products:[],purchases:[],receiveVouchers:[],account:{openingAmount:0,currentPaid:0,cycleStart:'',advanceBalance:0,payments:[]}}:suppliers[index];
   if(!supplier) return;
   let pendingPhoto = supplier.photo || '';
-  const title = `Edit Supplier ${index+1}`;
+  const title = isNew?'Add Sole Supplier':`Edit Supplier ${index+1}`;
   modal(`
     <h3 style="margin-top:0;">${esc(title)}</h3>
     <div class="row">
@@ -6917,7 +6916,9 @@ function openShoeSoleSupplierModal(index){
     document.getElementById('sssPhoto').value='';
   });
   document.getElementById('sssSave').onclick=()=>{
-    supplier.name=document.getElementById('sssName').value.trim();
+    const name=document.getElementById('sssName').value.trim();if(!name){toast('Enter supplier name');return;}
+    if(isNew&&getShoeSoleSuppliers().some(s=>String(s.id)===String(supplier.id)))return;
+    supplier.name=name;
     supplier.ownerName=document.getElementById('sssOwner').value.trim();
     supplier.mobile=document.getElementById('sssMobile').value.trim();
     supplier.whatsapp=document.getElementById('sssWhatsapp').value.trim();
@@ -6925,6 +6926,8 @@ function openShoeSoleSupplierModal(index){
     supplier.location=document.getElementById('sssLocation').value.trim();
     supplier.notes=document.getElementById('sssNotes').value.trim();
     supplier.photo=pendingPhoto;
+    if(isNew)getShoeSoleSuppliers().push(supplier);
+    window.__soleSelectedId=supplier.id;
     persistAll();
     closeModal();
     render();
@@ -7111,7 +7114,7 @@ function openShoeSolePurchaseModal(supplierIndex,productId){
     <label>Quantity (Atoms)</label>
     <input id="ssPurchaseItems" type="number" min="0" step="any" value="0">
     <label>Date</label>
-    <input id="ssPurchaseDate" type="date" value="${new Date().toISOString().slice(0,10)}">
+    <input id="ssPurchaseDate" type="date" value="${(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;})()}">
     <label>Notes / Receiving Details</label>
     <textarea id="ssPurchaseNotes" rows="3" placeholder="Optional receiving details"></textarea>
     <div style="font-size:12px;color:var(--muted);margin-top:8px;">Receiving quantity is recorded exactly as Atoms. No box, pack, item or price conversion is used.</div>
@@ -7123,56 +7126,13 @@ function openShoeSolePurchaseModal(supplierIndex,productId){
   const itemsEl=document.getElementById('ssPurchaseItems');
   document.getElementById('ssPurchaseCancel').onclick=closeModal;
 
-  document.getElementById('ssPurchaseSave').onclick=()=>{
-    const atoms=Math.max(0,Number(itemsEl.value)||0);
-    if(atoms<=0){toast('Enter receiving quantity in Atoms');return;}
-
-    const dateValue=document.getElementById('ssPurchaseDate').value;
+  const request={};
+  document.getElementById('ssPurchaseSave').onclick=async()=>{
+    const atoms=Number(itemsEl.value),dateValue=document.getElementById('ssPurchaseDate').value;
     if(!dateValue){toast('Select receiving date');return;}
-
-    const now=new Date();
-    const date=new Date(dateValue+'T12:00:00').toISOString();
-    const time=now.toISOString();
-    const voucherNo=`RV-${String(settings.nextShoeSoleReceiveVoucherNo||1001).padStart(4,'0')}`;
-    const notes=document.getElementById('ssPurchaseNotes').value.trim();
-
-    const currentItems=shoeSoleProductStockItems(product);
-    product.stockItems=currentItems+atoms;
-    product.stockBoxes=Math.max(0,Number(product.stockBoxes)||0)+atoms;
-
-    supplier.purchases=Array.isArray(supplier.purchases)?supplier.purchases:[];
-    supplier.receiveVouchers=Array.isArray(supplier.receiveVouchers)?supplier.receiveVouchers:[];
-
-    const purchase={
-      id:uid(),
-      productId:product.id,
-      productName:product.name,
-      date,
-      items:atoms,
-      atoms,
-      boxes:atoms,
-      voucherNo,
-      notes,
-      time
-    };
-    supplier.purchases.push(purchase);
-
-    supplier.receiveVouchers.push({
-      id:uid(),
-      voucherNo,
-      date,
-      purchaseIds:[String(purchase.id)],
-      notes,
-      createdAt:time
-    });
-
-    settings.nextShoeSoleReceiveVoucherNo=(Number(settings.nextShoeSoleReceiveVoucherNo)||1001)+1;
-
-    persistAll();
-    closeModal();
-    render();
-    openShoeSoleReceiveVoucherModal(supplierIndex,[String(purchase.id)]);
-    toast(`${voucherNo} saved — ${shoeSoleQuantityDisplay(atoms)} Atoms received`);
+    const date=new Date(dateValue+'T12:00:00');if(!Number.isFinite(date.getTime())){toast('Select a valid receiving date');return;}
+    const result=await saveShoeSoleReceiving(supplier.id,productId,atoms,date.toISOString(),document.getElementById('ssPurchaseNotes').value.trim(),new Date().toISOString(),request);
+    if(result){closeModal();render();openShoeSoleReceiveVoucherModal(result.supplierIndex,[result.purchaseId]);toast(result.voucherNo+' saved');}
   };
 }
 
@@ -9317,7 +9277,7 @@ function pageBatamMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Batam Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map(w=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
@@ -10055,7 +10015,7 @@ function pageFinishedMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Finished Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map(w=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
@@ -10551,7 +10511,8 @@ function attachPageHandlers(){
   document.querySelectorAll('[data-sbspurchasehistory]').forEach(b=>b.addEventListener('click',()=>openShoeBoxPurchaseHistoryModal(parseInt(b.dataset.sbspurchasehistory))));
 
   // Shoe Sole Suppliers
-  document.querySelectorAll('[data-opensss]').forEach(card=>card.addEventListener('click',()=>goto(parseInt(card.dataset.opensss)===0?'shoeSoleSupplier1':'shoeSoleSupplier2')));
+  bindShoeSoleLanding();
+  document.querySelectorAll('[data-opensss]').forEach(card=>card.addEventListener('click',()=>{const supplier=getShoeSoleSuppliers()[parseInt(card.dataset.opensss)];if(supplier){window.__soleSelectedId=supplier.id;goto('shoeSoleSupplierDetail');}}));
   document.querySelectorAll('[data-editsss]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); openShoeSoleSupplierModal(parseInt(b.dataset.editsss)); }));
   document.querySelectorAll('[data-customsss]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); openShoeSoleCustomFieldsModal(parseInt(b.dataset.customsss)); }));
   document.getElementById('btnBackShoeSoleSuppliers')?.addEventListener('click',()=>goto('shoeSoleSuppliers'));
@@ -10562,7 +10523,7 @@ function attachPageHandlers(){
 
   document.querySelectorAll('[data-sssproductphoto]').forEach(el=>el.addEventListener('click',(e)=>{
     e.stopPropagation();
-    const supplierIndex=currentPage==='shoeSoleSupplier2'?1:currentPage==='shoeSoleSupplier1'?0:-1;
+    const supplierIndex=shoeSoleRouteIndex();
     if(supplierIndex<0) return;
     const supplier=getShoeSoleSuppliers()[supplierIndex];
     const product=(supplier?.products||[]).find(p=>String(p.id)===String(el.dataset.sssproductphoto));
@@ -10578,58 +10539,58 @@ function attachPageHandlers(){
     const idx=parseInt(b.dataset.openSssReceive);
     window.__shoeSoleReceiveFilters=window.__shoeSoleReceiveFilters||{};
     window.__shoeSoleReceiveFilters[idx]={filter:'today',start:'',end:''};
-    goto(idx===0?'shoeSoleReceive1':'shoeSoleReceive2');
+    window.__soleSelectedId=getShoeSoleSuppliers()[idx]?.id||'';goto('shoeSoleReceiveDetail');
   }));
   document.getElementById('btnBackShoeSoleSupplierDetail')?.addEventListener('click',()=>{
     const idx=parseInt(document.getElementById('btnBackShoeSoleSupplierDetail').dataset.receivesupplier);
-    goto(idx===0?'shoeSoleSupplier1':'shoeSoleSupplier2');
+    window.__soleSelectedId=getShoeSoleSuppliers()[idx]?.id||'';goto('shoeSoleSupplierDetail');
   });
   document.getElementById('sssReceiveToday')?.addEventListener('click',()=>{
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     window.__shoeSoleReceiveFilters=window.__shoeSoleReceiveFilters||{}; window.__shoeSoleReceiveFilters[idx]={filter:'today',start:'',end:''}; render();
   });
   document.getElementById('sssReceiveWeekly')?.addEventListener('click',()=>{
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     window.__shoeSoleReceiveFilters=window.__shoeSoleReceiveFilters||{}; window.__shoeSoleReceiveFilters[idx]={filter:'weekly',start:'',end:''}; render();
   });
   document.getElementById('sssReceiveMonthly')?.addEventListener('click',()=>{
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     window.__shoeSoleReceiveFilters=window.__shoeSoleReceiveFilters||{}; window.__shoeSoleReceiveFilters[idx]={filter:'monthly',start:'',end:''}; render();
   });
   document.getElementById('sssReceiveCustom')?.addEventListener('click',()=>{
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     window.__shoeSoleReceiveFilters=window.__shoeSoleReceiveFilters||{}; window.__shoeSoleReceiveFilters[idx]={filter:'custom',start:'',end:''}; render();
   });
   document.getElementById('sssReceiveApply')?.addEventListener('click',()=>{
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     const start=document.getElementById('sssReceiveStart')?.value||'', end=document.getElementById('sssReceiveEnd')?.value||'';
     if(!start||!end){toast('Select both dates');return;}
     if(start>end){toast('End Date cannot be before Start Date');return;}
     window.__shoeSoleReceiveFilters=window.__shoeSoleReceiveFilters||{}; window.__shoeSoleReceiveFilters[idx]={filter:'custom',start,end}; render();
   });
   document.getElementById('sssPrintReceiveSummary')?.addEventListener('click',()=>{
-    const idx=currentPage==='shoeSoleReceive2'?1:0, f=(window.__shoeSoleReceiveFilters||{})[idx]||{filter:'today',start:'',end:''};
+    const idx=shoeSoleRouteIndex(), f=(window.__shoeSoleReceiveFilters||{})[idx]||{filter:'today',start:'',end:''};
     printShoeSoleReceiveSummary(idx,f.filter,f.start,f.end);
   });
   document.getElementById('sssCreateReceiveVoucher')?.addEventListener('click',()=>{
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     openShoeSoleReceiveSession(idx);
   });
   document.querySelectorAll('[data-sssreceivevoucher-group]').forEach(b=>b.addEventListener('click',(e)=>{
     e.stopPropagation();
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     const ids=String(b.dataset.purchaseids||'').split(',').filter(Boolean);
     openShoeSoleReceiveVoucherModal(idx,ids);
   }));
   document.querySelectorAll('[data-sssprintvoucher]').forEach(b=>b.addEventListener('click',(e)=>{
     e.stopPropagation();
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     const ids=String(b.dataset.purchaseids||'').split(',').filter(Boolean);
     openShoeSoleReceiveVoucherModal(idx,ids,true);
   }));
   document.querySelectorAll('[data-sssdeletevoucher]').forEach(b=>b.addEventListener('click',(e)=>{
     e.stopPropagation();
-    const idx=currentPage==='shoeSoleReceive2'?1:0;
+    const idx=shoeSoleRouteIndex();
     const ids=String(b.dataset.purchaseids||'').split(',').filter(Boolean);
     deleteShoeSoleReceiveVoucher(idx,String(b.dataset.sssdeletevoucher),ids);
   }));
@@ -10909,9 +10870,15 @@ function mb20LocalPhotoSet(v){let s=mb20s();s.supplier=s.supplier||{};s.supplier
 function mb20today(){return new Date().toISOString().slice(0,10)}
 function mb20ws(){let x=new Date();x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+1)%7));return x.toISOString().slice(0,10)}
 function mb20we(){let x=new Date(mb20ws()+'T00:00:00');x.setDate(x.getDate()+5);return x.toISOString().slice(0,10)}
-function mb20new(pid){let s=mb20s(),a=0,ws=mb20ws(),we=mb20we(),today=mb20today();s.vouchers.forEach(v=>{let d=mb20d(v.date);if(d>=ws&&(d<=we||d===today))(v.lines||[]).forEach(l=>{if(String(l.productId)===String(pid))a+=Number(l.amount)||0})});let settled=s.payments.filter(x=>String(x.productId)===String(pid)&&(mb20d(x.date)>=ws&&mb20d(x.date)<=we||mb20d(x.date)===today)).reduce((z,x)=>z+(Number(x.currentPaid)||0),0);return Math.max(0,a-settled)}
+let mb20SettlementBusy=false;
+function mb20Settlement(pid){let entry=mb20s().settlements?.[String(pid)];return entry?.version===1?entry:null}
+function mb20VoucherAmount(v,pid){return (v.lines||[]).filter(l=>String(l.productId)===String(pid)).reduce((a,l)=>a+(Number(l.amount)||0),0)}
+function mb20IncludeVouchers(entry,pid,baseline){let ids=[];mb20s().vouchers.forEach(v=>{if((v.lines||[]).some(l=>String(l.productId)===String(pid))&&!Object.prototype.hasOwnProperty.call(entry.includedVouchers,String(v.id))){entry.includedVouchers[String(v.id)]={amount:mb20VoucherAmount(v,pid),reversed:false,baseline};ids.push(v.id)}});return ids}
+async function mb20SettlementSave(mutate){if(mb20SettlementBusy)return false;mb20SettlementBusy=true;const before=JSON.stringify(mb20s());try{mutate();if(!await saveCriticalCloudState())throw new Error('Settlement save failed');return true}catch(error){settings.magziBatavaSupplier=JSON.parse(before);try{await reconcileCloudAfterCriticalRollback()}catch(e){console.error(e)}toast('Change was not saved. Previous balances and records were restored.');return false}finally{mb20SettlementBusy=false}}
+async function mb20DeleteVoucher(id){if(mb20SettlementBusy)return;let s=mb20s(),v=s.vouchers.find(v=>String(v.id)===String(id));if(!v)return;const entries=Object.entries(s.settlements||{}).filter(([pid,e])=>e.version===1&&Object.prototype.hasOwnProperty.call(e.includedVouchers,String(id)));if(entries.some(([pid,e])=>e.includedVouchers[String(id)].baseline)){toast('This voucher belongs to the pre-settlement historical balance. Deletion requires manual/accounting review.');return}if(!confirm('Delete voucher?'))return;if(await mb20SettlementSave(()=>{for(const [pid,e] of entries){const included=e.includedVouchers[String(id)];if(included.reversed)continue;const net=(Number(s.opening[pid])||0)-(Number(s.advance[pid])||0)-(Number(included.amount)||0);s.opening[pid]=Math.max(0,net);s.advance[pid]=Math.max(0,-net);included.reversed=true}s.vouchers=s.vouchers.filter(v=>String(v.id)!==String(id))}))render()}
+function mb20new(pid){let entry=mb20Settlement(pid);if(entry)return mb20s().vouchers.filter(v=>!Object.prototype.hasOwnProperty.call(entry.includedVouchers,String(v.id))).reduce((a,v)=>a+mb20VoucherAmount(v,pid),0);let start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-((start.getDay()+1)%7));let end=new Date(start);end.setDate(end.getDate()+6);let localDate=d=>String(d.getFullYear()).padStart(4,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"),s=mb20s(),a=0,ws=localDate(start),we=localDate(end);s.vouchers.forEach(v=>{let d=mb20d(v.date);if(d>=ws&&d<=we)(v.lines||[]).forEach(l=>{if(String(l.productId)===String(pid))a+=Number(l.amount)||0})});let settled=s.payments.filter(x=>String(x.productId)===String(pid)&&mb20d(x.date)>=ws&&mb20d(x.date)<=we).reduce((z,x)=>z+(Number(x.currentPaid)||0),0);return Math.max(0,a-settled)}
 function mb20paid(pid){let start=new Date();start.setHours(0,0,0,0);start.setDate(start.getDate()-((start.getDay()+1)%7));let end=new Date(start);end.setDate(end.getDate()+6);let localDate=d=>String(d.getFullYear()).padStart(4,'0')+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'),ws=localDate(start),we=localDate(end);return mb20s().payments.filter(x=>String(x.productId)===String(pid)&&x.deleted!==true&&mb20d(x.date)>=ws&&mb20d(x.date)<=we).reduce((a,x)=>a+(Number(x.amount)||0),0)}
-function mb20bal(pid){let s=mb20s(),o=Math.max(0,Number(s.opening[pid])||0),n=mb20new(pid),p=mb20paid(pid),ws=mb20ws(),we=mb20we(),today=mb20today(),settled=s.payments.filter(x=>String(x.productId)===String(pid)&&(mb20d(x.date)>=ws&&mb20d(x.date)<=we||mb20d(x.date)===today)).reduce((z,x)=>z+(Number(x.currentPaid)||0),0),adv=Math.max(0,(Number(s.advance[pid])||0)-settled),remaining=Math.max(0,o+n-adv);return{opening:o,newAmount:n,paid:p,remaining,advance:adv}}
+function mb20bal(pid){if(mb20Settlement(pid)){let s=mb20s(),o=Math.max(0,Number(s.opening[pid])||0),n=mb20new(pid),adv=Math.max(0,Number(s.advance[pid])||0);return{opening:o,newAmount:n,paid:mb20paid(pid),remaining:Math.max(0,o+n-adv),advance:adv}}let s=mb20s(),o=Math.max(0,Number(s.opening[pid])||0),n=mb20new(pid),p=mb20paid(pid),ws=mb20ws(),we=mb20we(),today=mb20today(),settled=s.payments.filter(x=>String(x.productId)===String(pid)&&(mb20d(x.date)>=ws&&mb20d(x.date)<=we||mb20d(x.date)===today)).reduce((z,x)=>z+(Number(x.currentPaid)||0),0),adv=Math.max(0,(Number(s.advance[pid])||0)-settled),remaining=Math.max(0,o+n-adv);return{opening:o,newAmount:n,paid:p,remaining,advance:adv}}
 function mb20todayTotal(){let q=0;mb20s().vouchers.filter(v=>mb20d(v.date)===mb20today()).forEach(v=>(v.lines||[]).forEach(l=>q+=Number(l.qty)||0));return q}
 function pageMagziBatavaSupplier(){let s=mb20s(),sp=s.supplier||{},displayPhoto=sp.photo||mb20LocalPhotoGet(),balances=s.products.map(p=>mb20bal(p.id)),totalOpening=balances.reduce((a,x)=>a+(Number(x.opening)||0),0),totalRemaining=balances.reduce((a,x)=>a+(Number(x.remaining)||0),0);return `<div class="mb20"><div class="mb20-row mb20-top"><button class="btn ghost small" id="mb20back">← Back</button><button class="btn ghost small" id="mb20dash">← Back to Dashboard</button><button class="btn small" id="mb20history">Today Magzi & Batava Receive: <b>${mb20todayTotal()} Items</b></button><button class="btn brass small" id="mb20products">+ Add Product</button><div class="mb20-box" style="min-width:142px">Total Opening Amount<strong>${mb20m(totalOpening)}</strong></div><div class="mb20-box" style="min-width:142px">Total Remaining Balance<strong>${mb20m(totalRemaining)}</strong></div></div><div class="mb20-card mb20-supplier">${displayPhoto?`<img class="mb20-photo zoomable" src="${displayPhoto}" data-mb20-supplier-photo="1" style="cursor:pointer">`:`<div class="mb20-photo" style="display:grid;place-items:center">PHOTO</div>`}<div class="mb20-info"><div><b>Shop Name</b><br>${esc(sp.shopName||'—')}</div><div><b>Owner Name</b><br>${esc(sp.ownerName||'—')}</div><div><b>Mobile No</b><br>${esc(sp.mobile||'—')}</div><div><b>Shop Location</b><br>${esc(sp.location||'—')}</div></div><button class="btn blue small" id="mb20editSupplier">Edit</button></div><div>${s.products.length?s.products.map(p=>{let b=mb20bal(p.id);return `<div class="mb20-card mb20-balance"><strong>${esc(p.name)}</strong><button class="mb20-box" data-mb20opening="${esc(p.id)}">Opening Amount<strong>${mb20m(b.opening)}</strong></button><div class="mb20-box">New Amount<strong>${mb20m(b.newAmount)}</strong></div><button class="mb20-box" data-mb20pay="${esc(p.id)}">Pay Amount<strong></strong></button><div class="mb20-box">Remaining Amount<strong>${mb20m(b.remaining)}</strong></div><div class="mb20-box">Advance Amount<strong>${mb20m(b.advance)}</strong></div></div>`}).join(''):`<div class="mb20-card empty">Add Magzi / Batava products.</div>`}</div><div style="text-align:right"><button class="btn brass" id="mb20voucher">Create Voucher</button></div></div>`}
 function pageMagziBatavaProducts(){let s=mb20s(),eid=window.__mb20EditProductId||'',ep=s.products.find(x=>String(x.id)===String(eid));return `<div class="mb20"><div class="mb20-row mb20-top"><button class="btn ghost small" id="mb20pback">← Back</button><b>${ep?'Edit':'Add'} Product</b></div><div class="card"><div style="display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(180px,1fr);gap:10px;align-items:end"><div><label>Product Name</label><input id="mb20ProductName" value="${esc(ep?.name||'')}" placeholder="e.g. Magzi / Batava"></div><div><label>Labour Rate Per Item (Rs.)</label><input id="mb20ProductRate" type="number" min="0" step="0.01" value="${ep?Number(ep.rate)||0:''}" placeholder="Rate per item"></div></div><div style="display:flex;gap:7px;margin-top:10px"><button class="btn brass" id="mb20ProductSave">${ep?'Update':'Save'} Product</button>${ep?'<button class="btn ghost" id="mb20ProductCancel">Cancel Edit</button>':''}</div></div><div class="mb20-card"><div style="font-weight:800;margin-bottom:6px">Saved Products</div>${s.products.length?s.products.map(p=>`<div class="mb20-product"><strong>${esc(p.name)}</strong><span>${mb20m(p.rate)} / Item</span><span><button class="btn blue small" data-mb20pe="${esc(p.id)}">Edit</button> <button class="btn red small" data-mb20pd="${esc(p.id)}">Delete</button></span></div>`).join(''):'<div class="empty">No products.</div>'}</div></div>`}
@@ -10921,7 +10888,7 @@ function pageMagziBatavaVoucher(){let s=mb20s();return `<div class="mb20"><div c
 function mb20SaveProductForm(){let s=mb20s(),id=window.__mb20EditProductId||'',p=s.products.find(x=>String(x.id)===String(id)),name=(document.getElementById('mb20ProductName')?.value||'').trim(),rate=Number(document.getElementById('mb20ProductRate')?.value);if(!name)return toast('Product Name is required');if(!Number.isFinite(rate)||rate<0)return toast('Enter valid Labour Rate');if(p){p.name=name;p.rate=rate;p.updatedAt=new Date().toISOString()}else{s.products.push({id:'mbp'+Date.now(),name,rate,createdAt:new Date().toISOString()})}window.__mb20EditProductId='';persistAll();render();toast('Product saved')}
 function mb20supplier(){let s=mb20s(),p=s.supplier||{},pendingPhoto=p.photo||mb20LocalPhotoGet(),photoChanged=false;modal(`<h3 style="margin-top:0">Edit Supplier Details</h3><label>Supplier Photo</label><input type="file" id="mb20SupplierPhoto" accept="image/*"><div id="mb20SupplierPreview" style="margin:8px 0">${pendingPhoto?`<img src="${pendingPhoto}" class="zoomable" style="width:130px;height:130px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer">`:'No photo selected'}</div><label>Shop Name</label><input id="mb20ShopName" value="${esc(p.shopName||'')}"><label>Owner Name</label><input id="mb20OwnerName" value="${esc(p.ownerName||'')}"><label>Mobile No</label><input id="mb20Mobile" value="${esc(p.mobile||'')}"><label>Shop Location</label><input id="mb20Location" value="${esc(p.location||'')}"><div class="modal-actions"><button class="btn brass" id="mb20SupplierSave">Save</button><button class="btn ghost" id="mb20SupplierCancel">Cancel</button></div>`);const refresh=()=>{let w=document.getElementById('mb20SupplierPreview');if(!w)return;w.innerHTML=pendingPhoto?`<img src="${pendingPhoto}" class="zoomable" style="width:130px;height:130px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer">`:'No photo selected';w.querySelector('img')?.addEventListener('click',()=>openImageLightbox(pendingPhoto))};document.getElementById('mb20SupplierPhoto')?.addEventListener('change',e=>{let f=e.target.files?.[0];if(!f)return;openImageCropper(f,async cropped=>{if(!cropped)return;try{pendingPhoto=typeof compressImageDataUrl==='function'?await compressImageDataUrl(cropped,700,.72):cropped}catch(err){console.error(err);pendingPhoto=cropped}photoChanged=true;refresh()})});refresh();document.getElementById('mb20SupplierCancel').onclick=closeModal;document.getElementById('mb20SupplierSave').onclick=()=>{p.shopName=document.getElementById('mb20ShopName').value.trim();p.ownerName=document.getElementById('mb20OwnerName').value.trim();p.mobile=document.getElementById('mb20Mobile').value.trim();p.location=document.getElementById('mb20Location').value.trim();if(photoChanged)p.photo=pendingPhoto;s.supplier=p;if(photoChanged)mb20LocalPhotoSet(pendingPhoto);else persistAll();closeModal();render();toast('Supplier details saved')}}
 function mb20opening(id){let s=mb20s(),p=s.products.find(x=>String(x.id)===String(id)),cur=Number(s.opening[id])||0;modal(`<h3 style="margin-top:0">${esc(p?.name||'Product')} — Opening Amount</h3><label>Opening Amount (Rs.)</label><input id="mb20OpeningInput" type="number" min="0" step="1" value="${cur}"><div class="modal-actions"><button class="btn brass" id="mb20OpeningSave">Save</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);document.getElementById('mb20OpeningSave').onclick=()=>{let a=Number(document.getElementById('mb20OpeningInput').value);if(!Number.isFinite(a)||a<0)return toast('Enter valid Opening Amount');s.opening[id]=a;persistAll();closeModal();render();toast('Opening Amount saved')}}
-function mb20pay(id){let s=mb20s(),p=s.products.find(x=>String(x.id)===String(id)),b=mb20bal(id);modal(`<h3 style="margin-top:0">${esc(p?.name||'Product')} — Pay Amount</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px">Current Remaining: <b>${mb20m(b.remaining)}</b></div><label>Pay Amount (Rs.)</label><input id="mb20PayInput" type="number" min="0" step="1" value=""><div class="modal-actions"><button class="btn brass" id="mb20PaySave">Save Payment</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);document.getElementById('mb20PaySave').onclick=()=>{let a=Number(document.getElementById('mb20PayInput').value);if(!Number.isFinite(a)||a<=0)return toast('Enter valid Pay Amount');let opening=Math.max(0,Number(s.opening[id])||0),useOpening=Math.min(opening,a);s.opening[id]=opening-useOpening;let left=a-useOpening,newAmt=mb20new(id),oldAdv=mb20bal(id).advance,currentDue=Math.max(0,newAmt-oldAdv),useCurrent=Math.min(left,currentDue),extra=Math.max(0,left-useCurrent),priorSettled=s.payments.filter(x=>String(x.productId)===String(id)&&(mb20d(x.date)>=mb20ws()&&mb20d(x.date)<=mb20we()||mb20d(x.date)===mb20today())).reduce((z,x)=>z+(Number(x.currentPaid)||0),0);s.advance[id]=Math.max(0,priorSettled+useCurrent+oldAdv+extra);s.payments.push({id:'pay'+Date.now(),productId:id,amount:a,date:mb20today(),createdAt:new Date().toISOString(),openingPaid:useOpening,currentPaid:useCurrent,advanceAdded:extra});persistAll();closeModal();render();toast(extra>0?'Payment saved; extra amount is Advance':'Payment saved')}}
+function mb20pay(id){let s=mb20s(),p=s.products.find(x=>String(x.id)===String(id)),b=mb20bal(id);modal(`<h3 style="margin-top:0">${esc(p?.name||'Product')} — Pay Amount</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px">Current Remaining: <b>${mb20m(b.remaining)}</b></div><label>Pay Amount (Rs.)</label><input id="mb20PayInput" type="number" min="0" step="1" value=""><div class="modal-actions"><button class="btn brass" id="mb20PaySave">Save Payment</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);let submitted=false;document.getElementById('mb20PaySave').onclick=async()=>{if(submitted||mb20SettlementBusy)return;let a=Number(document.getElementById('mb20PayInput').value);if(!Number.isFinite(a)||a<=0)return toast('Enter valid Pay Amount');submitted=true;const button=document.getElementById('mb20PaySave');button.disabled=true;const ok=await mb20SettlementSave(()=>{let s=mb20s(),b=mb20bal(id),before={opening:b.opening,newAmount:b.newAmount,advance:b.advance},net=b.opening+b.newAmount-b.advance-a,now=new Date(),localDate=String(now.getFullYear()).padStart(4,'0')+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0'),paymentId='pay'+uid(),entry=mb20Settlement(id),baseline=!entry;if(!entry){entry={version:1,activatedAt:now.toISOString(),lastPaymentId:'',lastSettledAt:'',includedVouchers:{}};s.settlements=s.settlements||{};s.settlements[String(id)]=entry}const includedVoucherIds=mb20IncludeVouchers(entry,id,baseline);s.opening[id]=Math.max(0,net);s.advance[id]=Math.max(0,-net);entry.lastPaymentId=paymentId;entry.lastSettledAt=now.toISOString();s.payments.push({id:paymentId,productId:id,amount:a,date:localDate,createdAt:now.toISOString(),settlementVersion:1,before,after:{opening:s.opening[id],advance:s.advance[id]},includedVoucherIds})});if(!ok){submitted=false;button.disabled=false;return}closeModal();render();toast('Payment settled')}}
 function mb20saveVoucher(){let s=mb20s(),lines=[];s.products.forEach(p=>{let c=document.querySelector(`[data-mb20vs="${CSS.escape(String(p.id))}"]`),q=Number(document.querySelector(`[data-mb20vq="${CSS.escape(String(p.id))}"]`)?.value)||0;if(c?.checked&&q>0)lines.push({productId:p.id,productName:p.name,qty:q,rate:Number(p.rate)||0,amount:q*(Number(p.rate)||0)})});if(!lines.length)return toast('Select product and enter items');let pending=Number(document.getElementById('mb20PendingInput')?.value)||0;if(pending<0)return toast('Enter valid Pending Amount');const v={id:'mbv'+Date.now(),voucherNo:'MB-'+String(Date.now()).slice(-7),date:mb20today(),createdAt:new Date().toISOString(),pending,lines};s.vouchers.push(v);persistAll();printBatamMansHtml(mb20voucherHtml(v),'Magzi & Batava Receive Voucher');currentPage='magziBatavaSupplier';render();toast('Voucher saved and print opened')}
 function mb20voucherHtml(v){let s=mb20s(),sp=s.supplier||{},items=(v.lines||[]).reduce((a,l)=>a+(Number(l.qty)||0),0),amount=(v.lines||[]).reduce((a,l)=>a+(Number(l.amount)||0),0),pending=Number(v.pending)||0,rows=(v.lines||[]).map(l=>`<tr><td style="padding:6px 4px;border-bottom:1px solid #ddd;">${esc(l.productName)}</td><td style="padding:6px 4px;text-align:right;border-bottom:1px solid #ddd;">${Number(l.qty)||0} ITEMS</td></tr>`).join('');return `<div class="receipt-paper" style="width:80mm;margin:auto;">
 <div class="brand-head"><h3 style="font-size:18px;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div>
@@ -10940,7 +10907,7 @@ ${pending>0?`<div class="rline" style="margin-top:8px;font-weight:900;"><strong>
 <div class="rline" style="font-weight:800;"><span>TOTAL AMOUNT:</span><span>${mb20m(amount)}</span></div>
 ${settings.receiptFooter?`<div class="footer">${esc(settings.receiptFooter)}</div>`:''}${settings.thankYou?`<div class="footer">${esc(settings.thankYou)}</div>`:''}
 </div>`}
-function bindMB20(){document.getElementById('mb20back')?.addEventListener('click',()=>goBack());document.getElementById('mb20dash')?.addEventListener('click',()=>goto('dashboard'));document.getElementById('mb20products')?.addEventListener('click',()=>{currentPage='magziBatavaProducts';render()});document.getElementById('mb20history')?.addEventListener('click',()=>{currentPage='magziBatavaHistory';render()});document.getElementById('mb20editSupplier')?.addEventListener('click',mb20supplier);document.getElementById('mb20voucher')?.addEventListener('click',()=>{currentPage='magziBatavaVoucher';render()});document.querySelectorAll('[data-mb20opening]').forEach(x=>x.onclick=()=>mb20opening(x.dataset.mb20opening));document.querySelectorAll('[data-mb20pay]').forEach(x=>x.onclick=()=>mb20pay(x.dataset.mb20pay));document.getElementById('mb20pback')?.addEventListener('click',()=>{window.__mb20EditProductId='';currentPage='magziBatavaSupplier';render()});document.getElementById('mb20ProductSave')?.addEventListener('click',mb20SaveProductForm);document.getElementById('mb20ProductCancel')?.addEventListener('click',()=>{window.__mb20EditProductId='';render()});document.querySelectorAll('[data-mb20pe]').forEach(x=>x.onclick=()=>{window.__mb20EditProductId=x.dataset.mb20pe;render()});document.querySelectorAll('[data-mb20pd]').forEach(x=>x.onclick=()=>{let s=mb20s();if(s.vouchers.some(v=>(v.lines||[]).some(l=>String(l.productId)===String(x.dataset.mb20pd))))return toast('Product has voucher history');if(confirm('Delete product?')){s.products=s.products.filter(p=>String(p.id)!==String(x.dataset.mb20pd));persistAll();render()}});document.getElementById('mb20hback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20view]').forEach(x=>x.onclick=()=>{let v=mb20s().vouchers.find(a=>String(a.id)===String(x.dataset.mb20view));if(v)printBatamMansHtml(mb20voucherHtml(v),'Magzi & Batava Voucher')});document.querySelectorAll('[data-mb20delv]').forEach(x=>x.onclick=()=>{if(confirm('Delete voucher?')){let s=mb20s();s.vouchers=s.vouchers.filter(v=>String(v.id)!==String(x.dataset.mb20delv));persistAll();render()}});document.querySelectorAll('[data-mb20f]').forEach(x=>x.onclick=()=>{let mode=x.dataset.mb20f,td=mb20today(),ws=mb20ws(),now=new Date(),ms=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);document.querySelectorAll('[data-mb20hr]').forEach(r=>{let d=r.dataset.date;r.style.display=mode==='all'||mode==='today'&&d===td||mode==='week'&&d>=ws&&d<=mb20we()||mode==='month'&&d>=ms&&d<=td?'grid':'none'})});document.getElementById('mb20custom')?.addEventListener('change',e=>document.querySelectorAll('[data-mb20hr]').forEach(r=>r.style.display=!e.target.value||r.dataset.date===e.target.value?'grid':'none'));document.getElementById('mb20print')?.addEventListener('click',()=>printBatamMansHtml(`<div class="receipt-paper" style="width:80mm;margin:auto"><h3>Magzi & Batava Receive History</h3>${mb20s().vouchers.map(v=>`<div class="rline"><span>${mb20d(v.date)} ${(v.lines||[]).map(l=>esc(l.productName)+' '+l.qty).join(', ')}</span><b>${mb20m((v.lines||[]).reduce((a,l)=>a+(Number(l.amount)||0),0))}</b></div>`).join('')}</div>`,'Magzi & Batava History'));document.getElementById('mb20vback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20vq]').forEach(x=>x.oninput=()=>{let p=mb20s().products.find(a=>String(a.id)===String(x.dataset.mb20vq)),o=document.querySelector(`[data-mb20va="${CSS.escape(String(x.dataset.mb20vq))}"]`);if(o)o.textContent=mb20m((Number(x.value)||0)*(Number(p?.rate)||0))});document.getElementById('mb20savev')?.addEventListener('click',mb20saveVoucher);document.querySelector('[data-mb20-supplier-photo]')?.addEventListener('click',()=>{let u=mb20s().supplier?.photo||mb20LocalPhotoGet()||'';if(u)openImageLightbox(u)})}
+function bindMB20(){document.getElementById('mb20back')?.addEventListener('click',()=>goBack());document.getElementById('mb20dash')?.addEventListener('click',()=>goto('dashboard'));document.getElementById('mb20products')?.addEventListener('click',()=>{currentPage='magziBatavaProducts';render()});document.getElementById('mb20history')?.addEventListener('click',()=>{currentPage='magziBatavaHistory';render()});document.getElementById('mb20editSupplier')?.addEventListener('click',mb20supplier);document.getElementById('mb20voucher')?.addEventListener('click',()=>{currentPage='magziBatavaVoucher';render()});document.querySelectorAll('[data-mb20opening]').forEach(x=>x.onclick=()=>mb20opening(x.dataset.mb20opening));document.querySelectorAll('[data-mb20pay]').forEach(x=>x.onclick=()=>mb20pay(x.dataset.mb20pay));document.getElementById('mb20pback')?.addEventListener('click',()=>{window.__mb20EditProductId='';currentPage='magziBatavaSupplier';render()});document.getElementById('mb20ProductSave')?.addEventListener('click',mb20SaveProductForm);document.getElementById('mb20ProductCancel')?.addEventListener('click',()=>{window.__mb20EditProductId='';render()});document.querySelectorAll('[data-mb20pe]').forEach(x=>x.onclick=()=>{window.__mb20EditProductId=x.dataset.mb20pe;render()});document.querySelectorAll('[data-mb20pd]').forEach(x=>x.onclick=()=>{let s=mb20s();if(s.vouchers.some(v=>(v.lines||[]).some(l=>String(l.productId)===String(x.dataset.mb20pd))))return toast('Product has voucher history');if(confirm('Delete product?')){s.products=s.products.filter(p=>String(p.id)!==String(x.dataset.mb20pd));persistAll();render()}});document.getElementById('mb20hback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20view]').forEach(x=>x.onclick=()=>{let v=mb20s().vouchers.find(a=>String(a.id)===String(x.dataset.mb20view));if(v)printBatamMansHtml(mb20voucherHtml(v),'Magzi & Batava Voucher')});document.querySelectorAll('[data-mb20delv]').forEach(x=>x.onclick=()=>mb20DeleteVoucher(x.dataset.mb20delv));document.querySelectorAll('[data-mb20f]').forEach(x=>x.onclick=()=>{let mode=x.dataset.mb20f,td=mb20today(),ws=mb20ws(),now=new Date(),ms=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);document.querySelectorAll('[data-mb20hr]').forEach(r=>{let d=r.dataset.date;r.style.display=mode==='all'||mode==='today'&&d===td||mode==='week'&&d>=ws&&d<=mb20we()||mode==='month'&&d>=ms&&d<=td?'grid':'none'})});document.getElementById('mb20custom')?.addEventListener('change',e=>document.querySelectorAll('[data-mb20hr]').forEach(r=>r.style.display=!e.target.value||r.dataset.date===e.target.value?'grid':'none'));document.getElementById('mb20print')?.addEventListener('click',()=>printBatamMansHtml(`<div class="receipt-paper" style="width:80mm;margin:auto"><h3>Magzi & Batava Receive History</h3>${mb20s().vouchers.map(v=>`<div class="rline"><span>${mb20d(v.date)} ${(v.lines||[]).map(l=>esc(l.productName)+' '+l.qty).join(', ')}</span><b>${mb20m((v.lines||[]).reduce((a,l)=>a+(Number(l.amount)||0),0))}</b></div>`).join('')}</div>`,'Magzi & Batava History'));document.getElementById('mb20vback')?.addEventListener('click',()=>{currentPage='magziBatavaSupplier';render()});document.querySelectorAll('[data-mb20vq]').forEach(x=>x.oninput=()=>{let p=mb20s().products.find(a=>String(a.id)===String(x.dataset.mb20vq)),o=document.querySelector(`[data-mb20va="${CSS.escape(String(x.dataset.mb20vq))}"]`);if(o)o.textContent=mb20m((Number(x.value)||0)*(Number(p?.rate)||0))});document.getElementById('mb20savev')?.addEventListener('click',mb20saveVoucher);document.querySelector('[data-mb20-supplier-photo]')?.addEventListener('click',()=>{let u=mb20s().supplier?.photo||mb20LocalPhotoGet()||'';if(u)openImageLightbox(u)})}
 </script>
 <style id="ui-redesign-presentation-layer">
 /* Screen-only presentation layer: application behaviour and print output remain unchanged. */
@@ -11112,6 +11079,40 @@ function bindMB20(){document.getElementById('mb20back')?.addEventListener('click
     .upper-distribution-summary .upper-distribution-summary__filters .btn,
     .upper-distribution-summary .upper-distribution-summary__heading .btn{min-height:42px!important;}
     .upper-distribution-summary #upperSummaryPrintArea [data-upper-summary-voucher]{min-height:36px!important;}
+  }
+}
+</style>
+<style id="sole-supplier-dynamic-layout">
+@media screen{
+  body:has(.sole-supplier-page) #topFactoryName{color:var(--ink);}
+  .sole-supplier-page{min-width:0;}
+  .sole-supplier-page .card{padding:10px!important;margin:0 0 8px!important;}
+  .sole-supplier-page h3{font-size:15px;margin:0 0 8px;}
+  .sole-supplier-page .sole-supplier-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  .sole-supplier-page .sole-supplier-actions h3{margin:0;}
+  .sole-supplier-page .btn{min-height:32px;padding:5px 9px;font-size:11px;}
+  .sole-supplier-page .sole-supplier-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;}
+  .sole-supplier-page .sole-supplier-grid>.empty{grid-column:1/-1;}
+  .sole-supplier-page .sole-supplier-card{min-width:0;min-height:88px;padding:7px 4px;border:2px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;font-family:inherit;}
+  .sole-supplier-page .sole-supplier-card.selected{border-color:var(--brass);background:#edf7ef;}
+  .sole-supplier-page .sole-supplier-card strong{font-size:11px;max-width:100%;overflow-wrap:anywhere;}
+  .sole-supplier-page .sole-supplier-card span{font-size:10px;}
+  .sole-supplier-page .sole-supplier-completed{color:#23785c;font-weight:800;}
+  .sole-supplier-page .sole-entry-heading{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:7px;}
+  .sole-supplier-page .sole-entry-heading h3{margin:0;}
+  .sole-supplier-page .sole-receive-entry{display:grid;grid-template-columns:minmax(180px,2fr) minmax(100px,1fr) auto;gap:7px;align-items:end;}
+  .sole-supplier-page .sole-receive-entry label{display:block;font-size:11px;margin:0 0 3px;}
+  .sole-supplier-page .sole-receive-entry input,.sole-supplier-page .sole-receive-entry select{height:34px;padding:5px 7px;font-size:12px;}
+  .sole-supplier-page .sole-entry-hint{font-size:12px;margin-top:7px;}
+  .sole-supplier-page .sole-receive-today{overflow-x:auto;}
+  .sole-supplier-page .sole-receive-today table{min-width:660px!important;table-layout:auto!important;}
+  .sole-supplier-page .sole-receive-today th,.sole-supplier-page .sole-receive-today td{padding:5px 6px;font-size:11px;}
+  @media(max-width:1100px){.sole-supplier-page .sole-supplier-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}
+  @media(max-width:700px){
+    .sole-supplier-page .sole-supplier-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .sole-supplier-page .sole-receive-entry{grid-template-columns:1fr;}
+    .sole-supplier-page .sole-receive-entry input,.sole-supplier-page .sole-receive-entry select{height:42px;font-size:16px;}
+    .sole-supplier-page .btn{min-height:40px;}
   }
 }
 </style>
