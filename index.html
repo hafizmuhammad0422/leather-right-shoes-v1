@@ -764,7 +764,7 @@
   .upper-material-card:hover{border-color:var(--brass);transform:translateY(-2px);box-shadow:0 5px 12px rgba(0,0,0,.07);}
   .upper-material-photo{width:100%;aspect-ratio:1/1;border-radius:8px;overflow:hidden;background:#eee;display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
   .upper-material-photo img{width:100%;height:100%;object-fit:contain;display:block;}
-  .upper-distribution-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(170px,1.15fr) 120px 140px 44px;gap:8px;align-items:end;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fbfaf7;}
+  .upper-distribution-row{display:grid;grid-template-columns:minmax(130px,1fr) minmax(140px,1fr) 100px 100px 140px 44px;gap:8px;align-items:end;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fbfaf7;}
   .upper-distribution-row .upper-readonly{background:#f3f0e8;}
   .upper-distribution-row .upper-line-total{font-weight:800;padding:10px;border:1px solid #cfc9ba;border-radius:5px;background:#fff;min-height:38px;display:flex;align-items:center;}
   .upper-search-wrap{position:relative;}
@@ -1275,12 +1275,12 @@
 .upper-compact-search{height:28px!important;min-height:28px!important;width:220px!important;font-size:10px!important}
 .upper-entry-card{padding:8px!important}
 .upper-entry-card .bm-entry-head{margin-bottom:5px!important}
-.upper-one-row{display:grid!important;grid-template-columns:minmax(130px,1.25fr) minmax(130px,1.25fr) minmax(70px,.55fr) minmax(90px,.7fr) auto auto minmax(120px,.8fr)!important;gap:5px!important;align-items:end!important}
+.upper-one-row{display:grid!important;grid-template-columns:minmax(110px,1fr) minmax(110px,1fr) minmax(75px,.6fr) minmax(75px,.6fr) minmax(85px,.65fr) minmax(90px,.7fr) auto minmax(120px,.8fr)!important;gap:5px!important;align-items:end!important}
 .upper-one-row label{font-size:9px!important;margin-bottom:2px!important}
 .upper-one-row input{height:30px!important;min-height:30px!important;font-size:10px!important;padding:4px 6px!important}
 .upper-one-row .btn{height:30px!important;min-height:30px!important;padding:3px 7px!important;font-size:9px!important;white-space:nowrap}
 .upper-one-row .upper-row-stock-info:empty{display:none}
-@media(max-width:1100px){.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(10,minmax(72px,1fr))!important;overflow-x:auto}.upper-one-row{grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) 70px 90px auto auto 115px!important;overflow-x:auto}}
+@media(max-width:1100px){.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(10,minmax(72px,1fr))!important;overflow-x:auto}.upper-one-row{grid-template-columns:110px 110px 80px 80px 90px 90px auto 115px!important;overflow-x:auto}}
 </style>
 <style id="upper-mans-production-v16">
 .upper-compact-v15>.bm-page-title{margin-bottom:4px!important}
@@ -2097,7 +2097,7 @@ function normalizeUpperFeatureState(){
   settings.upperMaterials=Array.isArray(settings.upperMaterials)?settings.upperMaterials:[];
   settings.upperMaterials=settings.upperMaterials.filter(m=>m&&typeof m==='object').map(m=>({id:String(m.id||uid()),name:String(m.name||'').trim(),stock:Math.max(0,Number(m.stock)||0),photo:String(m.photo||''),createdAt:String(m.createdAt||new Date().toISOString()),updatedAt:String(m.updatedAt||m.createdAt||new Date().toISOString())})).filter(m=>m.name);
   settings.upperDistributions=Array.isArray(settings.upperDistributions)?settings.upperDistributions:[];
-  settings.upperDistributions=settings.upperDistributions.filter(d=>d&&typeof d==='object').map(d=>({id:String(d.id||uid()),voucherNo:Number(d.voucherNo)||0,date:String(d.date||new Date().toISOString()),workerId:String(d.workerId||''),workerName:String(d.workerName||''),workerCategory:String(d.workerCategory||''),lines:Array.isArray(d.lines)?d.lines.filter(l=>l&&typeof l==='object').map(l=>({articleId:String(l.articleId||''),articleName:String(l.articleName||''),articleStockBefore:Math.max(0,Number(l.articleStockBefore)||0),materialId:String(l.materialId||''),materialName:String(l.materialName||''),materialStockBefore:Math.max(0,Number(l.materialStockBefore)||0),qty:Math.max(0,Number(l.qty)||0),labourExpense:Math.max(0,Number(l.labourExpense??l.lineTotal)||0),lineTotal:Math.max(0,Number(l.lineTotal??l.labourExpense)||0),rate:Math.max(0,Number(l.rate)||0)})).filter(l=>(l.articleId&&l.articleName)||(l.materialId&&l.materialName)):[],totalItems:Math.max(0,Number(d.totalItems)||0),totalAmount:Math.max(0,Number(d.totalAmount)||0)})).filter(d=>d.workerId&&d.lines.length);
+  settings.upperDistributions=settings.upperDistributions.filter(d=>d&&typeof d==='object').map(d=>({id:String(d.id||uid()),voucherNo:Number(d.voucherNo)||0,...(d.workflowVersion===1?{workflowVersion:1}:{}),date:String(d.date||new Date().toISOString()),workerId:String(d.workerId||''),workerName:String(d.workerName||''),workerCategory:String(d.workerCategory||''),lines:Array.isArray(d.lines)?d.lines.filter(l=>l&&typeof l==='object').map(l=>({articleId:String(l.articleId||''),articleName:String(l.articleName||''),articleStockBefore:Math.max(0,Number(l.articleStockBefore)||0),materialId:String(l.materialId||''),materialName:String(l.materialName||''),materialStockBefore:Math.max(0,Number(l.materialStockBefore)||0),qty:Math.max(0,Number(l.qty)||0),...(d.workflowVersion===1?{receivedQty:Math.max(0,Number(l.receivedQty)||0)}:{}),labourExpense:Math.max(0,Number(l.labourExpense??l.lineTotal)||0),lineTotal:Math.max(0,Number(l.lineTotal??l.labourExpense)||0),rate:Math.max(0,Number(l.rate)||0)})).filter(l=>(l.articleId&&l.articleName)||(l.materialId&&l.materialName)):[],totalItems:Math.max(0,Number(d.totalItems)||0),totalAmount:Math.max(0,Number(d.totalAmount)||0)})).filter(d=>d.workerId&&d.lines.length);
   settings.upperPendingRecords=Array.isArray(settings.upperPendingRecords)?settings.upperPendingRecords:[];settings.upperPendingRecords=settings.upperPendingRecords.filter(p=>p&&typeof p==='object').map(p=>{const legacyQty=Math.max(0,Number(p.qty)||0),delta=Number.isFinite(Number(p.delta))?Number(p.delta):legacyQty;return {id:String(p.id||uid()),date:String(p.date||new Date().toISOString()),workerId:String(p.workerId||''),workerName:String(p.workerName||''),workerCategory:String(p.workerCategory||''),qty:Math.abs(delta),delta,action:String(p.action||(delta<0?'minus':'add')),editedAt:String(p.editedAt||'')};}).filter(p=>p.workerId&&Number(p.delta)!==0);
   const upperVoucherFields=['factoryName','title','voucherNo','date','time','worker','workerType','articleMaterial','quantity','labourWeeklyKharcha','receivingSummary','totalItems'];
   settings.upperVoucherCustomization=(settings.upperVoucherCustomization&&typeof settings.upperVoucherCustomization==='object')?settings.upperVoucherCustomization:{};
@@ -3694,7 +3694,7 @@ function pageDistributeUpper(){
       <button type="button" class="btn ghost small bm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList">👞 Upper Articles</button>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperMaterialList">📦 Upper Materials</button>
-      <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard">⏳ Pending</button>
+      <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard" style="display:flex;flex-direction:column;gap:2px;"><span>Today Pending</span><strong>${pendingTotal} ATOMS</strong></button>
       <button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>Weekly Kharcha</span><strong>${upperMoney(weeklyAmount)}</strong></button>
       <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>Today Articles Distributed</span><strong>${totalArticle} ATOMS</strong></button>
       <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayMaterialsCard"><span>Today Materials Distributed</span><strong>${totalMaterial} ATOMS</strong></button>
@@ -3703,17 +3703,19 @@ function pageDistributeUpper(){
     <div class="card bm-worker-card">
       <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
       <div class="bm-worker-grid" id="upperWorkerCards">
-        ${upperWorkers.length?upperCards.map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
+        ${upperWorkers.length?upperCards.map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'upper')}${upperDefaultMaterialCard(w)}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
       ${selectedWorker?`<div class="bm-selected-line">Selected: <strong>${esc(selectedWorker.name||'')}</strong></div>`:''}
     </div>
 
     <div class="card bm-entry-card upper-entry-card">
       <div class="bm-entry-head"><h3>Enter Upper Distribution Details</h3>${selectedWorker?`<span>Worker: <strong>${esc(selectedWorker.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Upper Man above first</span>'}</div>
+      <!-- Upper pending is displayed in the entry row. -->
       <div id="upperDistributionRows" class="upper-compact-rows">${articles.length||materials.length?`<div class="upper-distribution-row upper-one-row" data-upper-row>
-        <div class="upper-search-wrap"><label>Upper Article</label><input type="text" class="upper-article-search" placeholder="Select article..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>
-        <div class="upper-search-wrap"><label>Upper Material</label><input type="text" class="upper-material-search" placeholder="Select material..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>
-        <div><label>Quantity</label><input class="upper-qty" type="number" min="1" step="1" placeholder="Atoms"></div>
+        <div class="upper-search-wrap"><label>Upper Article</label><input type="text" class="upper-article-search" data-selected-id="${esc(productionArticleChoice(selectedWorker,'upper')?.id||'')}" value="${esc(productionArticleChoice(selectedWorker,'upper')?.name||'')}" placeholder="Select article..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>
+        <div class="upper-search-wrap"><label>Upper Material</label><input type="text" class="upper-material-search" data-selected-id="${esc(upperMaterialChoice(selectedWorker)?.id||'')}" value="${esc(upperMaterialChoice(selectedWorker)?.name||'')}" placeholder="Select material..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>
+        <div><label>Issued Quantity</label><input class="upper-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Received Quantity</label><input class="upper-received-qty" type="number" min="0" step="1" placeholder="Atoms"></div>
+        <div><label>Worker Pending</label><input id="upperWorkerPending" type="number" min="0" step="1" value="${selectedWorker?Number(getUpperPendingForWorker(selectedWorker.id)?.qty)||0:0}" ${!selectedWorker?'disabled':getUpperPendingForWorker(selectedWorker.id)?'readonly':''} placeholder="Opening (once)"></div>
         <div><label>Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div>
         <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn ghost small" id="btnAddUpperArticleRow">+ Article</button></div>
         <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn ghost small" id="btnAddUpperMaterialRow">+ Material</button></div>
@@ -3728,10 +3730,12 @@ function pageUpperArticles(){normalizeUpperFeatureState();const list=settings.up
 function pageUpperMaterials(){normalizeUpperFeatureState();const list=settings.upperMaterials||[];return `<h2 class="page-title">Upper Materials</h2><div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;"><div><strong>Upper Materials</strong><div style="font-size:12px;color:var(--muted);margin-top:3px;">Belong only to Distribute Upper. Stock only — no rate or price.</div></div><button type="button" class="btn brass" id="btnAddUpperMaterialPage">+ Add Upper Material</button></div><div class="card">${list.length?`<div class="upper-material-grid">${list.map(m=>`<div class="upper-material-card"><div class="upper-material-photo">${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}">`:`<span style="font-size:28px;color:var(--muted);">📦</span>`}</div><div style="font-weight:800;font-size:16px;">${esc(m.name)}</div><div style="font-size:13px;margin-top:7px;">Stock: <strong>${m.stock} Atoms</strong></div><div style="font-size:11px;color:var(--muted);margin-top:4px;">No rate / no price</div><div style="display:flex;gap:6px;margin-top:10px;"><button type="button" class="btn ghost small" data-edit-upper-material="${esc(m.id)}" style="flex:1;">Edit</button><button type="button" class="btn red small" data-delete-upper-material="${esc(m.id)}" style="flex:1;">Delete</button></div></div>`).join('')}</div>`:'<div class="empty">No Upper Materials saved yet.</div>'}</div>`;}
 function openUpperArticleModal(id){normalizeUpperFeatureState();const existing=getUpperArticle(id);let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit Upper Article':'Add Upper Article'}</h3><label>Article Photo</label><input type="file" id="upperArticlePhoto" accept="image/*"><div id="upperArticlePhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div><label>Article Name</label><input id="upperArticleName" value="${esc(existing?.name||'')}" placeholder="e.g. Formal Black Upper"><label>Labour Rate Per Atom</label><input id="upperArticleRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}" placeholder="e.g. 320"><label>Stock (Atoms)</label><input id="upperArticleStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 150"><div style="font-size:12px;color:var(--muted);margin-top:5px;">1 Atom = 12 pairs.</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperArticle">Save</button><button type="button" class="btn ghost" id="cancelUpperArticle">Cancel</button></div>`);document.getElementById('upperArticlePhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperArticlePhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read Upper Article photo');}});document.getElementById('cancelUpperArticle').onclick=closeModal;document.getElementById('saveUpperArticle').onclick=()=>{const name=document.getElementById('upperArticleName')?.value.trim()||'';const rate=Number(document.getElementById('upperArticleRate')?.value);const stock=Math.max(0,parseInt(document.getElementById('upperArticleStock')?.value,10)||0);if(!name){toast('Article Name is required');return;}if(!Number.isFinite(rate)||rate<0){toast('Enter a valid Labour Rate Per Atom');return;}const now=new Date().toISOString();settings.upperArticles=settings.upperArticles||[];if(existing){existing.name=name;existing.rate=rate;existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else settings.upperArticles.push({id:uid(),name,rate,stock,photo:pendingPhoto,createdAt:now,updatedAt:now});persistAll();closeModal();render();toast('Upper Article saved');};}
 function openUpperMaterialModal(id){normalizeUpperFeatureState();const existing=(settings.upperMaterials||[]).find(m=>String(m.id)===String(id));let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit Upper Material':'Add Upper Material'}</h3><label>Material Photo (optional)</label><input type="file" id="upperMaterialPhoto" accept="image/*"><div id="upperMaterialPhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div><label>Material Name</label><input id="upperMaterialName" value="${esc(existing?.name||'')}" placeholder="e.g. Black Rexine"><label>Stock (Atoms)</label><input id="upperMaterialStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 200"><div style="font-size:12px;color:var(--muted);margin-top:5px;">Upper Material has stock only. No rate, price, amount or cost.</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperMaterial">Save</button><button type="button" class="btn ghost" id="cancelUpperMaterial">Cancel</button></div>`);document.getElementById('upperMaterialPhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperMaterialPhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read Upper Material photo');}});document.getElementById('cancelUpperMaterial').onclick=closeModal;document.getElementById('saveUpperMaterial').onclick=()=>{const name=document.getElementById('upperMaterialName')?.value.trim()||'';const stock=Math.max(0,parseInt(document.getElementById('upperMaterialStock')?.value,10)||0);if(!name){toast('Material Name is required');return;}const now=new Date().toISOString();settings.upperMaterials=settings.upperMaterials||[];if(existing){existing.name=name;existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else settings.upperMaterials.push({id:uid(),name,stock,photo:pendingPhoto,createdAt:now,updatedAt:now});persistAll();closeModal();render();toast('Upper Material saved');};}
-function addUpperDistributionRow(kind='both'){const wrap=document.getElementById('upperDistributionRows');if(!wrap)return;const hasArticle=(settings.upperArticles||[]).length>0,hasMaterial=(settings.upperMaterials||[]).length>0;const row=document.createElement('div');row.className='upper-distribution-row';row.setAttribute('data-upper-row','');const articleHtml=(kind==='material'||!hasArticle)?'':`<div class="upper-search-wrap"><label>Search Upper Article</label><input type="text" class="upper-article-search" placeholder="Type article name..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>`;const materialHtml=(kind==='article'||!hasMaterial)?'':`<div class="upper-search-wrap"><label>Select Upper Material</label><input type="text" class="upper-material-search" placeholder="Type material name..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>`;row.innerHTML=`${articleHtml}${materialHtml}<div><label>Quantity (Atoms)</label><input class="upper-qty" type="number" min="1" step="1" placeholder="Atoms"></div><div><label>Labour Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div><div class="upper-remove-row"><button type="button" class="btn red small upper-remove" style="width:100%;">✕</button></div><div class="upper-row-stock-info" style="grid-column:1/-1;font-size:12px;color:var(--muted);"></div>`;wrap.appendChild(row);bindUpperDistributionRows();}
+function addUpperDistributionRow(kind='both'){const wrap=document.getElementById('upperDistributionRows');if(!wrap)return;const hasArticle=(settings.upperArticles||[]).length>0,hasMaterial=(settings.upperMaterials||[]).length>0;const row=document.createElement('div');row.className='upper-distribution-row';row.setAttribute('data-upper-row','');const articleHtml=(kind==='material'||!hasArticle)?'':`<div class="upper-search-wrap"><label>Search Upper Article</label><input type="text" class="upper-article-search" placeholder="Type article name..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>`;const materialHtml=(kind==='article'||!hasMaterial)?'':`<div class="upper-search-wrap"><label>Select Upper Material</label><input type="text" class="upper-material-search" placeholder="Type material name..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>`;row.innerHTML=`${articleHtml}${materialHtml}<div><label>Issued Quantity</label><input class="upper-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Received Quantity</label><input class="upper-received-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Labour Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div><div class="upper-remove-row"><button type="button" class="btn red small upper-remove" style="width:100%;">✕</button></div><div class="upper-row-stock-info" style="grid-column:1/-1;font-size:12px;color:var(--muted);"></div>`;wrap.appendChild(row);bindUpperDistributionRows();}
 function setUpperWorkerSelection(workerId){
   const worker=workers.find(w=>String(w.id)===String(workerId)&&!w.archived&&String(w.category||'').trim().toUpperCase()==='UPPER MANS');
   upperSelWorker=worker?String(worker.id):null;
+  if(worker)productionArticleChoices.delete(productionArticleChoiceKey(worker,'upper'));
+  if(worker)upperMaterialChoices.delete(productionArticleChoiceKey(worker,'upper-material'));
   bindUpperDistributionRows();
   render();
 }
@@ -3743,6 +3747,8 @@ function setUpperRowSelection(row,kind,id){
   const results=row.querySelector(kind==='article'?'.upper-article-results':'.upper-material-results');
   if(input) { input.dataset.selectedId=item?String(item.id):''; input.value=item?String(item.name||''):''; }
   if(results) results.innerHTML='';
+  if(kind==='article'&&row===document.querySelector('.upper-distribution-row'))rememberProductionArticleChoice(upperSelWorker,'upper',item?.id||'');
+  if(kind==='material'&&row===document.querySelector('.upper-distribution-row'))rememberUpperMaterialChoice(item?.id||'');
   updateUpperDistributionRow(row);
 }
 function renderUpperRowResults(row,kind,query){
@@ -3758,29 +3764,73 @@ function renderUpperRowResults(row,kind,query){
 function updateUpperDistributionRow(row){const aId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',mId=row.querySelector('.upper-material-search')?.dataset.selectedId||'';const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(aId)),m=(settings.upperMaterials||[]).find(x=>String(x.id)===String(mId));const qty=row.querySelector('.upper-qty'),info=row.querySelector('.upper-row-stock-info');const q=Math.max(0,parseInt(qty?.value||'0',10)||0);if(info){const ap=a?`Article stock: <strong class="${Number(a.stock)<q?'upper-stock-low':'upper-stock-ok'}">${a.stock} Atoms</strong>`:'';const mp=m?`Material stock: <strong class="${Number(m.stock)<q?'upper-stock-low':'upper-stock-ok'}">${m.stock} Atoms</strong>`:'';info.innerHTML=[ap,mp,'1 Atom = 12 pairs'].filter(Boolean).join(' &nbsp; | &nbsp; ');}updateUpperDistributionTotals();}
 function bindUpperDistributionRows(){document.querySelectorAll('.upper-distribution-row').forEach(row=>{
   const articleSearch=row.querySelector('.upper-article-search'),materialSearch=row.querySelector('.upper-material-search'),qty=row.querySelector('.upper-qty'),expense=row.querySelector('.upper-labour-expense');
-  if(articleSearch&&!articleSearch.dataset.bound){articleSearch.dataset.bound='1';articleSearch.addEventListener('input',()=>{articleSearch.dataset.selectedId='';renderUpperRowResults(row,'article',articleSearch.value);updateUpperDistributionRow(row);});}
-  if(materialSearch&&!materialSearch.dataset.bound){materialSearch.dataset.bound='1';materialSearch.addEventListener('input',()=>{materialSearch.dataset.selectedId='';renderUpperRowResults(row,'material',materialSearch.value);updateUpperDistributionRow(row);});}
+  if(articleSearch&&!articleSearch.dataset.bound){articleSearch.dataset.bound='1';articleSearch.addEventListener('input',()=>{articleSearch.dataset.selectedId='';if(row===document.querySelector('.upper-distribution-row'))rememberProductionArticleChoice(upperSelWorker,'upper','');renderUpperRowResults(row,'article',articleSearch.value);updateUpperDistributionRow(row);});}
+  if(materialSearch&&!materialSearch.dataset.bound){materialSearch.dataset.bound='1';materialSearch.addEventListener('input',()=>{materialSearch.dataset.selectedId='';if(row===document.querySelector('.upper-distribution-row'))rememberUpperMaterialChoice('');renderUpperRowResults(row,'material',materialSearch.value);updateUpperDistributionRow(row);});}
+  const received=row.querySelector('.upper-received-qty');if(received&&!received.dataset.bound){received.dataset.bound='1';received.addEventListener('input',()=>updateUpperDistributionTotals());}
   if(qty&&!qty.dataset.bound){qty.dataset.bound='1';qty.addEventListener('input',()=>updateUpperDistributionRow(row));}
   if(expense&&!expense.dataset.bound){expense.dataset.bound='1';expense.addEventListener('input',()=>updateUpperDistributionTotals());}
   const remove=row.querySelector('.upper-remove');if(remove&&!remove.dataset.bound){remove.dataset.bound='1';remove.addEventListener('click',()=>{row.remove();updateUpperDistributionTotals();});}
   updateUpperDistributionRow(row);
 });}
-function updateUpperDistributionTotals(){let draftArticle=0,draftMaterial=0,draftAmount=0;document.querySelectorAll('.upper-distribution-row').forEach(row=>{const aId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',mId=row.querySelector('.upper-material-search')?.dataset.selectedId||'',a=(settings.upperArticles||[]).find(x=>String(x.id)===String(aId)),m=(settings.upperMaterials||[]).find(x=>String(x.id)===String(mId)),q=Math.max(0,parseInt(row.querySelector('.upper-qty')?.value||'0',10)||0),expense=Math.max(0,Number(row.querySelector('.upper-labour-expense')?.value||0)||0);if(q>0){if(a)draftArticle+=q;if(m)draftMaterial+=q;if(a||m)draftAmount+=expense;}});let todayArticle=0,todayMaterial=0;upperTodayRecords().forEach(r=>(r.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleName)todayArticle+=q;if(l.materialName)todayMaterial+=q;}));const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0);const ai=document.getElementById('upperTotalArticleAtoms');if(ai)ai.textContent=String(todayArticle);const mi=document.getElementById('upperTotalMaterialAtoms');if(mi)mi.textContent=String(todayMaterial);const a=document.getElementById('upperTotalAmount');if(a)a.textContent=upperMoney(weeklyAmount);return {articleAtoms:draftArticle,materialAtoms:draftMaterial,amount:draftAmount};}
-function collectUpperDistributionDraft(){const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&!w.archived&&String(w.category||'').trim().toUpperCase()==='UPPER MANS'),lines=[],materialNeed={},articleNeed={};let invalid=false;document.querySelectorAll('.upper-distribution-row').forEach(row=>{if(invalid)return;const articleId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',materialId=row.querySelector('.upper-material-search')?.dataset.selectedId||'',article=(settings.upperArticles||[]).find(a=>String(a.id)===String(articleId)),material=(settings.upperMaterials||[]).find(m=>String(m.id)===String(materialId)),qty=Math.max(0,parseInt(row.querySelector('.upper-qty')?.value||'0',10)||0),labourExpense=Math.max(0,Number(row.querySelector('.upper-labour-expense')?.value||0)||0);if(article||material||qty||labourExpense){if((!article&&!material)||qty<=0){invalid=true;return;}if(article)articleNeed[article.id]=(articleNeed[article.id]||0)+qty;if(material)materialNeed[material.id]=(materialNeed[material.id]||0)+qty;lines.push({articleId:article?article.id:'',articleName:article?article.name:'',articleStockBefore:article?Number(article.stock)||0:0,materialId:material?material.id:'',materialName:material?material.name:'',materialStockBefore:material?Number(material.stock)||0:0,qty,labourExpense,lineTotal:labourExpense});}});if(!worker){toast('Please select an Upper Man Worker');return null;}if(invalid){toast('Complete every Upper Article or Upper Material row with Quantity');return null;}if(!lines.length){toast('Add at least one Upper Article or Upper Material row with quantity');return null;}for(const id of Object.keys(articleNeed)){const a=settings.upperArticles.find(x=>String(x.id)===String(id));if(!a||Number(a.stock)<articleNeed[id]){toast(`Insufficient Upper Article stock: ${a?a.name:'Unknown'} — available ${a?a.stock:0} Atoms`);return null;}}for(const id of Object.keys(materialNeed)){const m=settings.upperMaterials.find(x=>String(x.id)===String(id));if(!m||Number(m.stock)<materialNeed[id]){toast(`Insufficient Upper Material stock: ${m?m.name:'Unknown'} — available ${m?m.stock:0} Atoms`);return null;}}const totalItems=lines.reduce((sum,l)=>sum+l.qty,0),totalAmount=lines.reduce((sum,l)=>sum+l.labourExpense,0);return {workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),lines,totalItems,totalAmount,articleNeed,materialNeed};}
-async function createUpperDistribution(){if(window.__upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a)a.stock-=l.qty;if(m)m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),voucherNo,date,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,qty:l.qty,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
+function updateUpperDistributionTotals(){let draftArticle=0,draftMaterial=0,draftAmount=0;document.querySelectorAll('.upper-distribution-row').forEach(row=>{const aId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',mId=row.querySelector('.upper-material-search')?.dataset.selectedId||'',a=(settings.upperArticles||[]).find(x=>String(x.id)===String(aId)),m=(settings.upperMaterials||[]).find(x=>String(x.id)===String(mId)),q=Math.max(0,parseInt(row.querySelector('.upper-qty')?.value||'0',10)||0),expense=Math.max(0,Number(row.querySelector('.upper-labour-expense')?.value||0)||0);if(q>0){if(a)draftArticle+=q;if(m)draftMaterial+=q;if(a||m)draftAmount+=expense;}});let todayArticle=0,todayMaterial=0;upperTodayRecords().forEach(r=>(r.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleName)todayArticle+=q;if(l.materialName)todayMaterial+=q;}));const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0);const ai=document.getElementById('upperTotalArticleAtoms');if(ai)ai.textContent=String(todayArticle);const mi=document.getElementById('upperTotalMaterialAtoms');if(mi)mi.textContent=String(todayMaterial);const a=document.getElementById('upperTotalAmount');if(a)a.textContent=upperMoney(weeklyAmount);updateUpperWorkflowSummary();return {articleAtoms:draftArticle,materialAtoms:draftMaterial,amount:draftAmount};}
+function upperWorkflowStarted(workerId){return (settings.upperDistributions||[]).some(r=>r.workflowVersion===1&&String(r.workerId)===String(workerId));}
+function upperReceivedTotal(record){return record.workflowVersion===1?(record.lines||[]).reduce((n,l)=>n+(Number(l.receivedQty)||0),0):0;}
+function upperPendingState(workerId,records=settings.upperDistributions||[],throughId=null){
+  const events=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId)).map(p=>({date:p.date,delta:Number.isFinite(Number(p.delta))?Number(p.delta):Number(p.qty)||0}));
+  records.filter(r=>r.workflowVersion===1&&String(r.workerId)===String(workerId)).forEach(r=>events.push({date:r.date,id:r.id,delta:(r.lines||[]).reduce((n,l)=>n+(Number(l.qty)||0)-(Number(l.receivedQty)||0),0)}));
+  events.sort((a,b)=>new Date(a.date)-new Date(b.date));let qty=0,valid=true;
+  for(const event of events){qty+=event.delta;if(event.id&&qty<0)valid=false;if(throughId&&String(event.id)===String(throughId))break;}
+  return {qty,valid:valid&&qty>=0};
+}
+function updateUpperWorkflowSummary(){
+  const field=document.getElementById('upperWorkerPending');if(!field)return;
+  const id=String(getUpperSelectedWorkerId()||''),saved=id?getUpperPendingForWorker(id):null;
+  if(field.dataset.workerId!==id||saved)field.value=String(saved?.qty||0);
+  field.dataset.workerId=id;field.disabled=!id;field.readOnly=!!saved;
+  field.title=saved?'Current saved Worker Pending':'Opening Pending: set once with the first voucher';
+}
+
+function collectUpperDistributionDraft(){
+  const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&!w.archived&&String(w.category||'').trim().toUpperCase()==='UPPER MANS'),lines=[],articleNeed={},materialNeed={};let invalid=false;
+  document.querySelectorAll('.upper-distribution-row').forEach(row=>{
+    const articleId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',materialId=row.querySelector('.upper-material-search')?.dataset.selectedId||'',article=(settings.upperArticles||[]).find(a=>String(a.id)===String(articleId)),material=(settings.upperMaterials||[]).find(m=>String(m.id)===String(materialId)),qty=Number(row.querySelector('.upper-qty')?.value||0),receivedQty=Number(row.querySelector('.upper-received-qty')?.value||0),labourExpense=Number(row.querySelector('.upper-labour-expense')?.value||0);
+    if(!qty&&!receivedQty&&!labourExpense)return;
+    if(!Number.isInteger(qty)||qty<0||!Number.isInteger(receivedQty)||receivedQty<0||!Number.isFinite(labourExpense)||labourExpense<0||(!article&&!material)||(receivedQty>0&&!article)){invalid=true;return;}
+    if(article)articleNeed[article.id]=(articleNeed[article.id]||0)+qty;if(material)materialNeed[material.id]=(materialNeed[material.id]||0)+qty;
+    lines.push({articleId:article?.id||'',articleName:article?.name||'',articleStockBefore:Number(article?.stock)||0,materialId:material?.id||'',materialName:material?.name||'',materialStockBefore:Number(material?.stock)||0,qty,receivedQty,rate:Number(article?.rate)||0,labourExpense,lineTotal:labourExpense});
+  });
+  if(!worker){toast('Please select an Upper Man Worker');return null;}
+  if(invalid||!lines.length){toast('Enter whole non-negative Issued/Received quantities and select an Article for received work.');return null;}
+  for(const [id,qty] of Object.entries(articleNeed)){const a=settings.upperArticles.find(x=>String(x.id)===id);if(!a||Number(a.stock)<qty){toast('Insufficient Upper Article stock: '+(a?.name||'Unknown'));return null;}}
+  for(const [id,qty] of Object.entries(materialNeed)){const m=settings.upperMaterials.find(x=>String(x.id)===id);if(!m||Number(m.stock)<qty){toast('Insufficient Upper Material stock: '+(m?.name||'Unknown'));return null;}}
+  const savedPending=getUpperPendingForWorker(workerId),openingPending=savedPending?0:Number(document.getElementById('upperWorkerPending')?.value||0);
+  if(!Number.isInteger(openingPending)||openingPending<0){toast('Enter a non-negative whole opening Pending quantity.');return null;}
+  const totalItems=lines.reduce((n,l)=>n+l.qty,0),received=lines.reduce((n,l)=>n+l.receivedQty,0);
+  if((savedPending?.qty||0)+openingPending+totalItems-received<0){toast('Received quantity exceeds opening pending plus issued quantity.');return null;}
+  return {workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),lines,totalItems,openingPending,totalAmount:lines.reduce((n,l)=>n+l.labourExpense,0),articleNeed,materialNeed};
+}
+
+async function createUpperDistribution(){if(window.__upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a)a.stock-=l.qty;if(m)m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
   const cloudSaved=await saveCriticalCloudState();
   if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}
+  updateUpperWorkflowSummary();
   showUpperVoucher(record);
   }finally{window.__upperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function getUpperPendingForWorker(workerId){
-  const list=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId));
-  if(!list.length)return null;
-  const qty=Math.max(0,list.reduce((sum,p)=>sum+(Number.isFinite(Number(p.delta))?Number(p.delta):(Number(p.qty)||0)),0));
-  const last=list.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).pop();
-  return {workerId:String(workerId),workerName:last?.workerName||'',workerCategory:last?.workerCategory||'',qty};
+  const records=(settings.upperDistributions||[]).filter(r=>r.workflowVersion===1&&String(r.workerId)===String(workerId)),opening=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId));
+  if(!records.length&&!opening.length)return null;const last=records[records.length-1]||opening[opening.length-1];
+  return {workerId:String(workerId),workerName:last.workerName||'',workerCategory:last.workerCategory||'',qty:Math.max(0,upperPendingState(workerId).qty)};
 }
+
 function upperVoucherHtml(v){
+  if(v.workflowVersion!==1)return upperLegacyVoucherHtml(v);
+  const week=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date),pending=upperPendingState(v.workerId,settings.upperDistributions||[],v.id).qty,dt=new Date(v.date);
+  const row=(label,value,large=false)=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0;'+(large?'font-size:16px;font-weight:900;':'')+'"><span style="min-width:0;">'+esc(label)+'</span><span style="white-space:nowrap;">'+esc(String(value))+'</span></div>';
+  const rows=(v.lines||[]).flatMap(l=>[l.articleName?row('Article: '+l.articleName,l.qty+' ATOMS'):'',l.materialName?row('Material: '+l.materialName,l.qty+' ATOMS'):'']).join('');
+  return '<div style="font-weight:800;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">UPPER MAN VOUCHER #'+esc(v.voucherNo)+'</div><div style="text-align:center;">'+esc(dt.toLocaleDateString())+' &#8226; '+esc(fmtTime(dt))+'</div><div style="text-align:center;margin-top:3px;">'+esc(v.workerName)+' | UPPER MAN</div><hr style="margin:5px 0;"><div>TODAY ISSUED</div>'+rows+'<hr style="margin:5px 0;">'+row('Received',upperReceivedTotal(v)+' ATOMS')+row('Issued',v.totalItems+' ATOMS')+'<hr style="border:0;border-top:2px solid #000;margin:5px 0;">'+row('WORKER PENDING',pending+' ATOMS',true)+row('Weekly Received',week.receivedAtoms+' ATOMS')+row('Weekly Kharcha',upperMoney(week.kharcha))+'<hr style="margin:5px 0;"><div style="text-align:center;">'+esc(settings.phone?'Contact: '+settings.phone:'')+(settings.receiptFooter?'<br>'+esc(settings.receiptFooter):'')+'</div></div>';
+}
+function upperLegacyVoucherHtml(v){
   const s=settings,c=upperVoucherFieldStyle;
   const factory=c('factoryName'),title=c('title'),voucherNo=c('voucherNo'),date=c('date'),time=c('time'),worker=c('worker'),workerType=c('workerType'),am=c('articleMaterial'),qty=c('quantity'),labour=c('labourWeeklyKharcha'),summary=c('receivingSummary'),total=c('totalItems');
   const pending=getUpperPendingForWorker(v.workerId),weekSummary=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);
@@ -3824,7 +3874,8 @@ function upperWorkerWeekRecords(workerId,baseDate=new Date(),throughDate=null){
 function upperWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
   const records=upperWorkerWeekRecords(workerId,baseDate,throughDate);let articleAtoms=0,materialAtoms=0,totalAtoms=0,kharcha=0;
   records.forEach(r=>{totalAtoms+=Number(r.totalItems)||0;kharcha+=Number(r.totalAmount)||0;(r.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleName)articleAtoms+=q;if(l.materialName)materialAtoms+=q;});});
-  return {records,articleAtoms,materialAtoms,totalAtoms,kharcha};
+  let receivedAtoms=0,grossEarned=0;records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const received=Number(l.receivedQty)||0;receivedAtoms+=received;grossEarned+=received*(Number(l.rate)||0);}));
+  return {records,articleAtoms,materialAtoms,totalAtoms,kharcha,receivedAtoms,grossEarned,netEarned:grossEarned-kharcha};
 }
 function upperSummaryFilteredRecords(kind,forPrint=false){
   const mode=window.__upperSummaryFilterMode||'today',workerQ=String(window.__upperSummaryWorkerQ||'').trim().toLowerCase(),fromVal=window.__upperSummaryFrom||'',toVal=window.__upperSummaryTo||'';const now=new Date();let start=null,end=null;
@@ -3849,22 +3900,33 @@ function upperPendingWorkerAccounts(query=''){
     a.qty+=Number.isFinite(Number(p.delta))?Number(p.delta):(Number(p.qty)||0);
     if(String(p.date||'')>String(a.lastDate||''))a.lastDate=p.date||'';
   });
+  (settings.upperDistributions||[]).filter(r=>r.workflowVersion===1).forEach(r=>{const id=String(r.workerId);if(!map.has(id))map.set(id,{workerId:id,workerName:r.workerName,workerCategory:r.workerCategory,qty:0,lastDate:r.date});});
+  map.forEach(a=>a.qty=upperPendingState(a.workerId).qty);
   return Array.from(map.values()).map(a=>({...a,qty:Math.max(0,a.qty)})).filter(a=>!q||String(a.workerName).toLowerCase().includes(q)).sort((a,b)=>String(a.workerName).localeCompare(String(b.workerName)));
 }
+function upperPendingReportRows(mode='today',now=new Date()){
+  const end=new Date(now);end.setHours(24,0,0,0);let start=null;
+  if(mode==='today'){start=new Date(now);start.setHours(0,0,0,0);}
+  else if(mode==='week'){start=getUpperWorkWeekRange(now).start;}
+  else if(mode==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);}
+  const rows=new Map(upperPendingWorkerAccounts().map(a=>[String(a.workerId),{workerId:String(a.workerId),workerName:a.workerName,issued:0,received:0,pending:a.qty}]));
+  workers.filter(w=>String(w.category||'').trim().toUpperCase()==='UPPER MANS').forEach(w=>{const id=String(w.id);if(!rows.has(id))rows.set(id,{workerId:id,workerName:w.name||'',issued:0,received:0,pending:0});else rows.get(id).workerName=w.name||rows.get(id).workerName;});
+  (settings.upperDistributions||[]).forEach(r=>{const date=new Date(r.date);if(!Number.isFinite(date.getTime())||(start&&date<start)||date>=end)return;const id=String(r.workerId);if(!rows.has(id))rows.set(id,{workerId:id,workerName:r.workerName||'',issued:0,received:0,pending:getUpperPendingForWorker(id)?.qty||0});const row=rows.get(id);row.issued+=(r.lines||[]).reduce((n,l)=>n+(Number(l.qty)||0),0);row.received+=upperReceivedTotal(r);});
+  return [...rows.values()].sort((a,b)=>String(a.workerName).localeCompare(String(b.workerName)));
+}
+function upperPendingReportTable(rows){
+  const cell='padding:4px 5px;line-height:1.2;border-bottom:1px solid #ddd;',head=(text)=>'<th style="'+cell+'text-align:left;">'+text+'</th>';
+  return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+['#','Worker Name','Issued','Received','Pending'].map(head).join('')+'</tr></thead><tbody>'+rows.map((r,i)=>'<tr><td style="'+cell+'">'+(i+1)+'</td><td style="'+cell+'overflow-wrap:anywhere;">'+esc(r.workerName)+'</td>'+[r.issued,r.received,r.pending].map(n=>'<td style="'+cell+'text-align:right;">'+esc(String(n))+'</td>').join('')+'</tr>').join('')+'</tbody></table><div style="font-weight:900;margin-top:7px;">Total Pending: '+rows.reduce((n,r)=>n+r.pending,0)+' ATOMS</div>';
+}
 function pageUpperPending(){
-  normalizeUpperFeatureState();
-  const accounts=upperPendingWorkerAccounts(),total=accounts.reduce((s,a)=>s+a.qty,0);
-  return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;"><div><h2 class="page-title" style="margin-bottom:4px;">Pending</h2><div style="font-size:12px;color:var(--muted);">Manual Pending account only — it does not change stock, vouchers, weekly items or labour calculations.</div></div><button type="button" class="btn ghost" id="btnBackUpperPending">← Back to Distribute Upper</button></div>
-  <div class="card"><div class="label">CURRENT TOTAL PENDING</div><div style="font-size:26px;font-weight:900;">${total} ATOMS</div></div>
-  <div class="card"><label>Search Worker</label><input id="upperPendingSearch" type="text" placeholder="Search Worker" autocomplete="off"><div id="upperPendingPageList" style="margin-top:12px;"></div></div>
-  <div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;margin:12px auto 0;display:none;"></div>`;
+  const mode=window.__upperPendingReportMode||'today',labels={today:'Today',week:'This Week',month:'This Month',all:'All Time'};
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Issued / Received: '+labels[mode]+' | Pending: current balance | Quantities in ATOMS</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
 }
-function renderUpperPendingPageList(query=''){
-  const host=document.getElementById('upperPendingPageList');if(!host)return;
-  const list=upperPendingWorkerAccounts(query);
-  host.innerHTML=list.length?list.map(a=>`<div class="card" style="margin:8px 0;padding:10px;cursor:pointer;" data-upper-pending-worker="${esc(a.workerId)}"><div style="display:flex;justify-content:space-between;gap:10px;"><div><strong>${esc(a.workerName)}</strong> <span style="font-size:12px;color:var(--muted);">| ${esc(a.workerCategory||'')}</span></div><strong>${a.qty} ATOMS</strong></div><div style="font-size:12px;color:var(--muted);margin-top:5px;">Click to view Pending history / Edit / Delete</div></div>`).join(''):'<div class="empty">No matching Pending workers found.</div>';
-  document.querySelectorAll('[data-upper-pending-worker]').forEach(el=>el.onclick=()=>openUpperPendingWorkerDetail(el.dataset.upperPendingWorker));
+
+function renderUpperPendingPageList(){
+  const host=document.getElementById('upperPendingPageList');if(host)host.innerHTML=upperPendingReportTable(upperPendingReportRows(window.__upperPendingReportMode||'today'));
 }
+
 function openUpperPendingWorkerDetail(workerId){
   const rows=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   const account=getUpperPendingForWorker(workerId),name=account?.workerName||rows[0]?.workerName||'Worker';
@@ -3875,6 +3937,7 @@ function openUpperPendingWorkerDetail(workerId){
 }
 async function editUpperPendingEntry(id){
   const rec=(settings.upperPendingRecords||[]).find(p=>String(p.id)===String(id));if(!rec)return;
+  if(upperWorkflowStarted(rec.workerId)){toast('Pending now updates through Upper vouchers. Opening adjustments are locked.');return;}
   const old=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0),sign=old<0?-1:1;
   const raw=prompt(`Old Pending Entry: ${old>=0?'+':''}${old} Atoms\nEnter new whole Atoms for this entry:`,Math.abs(old));if(raw===null)return;
   const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}
@@ -3885,16 +3948,18 @@ async function editUpperPendingEntry(id){
 }
 async function deleteUpperPendingEntry(id){
   const rec=(settings.upperPendingRecords||[]).find(p=>String(p.id)===String(id));if(!rec)return;
+  if(upperWorkflowStarted(rec.workerId)){toast('Pending now updates through Upper vouchers. Opening adjustments are locked.');return;}
   const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);
   if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change. No voucher, stock, weekly item or expense calculation will change.`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.upperPendingRecords=settings.upperPendingRecords.filter(p=>String(p.id)!==String(id));audit('Upper Pending Deleted',`${rec.workerName}: ${d} ATOMS`);
   if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved to D1. Original Pending was restored.');return;}
   closeModal();render();toast('Pending entry deleted');
 }
-function buildUpperPendingPrintHtml(query=''){
-  const list=upperPendingWorkerAccounts(query),total=list.reduce((s,a)=>s+a.qty,0);
-  return `<div style="text-align:center;font-weight:900;font-size:18px;">Leather Right Shoes by Abid</div><div class="sub" style="font-weight:800;">CURRENT PENDING</div><hr>${list.map(a=>`<div class="rline"><strong>${esc(a.workerName)}</strong><strong>${a.qty} ATOMS</strong></div>`).join('')||'<div class="empty">No Pending found.</div>'}<hr><div class="rline"><strong>TOTAL:</strong><strong>${total} ATOMS</strong></div>`;
+function buildUpperPendingPrintHtml(){
+  const mode=window.__upperPendingReportMode||'today',label={today:'Today',week:'This Week',month:'This Month',all:'All Time'}[mode];
+  return '<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Issued / Received: '+label+' | Pending: current balance | ATOMS</div>'+upperPendingReportTable(upperPendingReportRows(mode));
 }
+
 function openUpperTodayItemsDetail(){
   const records=upperTodayRecords();
   const grouped={};
@@ -3989,7 +4054,8 @@ function openUpperDistributionEditor(id){
   const rows=(r.lines||[]).map(l=>`<div class="upper-edit-line" style="border:1px solid var(--line);padding:10px;border-radius:8px;margin-bottom:8px;">
     <label>Upper Article</label><select class="upper-edit-article"><option value="">None</option>${articleOptions.replace(`value="${esc(l.articleId)}"`,`value="${esc(l.articleId)}" selected`)}</select>
     <label>Upper Material</label><select class="upper-edit-material"><option value="">None</option>${materialOptions.replace(`value="${esc(l.materialId)}"`,`value="${esc(l.materialId)}" selected`)}</select>
-    <label>Quantity (Atoms)</label><input class="upper-edit-qty" type="number" min="1" step="1" value="${Number(l.qty)||0}">
+    <label>Issued Quantity (Atoms)</label><input class="upper-edit-qty" type="number" min="${r.workflowVersion===1?0:1}" step="1" value="${Number(l.qty)||0}">
+    ${r.workflowVersion===1?`<label>Received Quantity (Atoms)</label><input class="upper-edit-received" type="number" min="0" step="1" value="${Number(l.receivedQty)||0}">`:''}
     <label>Labour Weekly Kharcha</label><input class="upper-edit-expense" type="number" min="0" step="0.01" value="${Number(l.labourExpense??l.lineTotal)||0}">
   </div>`).join('');
   modal(`<h3 style="margin-top:0;">Edit Upper Voucher #${r.voucherNo}</h3><label>Worker</label><select id="upperEditWorker">${workerOptions}</select><div id="upperEditLines" style="margin-top:10px;">${rows}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperEdit">Save Changes</button><button type="button" class="btn ghost" id="cancelUpperEdit">Cancel</button></div>`);
@@ -4000,8 +4066,9 @@ async function saveUpperDistributionEdit(id){
   const r=(settings.upperDistributions||[]).find(x=>String(x.id)===String(id));if(!r)return;
   const worker=workers.find(w=>String(w.id)===String(document.getElementById('upperEditWorker')?.value)&&!w.archived&&String(w.category||'').trim().toUpperCase()==='UPPER MANS');
   const lines=[];const articleNeed={},materialNeed={};let invalid=false;
-  document.querySelectorAll('.upper-edit-line').forEach(row=>{const aId=row.querySelector('.upper-edit-article')?.value||'',mId=row.querySelector('.upper-edit-material')?.value||'',q=Math.max(0,parseInt(row.querySelector('.upper-edit-qty')?.value||'0',10)||0),e=Math.max(0,Number(row.querySelector('.upper-edit-expense')?.value||0)||0),a=(settings.upperArticles||[]).find(x=>String(x.id)===aId),m=(settings.upperMaterials||[]).find(x=>String(x.id)===mId);if((!a&&!m)||q<=0){invalid=true;return;}if(a)articleNeed[a.id]=(articleNeed[a.id]||0)+q;if(m)materialNeed[m.id]=(materialNeed[m.id]||0)+q;lines.push({articleId:a?a.id:'',articleName:a?a.name:'',materialId:m?m.id:'',materialName:m?m.name:'',qty:q,labourExpense:e,lineTotal:e});});
+  document.querySelectorAll('.upper-edit-line').forEach((row,index)=>{const aId=row.querySelector('.upper-edit-article')?.value||'',mId=row.querySelector('.upper-edit-material')?.value||'',q=Number(row.querySelector('.upper-edit-qty')?.value||0),receivedQty=Number(row.querySelector('.upper-edit-received')?.value||0),e=Math.max(0,Number(row.querySelector('.upper-edit-expense')?.value||0)||0),a=(settings.upperArticles||[]).find(x=>String(x.id)===aId),m=(settings.upperMaterials||[]).find(x=>String(x.id)===mId);if((!a&&!m)||!Number.isInteger(q)||q<0||(r.workflowVersion!==1&&q===0)||(r.workflowVersion===1&&(!Number.isInteger(receivedQty)||receivedQty<0||(receivedQty>0&&!a)||(q===0&&receivedQty===0&&e===0)))){invalid=true;return;}if(a)articleNeed[a.id]=(articleNeed[a.id]||0)+q;if(m)materialNeed[m.id]=(materialNeed[m.id]||0)+q;lines.push({articleId:a?a.id:'',articleName:a?a.name:'',materialId:m?m.id:'',materialName:m?m.name:'',qty:q,...(r.workflowVersion===1?{receivedQty,rate:String(r.lines[index]?.articleId)===String(aId)?Number(r.lines[index]?.rate)||0:Number(a?.rate)||0}:{}),labourExpense:e,lineTotal:e});});
   if(!worker||invalid||!lines.length){toast('Complete the Upper Voucher details');return;}
+  if(r.workflowVersion===1){const candidate={...r,workerId:String(worker.id),lines},records=settings.upperDistributions.map(x=>x===r?candidate:x);if(!upperPendingState(r.workerId,records).valid||!upperPendingState(worker.id,records).valid){toast('This edit would make Worker Pending negative. Correct dependent received vouchers first.');return;}}
   const oldArticle={},oldMaterial={};(r.lines||[]).forEach(l=>{oldArticle[l.articleId]=(oldArticle[l.articleId]||0)+Number(l.qty||0);oldMaterial[l.materialId]=(oldMaterial[l.materialId]||0)+Number(l.qty||0);});
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),oldItems=Number(r.totalItems)||0,oldAmount=Number(r.totalAmount)||0;
   Object.keys(oldArticle).forEach(id=>{const a=settings.upperArticles.find(x=>String(x.id)===String(id));if(a)a.stock+=oldArticle[id];});
@@ -4019,6 +4086,8 @@ function deleteUpperDistribution(id){
   const r=(settings.upperDistributions||[]).find(x=>String(x.id)===String(id));if(!r){toast('Upper voucher not found');return;}
   openConfirmModal(`Delete Upper Voucher #${r.voucherNo}? This will reverse its related Upper Article and Upper Material stock.`,async()=>{
     const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
+    if(!(settings.upperDistributions||[]).includes(r))return;
+    if(r.workflowVersion===1&&!upperPendingState(r.workerId,settings.upperDistributions.filter(x=>String(x.id)!==String(id))).valid){toast('This deletion would make Worker Pending negative. Reverse dependent received vouchers first.');return;}
     (r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
@@ -4037,17 +4106,28 @@ function showUpperVoucher(v,saved=true){
         ${upperVoucherHtml(v)}
       </div>
       <div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;">
-        <button type="button" class="btn brass" id="upperVoucherPrint">🖨️ Print</button><button type="button" class="btn ghost" id="upperVoucherCustomize">Customize Voucher</button>
+        <button type="button" class="btn brass" id="upperVoucherPrint">🖨️ Print</button>${v.workflowVersion===1?'':'<button type="button" class="btn ghost" id="upperVoucherCustomize">Customize Voucher</button>'}
         ${saved?`<button type="button" class="btn ghost" id="upperVoucherEdit">Edit</button><button type="button" class="btn red" id="upperVoucherDelete">Delete</button>`:''}
         <button type="button" class="btn ghost" id="upperVoucherClose">Close</button>
       </div>
     </div>`);
-  document.getElementById('upperVoucherPrint').onclick=()=>printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize').onclick=()=>openUpperVoucherCustomize(v);
+  document.getElementById('upperVoucherPrint').onclick=()=>printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(v));
   document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(v.id));
   document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(v.id));
   document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
 }
-function buildUpperVoucherCanvas(v){return new Promise(async resolve=>{const weekSummary=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);const width=640,padding=28,SCALE=3,logo=null,lineCount=16+(v.lines.length*4),pending=getUpperPendingForWorker(v.workerId),height=padding*2+100+lineCount*26,canvas=document.createElement('canvas');canvas.width=width*SCALE;canvas.height=height*SCALE;const ctx=canvas.getContext('2d');ctx.scale(SCALE,SCALE);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.fillStyle='#000';ctx.textBaseline='middle';let y=drawReceiptHeaderCanvas(ctx,width,padding,logo,'Leather Right Shoes by Abid','UPPER MAN RECEIVE VOUCHER');const drawKV=(a,b)=>{ctx.font='13px monospace';ctx.textAlign='left';ctx.fillText(String(a),padding,y+13);ctx.textAlign='right';ctx.fillText(String(b),width-padding,y+13);y+=26;},divider=()=>{ctx.strokeStyle='#999';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(padding,y+8);ctx.lineTo(width-padding,y+8);ctx.stroke();ctx.setLineDash([]);y+=16;};if(settings.address)drawKV('Address:',settings.address);if(settings.phone)drawKV('Ph:',settings.phone);divider();drawKV('Voucher #:',v.voucherNo);drawKV('Date:',v.date.slice(0,10));drawKV('Time:',fmtTime(new Date(v.date)));drawKV('Worker:',v.workerName);drawKV('Worker Type:',v.workerCategory||'—');divider();v.lines.forEach(l=>{if(l.articleName){ctx.font='bold 13px monospace';ctx.textAlign='left';ctx.fillText(String(l.articleName),padding,y+13);y+=22;}if(l.materialName){ctx.font='bold 13px monospace';ctx.textAlign='left';ctx.fillText(String(l.materialName),padding,y+13);y+=22;}ctx.font='12px monospace';ctx.textAlign='left';ctx.fillText('Quantity: '+String(l.qty)+' Atoms',padding,y+13);y+=22;});divider();ctx.font='bold 14px monospace';ctx.textAlign='center';ctx.fillText('LABOUR KHARCHA',width/2,y+13);y+=26;drawKV('CURRENT:',upperMoney(Number(v.totalAmount)||0));drawKV('WEEKLY TOTAL:',upperMoney(weekSummary.kharcha));if(pending)drawKV('Pending:',String(pending.workerName||v.workerName)+' — '+String(pending.qty)+' ATOMS');divider();ctx.font='bold 14px monospace';ctx.textAlign='center';ctx.fillText('RECEIVING SUMMARY',width/2,y+13);y+=26;drawKV('TOTAL ARTICLE ATOMS:',weekSummary.articleAtoms);drawKV('TOTAL MATERIAL ATOMS:',weekSummary.materialAtoms);drawKV('WEEKLY TOTAL ATOMS:',weekSummary.totalAtoms);if(settings.receiptFooter){ctx.font='12px monospace';ctx.textAlign='center';ctx.fillText(settings.receiptFooter,width/2,y+13);y+=26;}if(settings.thankYou){ctx.font='12px monospace';ctx.textAlign='center';ctx.fillText(settings.thankYou,width/2,y+13);}resolve(canvas);});}
+async function buildUpperDailyVoucherCanvas(v){
+  const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[],week=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);let height=pad;
+  const add=(text,size=21,align='left',right='')=>{ctx.font='900 '+size+'px monospace';const limit=width-pad*2-(right?ctx.measureText(right).width+20:0);let line='';for(const char of String(text)){if(ctx.measureText(line+char).width>limit&&line){items.push({text:line,size,align,right,y:height});height+=size+5;line='';right='';}line+=char;}items.push({text:line,size,align,right,y:height});height+=size+5;};
+  const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
+  add('LEATHER RIGHT SHOES BY ABID',31,'center');add('UPPER MAN VOUCHER #'+v.voucherNo,23,'center');add(new Date(v.date).toLocaleDateString()+' / '+fmtTime(new Date(v.date)),20,'center');add(v.workerName+' | UPPER MAN',23,'center');rule();add('TODAY ISSUED');
+  (v.lines||[]).forEach(l=>{if(l.articleName)add('Article: '+l.articleName,21,'left',l.qty+' ATOMS');if(l.materialName)add('Material: '+l.materialName,21,'left',l.qty+' ATOMS');});rule();
+  add('Received',21,'left',upperReceivedTotal(v)+' ATOMS');add('Issued',21,'left',v.totalItems+' ATOMS');rule();add('WORKER PENDING',25,'left',upperPendingState(v.workerId,settings.upperDistributions||[],v.id).qty+' ATOMS');add('Weekly Received',21,'left',week.receivedAtoms+' ATOMS');add('Weekly Kharcha',21,'left',upperMoney(week.kharcha));rule();
+  if(settings.phone)add('Contact: '+settings.phone,20,'center');if(settings.receiptFooter)add(settings.receiptFooter,20,'center');
+  canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
+  items.forEach(item=>{if(item.rule){ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});return canvas;
+}
+function buildUpperVoucherCanvas(v){if(v.workflowVersion===1)return buildUpperDailyVoucherCanvas(v);return new Promise(async resolve=>{const weekSummary=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);const width=640,padding=28,SCALE=3,logo=null,lineCount=16+(v.lines.length*4),pending=getUpperPendingForWorker(v.workerId),height=padding*2+100+lineCount*26,canvas=document.createElement('canvas');canvas.width=width*SCALE;canvas.height=height*SCALE;const ctx=canvas.getContext('2d');ctx.scale(SCALE,SCALE);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.fillStyle='#000';ctx.textBaseline='middle';let y=drawReceiptHeaderCanvas(ctx,width,padding,logo,'Leather Right Shoes by Abid','UPPER MAN RECEIVE VOUCHER');const drawKV=(a,b)=>{ctx.font='13px monospace';ctx.textAlign='left';ctx.fillText(String(a),padding,y+13);ctx.textAlign='right';ctx.fillText(String(b),width-padding,y+13);y+=26;},divider=()=>{ctx.strokeStyle='#999';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(padding,y+8);ctx.lineTo(width-padding,y+8);ctx.stroke();ctx.setLineDash([]);y+=16;};if(settings.address)drawKV('Address:',settings.address);if(settings.phone)drawKV('Ph:',settings.phone);divider();drawKV('Voucher #:',v.voucherNo);drawKV('Date:',v.date.slice(0,10));drawKV('Time:',fmtTime(new Date(v.date)));drawKV('Worker:',v.workerName);drawKV('Worker Type:',v.workerCategory||'—');divider();v.lines.forEach(l=>{if(l.articleName){ctx.font='bold 13px monospace';ctx.textAlign='left';ctx.fillText(String(l.articleName),padding,y+13);y+=22;}if(l.materialName){ctx.font='bold 13px monospace';ctx.textAlign='left';ctx.fillText(String(l.materialName),padding,y+13);y+=22;}ctx.font='12px monospace';ctx.textAlign='left';ctx.fillText('Quantity: '+String(l.qty)+' Atoms',padding,y+13);y+=22;});divider();ctx.font='bold 14px monospace';ctx.textAlign='center';ctx.fillText('LABOUR KHARCHA',width/2,y+13);y+=26;drawKV('CURRENT:',upperMoney(Number(v.totalAmount)||0));drawKV('WEEKLY TOTAL:',upperMoney(weekSummary.kharcha));if(pending)drawKV('Pending:',String(pending.workerName||v.workerName)+' — '+String(pending.qty)+' ATOMS');divider();ctx.font='bold 14px monospace';ctx.textAlign='center';ctx.fillText('RECEIVING SUMMARY',width/2,y+13);y+=26;drawKV('TOTAL ARTICLE ATOMS:',weekSummary.articleAtoms);drawKV('TOTAL MATERIAL ATOMS:',weekSummary.materialAtoms);drawKV('WEEKLY TOTAL ATOMS:',weekSummary.totalAtoms);if(settings.receiptFooter){ctx.font='12px monospace';ctx.textAlign='center';ctx.fillText(settings.receiptFooter,width/2,y+13);y+=26;}if(settings.thankYou){ctx.font='12px monospace';ctx.textAlign='center';ctx.fillText(settings.thankYou,width/2,y+13);}resolve(canvas);});}
 
 async function shareUpperVoucherImage(v){try{const canvas=await buildUpperVoucherCanvas(v);canvas.toBlob(async blob=>{if(!blob){toast('Could not generate voucher image');return;}await shareImageToWhatsApp(blob,`upper-voucher-${v.voucherNo}.png`,`Upper Voucher #${v.voucherNo}`);},'image/png');}catch(e){toast('Could not generate voucher image');}}
 async function shareUpperVoucherToWorker(v){const worker=workers.find(w=>String(w.id)===String(v.workerId));if(!worker){toast('Worker not found');return;}const phone=normalizeWhatsAppNumber(worker.whatsapp||worker.phone);if(!phone){toast('Worker WhatsApp number is not saved');return;}try{const canvas=await buildUpperVoucherCanvas(v);canvas.toBlob(async blob=>{if(!blob){toast('Could not generate voucher image');return;}await shareImageToWhatsApp(blob,`upper-voucher-${v.voucherNo}-worker.png`,`Upper Voucher #${v.voucherNo} — ${worker.name}`,phone);},'image/png');}catch(e){toast('Could not generate voucher image');}}
@@ -4179,6 +4259,25 @@ function pageWorkerHistory(workerId){
   `;
 }
 
+const productionArticleChoices=new Map();
+function workerDefaultArticleModules(worker){const category=String(worker?.category||'').trim().toUpperCase(),hay=[category,...(Array.isArray(worker?.tags)?worker.tags:[])].join(' ').toUpperCase(),modules=[];if(category==='UPPER MANS')modules.push('upper');if(hay.includes('BATAM')||hay.includes('BOTTOM'))modules.push('batam');if(hay.includes('FINISHED MAN')||hay.includes('FINISH MAN')||hay.includes('FINISHING'))modules.push('finished');return modules}
+function workerDefaultArticleList(module){return ({upper:settings.upperArticles,batam:settings.batamMansProductionArticles,finished:settings.finishedMansProductionArticles}[module])||[]}
+function workerDefaultArticle(worker,module){const id=worker?.defaultArticleIds?.[module];return id?workerDefaultArticleList(module).find(a=>String(a.id)===String(id))||null:null}
+function productionArticleChoiceKey(worker,module){const d=new Date();return JSON.stringify([module,String(worker?.id||''),d.getFullYear(),d.getMonth(),d.getDate()])}
+function productionArticleChoice(worker,module){if(!worker)return null;const key=productionArticleChoiceKey(worker,module);if(productionArticleChoices.has(key)){const id=productionArticleChoices.get(key);return workerDefaultArticleList(module).find(a=>String(a.id)===String(id))||null}return workerDefaultArticle(worker,module)}
+function rememberProductionArticleChoice(workerId,module,id){const worker=workers.find(w=>String(w.id)===String(workerId));if(worker)productionArticleChoices.set(productionArticleChoiceKey(worker,module),String(id||''))}
+function workerDefaultArticleCard(worker,module){const name=workerDefaultArticle(worker,module)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Article: '+esc(name)+'">Default Article: '+esc(name)+'</div>'}
+const upperMaterialChoices=new Map();
+function upperDefaultMaterial(worker){const id=worker?.upperDefaultMaterialId;return id?(settings.upperMaterials||[]).find(m=>String(m.id)===String(id))||null:null}
+function upperMaterialChoice(worker){if(!worker)return null;const key=productionArticleChoiceKey(worker,'upper-material');return upperMaterialChoices.has(key)?(settings.upperMaterials||[]).find(m=>String(m.id)===upperMaterialChoices.get(key))||null:upperDefaultMaterial(worker)}
+function rememberUpperMaterialChoice(id){const worker=workers.find(w=>String(w.id)===String(upperSelWorker));if(worker)upperMaterialChoices.set(productionArticleChoiceKey(worker,'upper-material'),String(id||''))}
+function upperDefaultMaterialCard(worker){const name=upperDefaultMaterial(worker)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
+const bfMaterialChoices=new Map();
+function bfMaterialList(module){return settings[module+'MansProductionMaterials']||[]}
+function bfDefaultMaterial(worker,module){const id=worker?.[module+'DefaultMaterialId'];return id?bfMaterialList(module).find(m=>String(m.id)===String(id))||null:null}
+function bfMaterialChoice(worker,module){if(!worker)return null;const key=productionArticleChoiceKey(worker,module+'-material');return bfMaterialChoices.has(key)?bfMaterialList(module).find(m=>String(m.id)===bfMaterialChoices.get(key))||null:bfDefaultMaterial(worker,module)}
+function bfDefaultMaterialCard(worker,module){const name=bfDefaultMaterial(worker,module)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
+function bindBfMaterialChoice(module,prefix,selectedId){const input=document.getElementById(prefix+'DistMaterial'),workerInput=document.getElementById(prefix+'DistWorker');const workerId=()=>workerInput?.value||selectedId;workerInput?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.delete(productionArticleChoiceKey(w,module+'-material'));if(input)input.value=bfDefaultMaterial(w,module)?.id||'';});input?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.set(productionArticleChoiceKey(w,module+'-material'),input.value);});}
 function openWorkerModal(id){
   const w = id? workers.find(x=>x.id===id): null;
   let pendingPhoto = w? (w.photo||'') : '';
@@ -4201,6 +4300,9 @@ function openWorkerModal(id){
   modal(`
     <h3>${w?'Edit Worker':'Add New Worker'}</h3>
     ${chunkArray(fieldBlocks, 3).map(group=>`<div class="row">${group.join('')}</div>`).join('')}
+    <div id="workerDefaultArticles"></div>
+    <div id="workerDefaultMaterial"></div>
+    <div id="workerBfDefaultMaterials"></div>
     <div style="font-size:11px;color:var(--muted);margin:-6px 0 8px;">یہ نمبر اسی Worker کی Receipt WhatsApp پر بھیجنے کے لیے استعمال ہوگا۔</div>
     <label>Worker Photo</label>
     <input type="file" id="wPhoto" accept="image/*">
@@ -4211,6 +4313,15 @@ function openWorkerModal(id){
       <button class="btn ghost" id="wCancel">Cancel</button>
     </div>
   `);
+  let pendingMaterial=String(w?.upperDefaultMaterialId||'');
+  const refreshWorkerMaterial=()=>{const current=document.getElementById('wDefaultMaterial');if(current)pendingMaterial=current.value;const category=document.getElementById('wCategory')?.value??w?.category??'',list=settings.upperMaterials||[],missing=pendingMaterial&&!list.some(m=>String(m.id)===pendingMaterial);document.getElementById('workerDefaultMaterial').innerHTML=String(category).trim().toUpperCase()==='UPPER MANS'?'<label>Default Material</label><select id="wDefaultMaterial"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(pendingMaterial)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===pendingMaterial?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>':'';};
+  refreshWorkerMaterial();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerMaterial);
+  const pendingBfMaterials={batam:String(w?.batamDefaultMaterialId||''),finished:String(w?.finishedDefaultMaterialId||'')};
+  const refreshBfMaterials=()=>{document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerDefaultArticleModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
+  refreshBfMaterials();document.getElementById('wCategory')?.addEventListener('change',refreshBfMaterials);
+  const pendingDefaults={...(w?.defaultArticleIds||{})};
+  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-default-article]').forEach(el=>pendingDefaults[el.dataset.workerDefaultArticle]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerDefaultArticleModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=workerDefaultArticleList(module),id=String(pendingDefaults[module]||''),missing=id&&!list.some(a=>String(a.id)===id);return '<div><label>Default Article'+(modules.length>1?' ('+module+')':'')+'</label><select data-worker-default-article="'+module+'"><option value="">No default article</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable article</option>':'')+list.map(a=>'<option value="'+esc(a.id)+'" '+(String(a.id)===id?'selected':'')+'>'+esc(a.name||'')+'</option>').join('')+'</select></div>'}).join('');};
+  refreshWorkerDefaults();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerDefaults);
   const applyWorkerCrop=async cropped=>{if(!cropped)return;try{pendingPhoto=await compressImageDataUrl(cropped,700,.78);const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview zoomable" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
   const cropWorkerPhoto=()=>{if(pendingPhoto)openImageCropper(pendingPhoto,applyWorkerCrop);else{const file=document.getElementById('wPhoto').files?.[0];if(file)openImageCropper(file,applyWorkerCrop);else toast('پہلے Worker کی تصویر منتخب کریں');}};
   // Worker-name autocomplete: search the existing Workers data directly.
@@ -4260,10 +4371,17 @@ function openWorkerModal(id){
     if(!name){ toast('Please enter a name'); return; }
     const customFields = {};
     document.querySelectorAll('.wCustomField').forEach(inp=>{ customFields[inp.dataset.colid] = inp.value.trim(); });
+    const defaultArticleUpdates={};let invalidDefault=false;document.querySelectorAll('[data-worker-default-article]').forEach(el=>{const module=el.dataset.workerDefaultArticle,value=el.value,old=String(w?.defaultArticleIds?.[module]||'');if(value!==old){if(value&&!workerDefaultArticleList(module).some(a=>String(a.id)===value))invalidDefault=true;else defaultArticleUpdates[module]=value;}});if(invalidDefault){toast('Select a valid Default Article');return;}
+    const materialSelect=document.getElementById('wDefaultMaterial'),materialValue=materialSelect?.value||'',materialChanged=!!materialSelect&&materialValue!==String(w?.upperDefaultMaterialId||'');
+    if(materialChanged&&materialValue&&!(settings.upperMaterials||[]).some(m=>String(m.id)===materialValue)){toast('Select a valid Default Material');return;}
+    const bfMaterialUpdates={};let invalidBfMaterial=false;document.querySelectorAll('[data-bf-default-material]').forEach(el=>{const module=el.dataset.bfDefaultMaterial,value=el.value,key=module+'DefaultMaterialId';if(value!==String(w?.[key]||'')){if(value&&!bfMaterialList(module).some(m=>String(m.id)===value))invalidBfMaterial=true;else bfMaterialUpdates[key]=value;}});if(invalidBfMaterial){toast('Select a valid Default Material');return;}
     const beforeWorkerSave=captureCloudState();
     if(saveBtn) saveBtn.disabled=true;
     if(w){ w.name=name; w.category=category; w.phone=phone; w.whatsapp=whatsapp; w.photo=pendingPhoto; w.customFields=customFields; }
     else { workers.push({id:uid(), name, category, phone, whatsapp, photo:pendingPhoto, customFields}); }
+    if(Object.keys(defaultArticleUpdates).length){const target=w||workers[workers.length-1];target.defaultArticleIds={...(target.defaultArticleIds||{}),...defaultArticleUpdates};}
+    if(materialChanged)(w||workers[workers.length-1]).upperDefaultMaterialId=materialValue;
+    Object.assign(w||workers[workers.length-1],bfMaterialUpdates);
     const workerSaved=await saveCriticalCloudState();
     if(!workerSaved){
       applyCloudState(beforeWorkerSave);
@@ -8643,6 +8761,7 @@ async function saveUpperPending(){
   const workerId=String(document.getElementById('upperPendingWorker')?.value||''),raw=String(document.getElementById('upperPendingQty')?.value||'').trim(),qty=Number(raw),action=String(document.getElementById('upperPendingAction')?.value||'add');
   const worker=workers.find(w=>String(w.id)===workerId&&!w.archived&&String(w.category||'').trim().toUpperCase()==='UPPER MANS');
   if(!worker){toast('Please select an Upper Man Worker');return;}
+  if(upperWorkflowStarted(workerId)){toast('Pending now updates automatically through Upper vouchers.');return;}
   if(!Number.isInteger(qty)||qty<=0){toast('Please enter positive whole Pending Atoms');return;}
   const current=getUpperPendingForWorker(workerId)?.qty||0,delta=action==='minus'?-qty:qty;
   if(delta<0&&qty>current){toast(`Current Pending is ${current} Atoms. You cannot minus ${qty}.`);return;}
@@ -9155,13 +9274,13 @@ function pageBatamMansMaterialAccounts(){
 
  <div class="card bm-material-worker-card">
    <div class="bm-worker-heading"><h3>Select Batam Man</h3><span>Total Batam Mans: <strong>${ws.length}</strong></span></div>
-   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(batamMaterialSelectedWorker)===String(w.id)?'selected':''}" data-bm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-bm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Batam Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(batamMaterialSelectedWorker)===String(w.id)?'selected':''}" data-bm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-bm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div>${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Batam Man worker found.</div>'}</div>
  </div>
 
  <div class="card bm-material-entry-card">
    <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Batam Man above first</span>'}</div>
    <div class="bm-material-entry-row">
-    <div><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'batam')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
     <div><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"></div>
     <div><label>Notes (Optional)</label><input id="bmDistNotes" placeholder="Notes"></div>
     <button class="btn brass" id="bmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
@@ -9303,14 +9422,14 @@ function pageBatamMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Batam Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'batam')}${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
  <div class="card bm-entry-card">
    <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Batam Man above first</span>'}</div>
    <div class="bm-entry-row">
-     <div class="bm-field bm-article-field"><label>Production Article</label><select id="bmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div>
+     <div class="bm-field bm-article-field"><label>Production Article</label><select id="bmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}" ${String(productionArticleChoice(selected,'batam')?.id||'')===String(a.id)?'selected':''}>${esc(a.name||'')}</option>`).join('')}</select></div>
      <div class="bm-field bm-qty-field"><label>Quantity / Items</label><input id="bmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
      <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="bmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
      <div class="bm-field bm-pending-field"><label>Pending</label><input id="bmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
@@ -9887,13 +10006,13 @@ function pageFinishedMansMaterialAccounts(){
 
  <div class="card bm-material-worker-card">
    <div class="bm-worker-heading"><h3>Select Finished Man</h3><span>Total Finished Mans: <strong>${ws.length}</strong></span></div>
-   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(finishedMaterialSelectedWorker)===String(w.id)?'selected':''}" data-fm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-fm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Finished Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${ws.length?ws.map(w=>`<button type="button" class="pick-box bm-worker-box ${String(finishedMaterialSelectedWorker)===String(w.id)?'selected':''}" data-fm-material-worker="${esc(w.id)}"><div class="entity-photo ${w.photo?'zoomable':''}" data-fm-material-worker-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div><div class="bm-worker-name">${esc(w.name||'')}</div>${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`).join(''):'<div class="empty">No active Finished Man worker found.</div>'}</div>
  </div>
 
  <div class="card bm-material-entry-card">
    <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Finished Man above first</span>'}</div>
    <div class="bm-material-entry-row">
-    <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'finished')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
     <div><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"></div>
     <div><label>Notes (Optional)</label><input id="fmDistNotes" placeholder="Notes"></div>
     <button class="btn brass" id="fmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
@@ -10035,14 +10154,14 @@ function pageFinishedMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Finished Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div><div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'finished')}${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
  <div class="card bm-entry-card">
    <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Finished Man above first</span>'}</div>
    <div class="bm-entry-row">
-     <div class="bm-field bm-article-field"><label>Production Article</label><select id="fmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}">${esc(a.name||'')}</option>`).join('')}</select></div>
+     <div class="bm-field bm-article-field"><label>Production Article</label><select id="fmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}" ${String(productionArticleChoice(selected,'finished')?.id||'')===String(a.id)?'selected':''}>${esc(a.name||'')}</option>`).join('')}</select></div>
      <div class="bm-field bm-qty-field"><label>Quantity / Items</label><input id="fmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
      <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="fmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
      <div class="bm-field bm-pending-field"><label>Pending</label><input id="fmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
@@ -10262,7 +10381,7 @@ function attachPageHandlers(){
   document.getElementById('btnAddUpperMaterialRow')?.addEventListener('click',()=>addUpperDistributionRow('material'));
   if(document.getElementById('upperDistributionRows')) bindUpperDistributionRows();
   document.getElementById('btnCreateUpperVoucher')?.addEventListener('click',createUpperDistribution);   document.getElementById('btnSaveUpperPending')?.addEventListener('click',saveUpperPending);
-  document.getElementById('upperPendingCard')?.addEventListener('click',()=>goto('upperPending'));
+  document.getElementById('upperPendingCard')?.addEventListener('click',()=>{window.__upperPendingReportMode='today';goto('upperPending');});
   document.getElementById('upperTodayArticlesCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperArticleSummary');});
   document.getElementById('upperTodayMaterialsCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperMaterialSummary');});
   document.getElementById('upperWeeklyKharchaCard')?.addEventListener('click',()=>goto('upperWeeklyKharcha'));
@@ -10286,12 +10405,11 @@ function attachPageHandlers(){
   document.getElementById('upperLabourPrint')?.addEventListener('click',()=>printElement('upperLabourPrintArea'));
   document.querySelectorAll('[data-upper-labour-voucher]').forEach(b=>b.addEventListener('click',()=>{const r=(settings.upperDistributions||[]).find(x=>String(x.id)===String(b.dataset.upperLabourVoucher));if(r)showUpperVoucher(r);}));
   document.getElementById('btnBackUpperPending')?.addEventListener('click',()=>goto('distributeUpper'));
-  document.getElementById('upperPendingSearch')?.addEventListener('input',e=>renderUpperPendingPageList(e.target.value));
+  document.querySelectorAll('[data-upper-pending-period]').forEach(button=>button.addEventListener('click',()=>{window.__upperPendingReportMode=button.dataset.upperPendingPeriod;render();}));
   document.getElementById('btnPrintUpperPending')?.addEventListener('click',()=>{
-    const q=document.getElementById('upperPendingSearch')?.value||'';
     const host=document.getElementById('upperPendingPrintArea');
     if(!host)return;
-    host.innerHTML=buildUpperPendingPrintHtml(q);
+    host.innerHTML=buildUpperPendingPrintHtml();
     host.style.display='block';
     printElement('upperPendingPrintArea');
     setTimeout(()=>{host.style.display='none';},1000);
@@ -10343,13 +10461,15 @@ function attachPageHandlers(){
   if(currentPage==='batamMansPending')renderBatamPendingPageList();
   document.querySelectorAll('[data-batam-pickworker]').forEach(card=>card.addEventListener('click',e=>{
     if(e.target.closest('[data-batam-photo]'))return;
-    batamMansSelectedWorker=card.dataset.batamPickworker;render();
+    batamMansSelectedWorker=card.dataset.batamPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));render();
   }));
   document.querySelectorAll('[data-batam-photo]').forEach(photo=>photo.addEventListener('click',e=>{
     e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.batamPhoto));if(w?.photo)openImageLightbox(w.photo);
   }));
+  document.getElementById('bmArticle')?.addEventListener('change',e=>rememberProductionArticleChoice(batamMansSelectedWorker,'batam',e.target.value));
   document.getElementById('bmAddDraft')?.addEventListener('click',addBatamDraftItem);
   document.getElementById('bmAddMaterialDraft')?.addEventListener('click',addBatamDraftMaterial);
+  bindBfMaterialChoice('batam','bm',batamMaterialSelectedWorker);
   document.querySelectorAll('[data-bm-remove-material]').forEach(b=>b.addEventListener('click',()=>removeBatamDraftMaterial(b.dataset.bmRemoveMaterial)));
   document.querySelectorAll('[data-bm-remove-draft]').forEach(b=>b.addEventListener('click',()=>removeBatamDraftItem(b.dataset.bmRemoveDraft)));
   document.getElementById('bmCreateVoucher')?.addEventListener('click',createBatamProductionVoucher);
@@ -10359,7 +10479,7 @@ function attachPageHandlers(){
   document.getElementById('bmCustomTo')?.addEventListener('change',e=>{batamMansProductionCustomTo=e.target.value||'';render();});
   document.querySelectorAll('[data-bm-material-filter]').forEach(b=>b.addEventListener('click',()=>{batamMaterialFilter=b.dataset.bmMaterialFilter;render();}));
   document.getElementById('bmMaterialSearch')?.addEventListener('input',e=>{batamMaterialSearch=e.target.value||'';render();const x=document.getElementById('bmMaterialSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
-  document.querySelectorAll('[data-bm-material-worker]').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('[data-bm-material-worker-photo]'))return;batamMaterialSelectedWorker=b.dataset.bmMaterialWorker;render();}));
+  document.querySelectorAll('[data-bm-material-worker]').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('[data-bm-material-worker-photo]'))return;batamMaterialSelectedWorker=b.dataset.bmMaterialWorker;bfMaterialChoices.delete(productionArticleChoiceKey({id:batamMaterialSelectedWorker},'batam-material'));render();}));
   document.querySelectorAll('[data-bm-material-worker-photo]').forEach(p=>p.addEventListener('click',e=>{e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(p.dataset.bmMaterialWorkerPhoto));if(w?.photo)openImageLightbox(w.photo);}));
   document.querySelectorAll('[data-bm-material-account]').forEach(b=>b.addEventListener('click',()=>openBatamMaterialAccount(b.dataset.bmMaterialAccount)));
   document.getElementById('bmProductionSearch')?.addEventListener('input',e=>{batamMansProductionSearch=e.target.value;render();const x=document.getElementById('bmProductionSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
@@ -10407,13 +10527,15 @@ function attachPageHandlers(){
   if(currentPage==='finishedMansPending')renderFinishedPendingPageList();
   document.querySelectorAll('[data-finished-pickworker]').forEach(card=>card.addEventListener('click',e=>{
     if(e.target.closest('[data-finished-photo]'))return;
-    finishedMansSelectedWorker=card.dataset.finishedPickworker;render();
+    finishedMansSelectedWorker=card.dataset.finishedPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));render();
   }));
   document.querySelectorAll('[data-finished-photo]').forEach(photo=>photo.addEventListener('click',e=>{
     e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.finishedPhoto));if(w?.photo)openImageLightbox(w.photo);
   }));
+  document.getElementById('fmArticle')?.addEventListener('change',e=>rememberProductionArticleChoice(finishedMansSelectedWorker,'finished',e.target.value));
   document.getElementById('fmAddDraft')?.addEventListener('click',addFinishedDraftItem);
   document.getElementById('fmAddMaterialDraft')?.addEventListener('click',addFinishedDraftMaterial);
+  bindBfMaterialChoice('finished','fm',finishedMaterialSelectedWorker);
   document.querySelectorAll('[data-fm-remove-material]').forEach(b=>b.addEventListener('click',()=>removeFinishedDraftMaterial(b.dataset.fmRemoveMaterial)));
   document.querySelectorAll('[data-fm-remove-draft]').forEach(b=>b.addEventListener('click',()=>removeFinishedDraftItem(b.dataset.fmRemoveDraft)));
   document.getElementById('fmCreateVoucher')?.addEventListener('click',createFinishedProductionVoucher);
@@ -10423,7 +10545,7 @@ function attachPageHandlers(){
   document.getElementById('fmCustomTo')?.addEventListener('change',e=>{finishedMansProductionCustomTo=e.target.value||'';render();});
   document.querySelectorAll('[data-fm-material-filter]').forEach(b=>b.addEventListener('click',()=>{finishedMaterialFilter=b.dataset.fmMaterialFilter;render();}));
   document.getElementById('fmMaterialSearch')?.addEventListener('input',e=>{finishedMaterialSearch=e.target.value||'';render();const x=document.getElementById('fmMaterialSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
-  document.querySelectorAll('[data-fm-material-worker]').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('[data-fm-material-worker-photo]'))return;finishedMaterialSelectedWorker=b.dataset.fmMaterialWorker;render();}));
+  document.querySelectorAll('[data-fm-material-worker]').forEach(b=>b.addEventListener('click',e=>{if(e.target.closest('[data-fm-material-worker-photo]'))return;finishedMaterialSelectedWorker=b.dataset.fmMaterialWorker;bfMaterialChoices.delete(productionArticleChoiceKey({id:finishedMaterialSelectedWorker},'finished-material'));render();}));
   document.querySelectorAll('[data-fm-material-worker-photo]').forEach(p=>p.addEventListener('click',e=>{e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(p.dataset.fmMaterialWorkerPhoto));if(w?.photo)openImageLightbox(w.photo);}));
   document.querySelectorAll('[data-fm-material-account]').forEach(b=>b.addEventListener('click',()=>openFinishedMaterialAccount(b.dataset.fmMaterialAccount)));
   document.getElementById('fmProductionSearch')?.addEventListener('input',e=>{finishedMansProductionSearch=e.target.value;render();const x=document.getElementById('fmProductionSearch');if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length);}});
