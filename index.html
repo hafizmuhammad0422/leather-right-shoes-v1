@@ -1206,6 +1206,7 @@
 </style>
 <style id="batam-completed-badge-v7">
 .bm-completed-badge{position:absolute;top:3px;right:3px;background:#1f9d55;color:#fff;border-radius:999px;padding:2px 5px;font-size:9px;font-weight:800;line-height:1.2;z-index:3;white-space:nowrap}
+.bm-worker-box>.production-completed-tick{position:absolute;top:1px;right:2px;width:8px;height:9px;padding:0;background:none;border:0;color:#16833b;font-size:9px;font-weight:900;line-height:9px;pointer-events:none;}
 </style>
 <style id="batam-final-points-v8">
 .bm-worker-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
@@ -1272,15 +1273,20 @@
 .upper-compact-v15 .bm-worker-box .entity-photo{width:42px!important;height:42px!important;font-size:15px!important}
 .upper-compact-v15 .bm-worker-name{font-size:9px!important;margin-top:3px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .upper-compact-v15 .bm-worker-baqi{font-size:8px!important}
+.bm-worker-box[data-upper-pickworker] .bm-worker-name,
+.bm-worker-box[data-batam-pickworker] .bm-worker-name,
+.bm-worker-box[data-finished-pickworker] .bm-worker-name,
+.bm-worker-box[data-bm-material-worker] .bm-worker-name,
+.bm-worker-box[data-fm-material-worker] .bm-worker-name{flex-shrink:0!important}
 .upper-compact-search{height:28px!important;min-height:28px!important;width:220px!important;font-size:10px!important}
 .upper-entry-card{padding:8px!important}
 .upper-entry-card .bm-entry-head{margin-bottom:5px!important}
-.upper-one-row{display:grid!important;grid-template-columns:minmax(110px,1fr) minmax(110px,1fr) minmax(75px,.6fr) minmax(75px,.6fr) minmax(85px,.65fr) minmax(90px,.7fr) auto minmax(120px,.8fr)!important;gap:5px!important;align-items:end!important}
+.upper-one-row{display:grid!important;grid-template-columns:minmax(110px,1fr) minmax(110px,1fr) minmax(75px,.6fr) minmax(75px,.6fr) minmax(85px,.65fr) minmax(85px,.65fr) minmax(90px,.7fr) auto minmax(120px,.8fr)!important;gap:5px!important;align-items:end!important}
 .upper-one-row label{font-size:9px!important;margin-bottom:2px!important}
 .upper-one-row input{height:30px!important;min-height:30px!important;font-size:10px!important;padding:4px 6px!important}
 .upper-one-row .btn{height:30px!important;min-height:30px!important;padding:3px 7px!important;font-size:9px!important;white-space:nowrap}
 .upper-one-row .upper-row-stock-info:empty{display:none}
-@media(max-width:1100px){.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(10,minmax(72px,1fr))!important;overflow-x:auto}.upper-one-row{grid-template-columns:110px 110px 80px 80px 90px 90px auto 115px!important;overflow-x:auto}}
+@media(max-width:1100px){.upper-compact-v15 .bm-worker-grid{grid-template-columns:repeat(10,minmax(72px,1fr))!important;overflow-x:auto}.upper-one-row{grid-template-columns:110px 110px 80px 80px 90px 90px 90px auto 115px!important;overflow-x:auto}}
 </style>
 <style id="upper-mans-production-v16">
 .upper-compact-v15>.bm-page-title{margin-bottom:4px!important}
@@ -2679,6 +2685,8 @@ function render(){
   else if(currentPage==='upperArticles') main.innerHTML = pageUpperArticles();
   else if(currentPage==='upperMaterials') main.innerHTML = pageUpperMaterials();
   else if(currentPage==='upperPending') main.innerHTML = pageUpperPending();
+  else if(currentPage==='upperIssuedReport') main.innerHTML = pageUpperMovementReport('issued');
+  else if(currentPage==='upperReceivedReport') main.innerHTML = pageUpperMovementReport('received');
   else if(currentPage==='upperWeeklyKharcha') main.innerHTML = pageUpperWeeklyKharcha();
   else if(currentPage==='upperArticleSummary') main.innerHTML = pageUpperDistributionSummary('article');
   else if(currentPage==='upperMaterialSummary') main.innerHTML = pageUpperDistributionSummary('material');
@@ -3684,26 +3692,26 @@ function pageDistributeUpper(){
   const allUpperRecords=(settings.upperDistributions||[]).filter(record=>{const distributedAt=new Date(record.date);return distributedAt>=localDayStart&&distributedAt<nextLocalDayStart;});
   let totalArticle=0,totalMaterial=0;
   allUpperRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)totalArticle+=q;if(l.materialId||l.materialName)totalMaterial+=q;}));
-  const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0);
+  const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaAdjustmentTotal('upper');
   const pendingTotal=upperPendingWorkerAccounts().reduce((n,a)=>n+(Number(a.qty)||0),0);
   const totalBaqi=upperWorkers.reduce((n,w)=>n+(Number(getWorkerSummaryAmount(w,'baqi'))||0),0);
   const backDisabled=navHistory.length?'':'disabled';
   return `<div class="bm-compact-page upper-compact-v15">
     <div class="card bm-main-compact-row upper-main-compact-row">
-      <button type="button" class="btn ghost small bm-top-card" id="btnBackPage" ${backDisabled}>← Back</button>
-      <button type="button" class="btn ghost small bm-top-card" id="btnBackDashboard">← Back to Dashboard</button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayIssuedCard"><span>Today Issued</span><strong>${upperMovementRows('issued','today',upperNow).reduce((n,r)=>n+r.quantity,0)} ATOMS</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayReceivedCard"><span>Today Received</span><strong>${upperMovementRows('received','today',upperNow).reduce((n,r)=>n+r.quantity,0)} ATOMS</strong></button>
+      <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard" style="display:flex;flex-direction:column;gap:2px;"><span>Today Pending</span><strong>${pendingTotal} ATOMS</strong></button>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList">👞 Upper Articles</button>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperMaterialList">📦 Upper Materials</button>
-      <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard" style="display:flex;flex-direction:column;gap:2px;"><span>Today Pending</span><strong>${pendingTotal} ATOMS</strong></button>
       <button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>Weekly Kharcha</span><strong>${upperMoney(weeklyAmount)}</strong></button>
-      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>Today Articles Distributed</span><strong>${totalArticle} ATOMS</strong></button>
-      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayMaterialsCard"><span>Today Materials Distributed</span><strong>${totalMaterial} ATOMS</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayMaterialsCard"><span>Today Materials Issued</span><strong>${totalMaterial} ATOMS</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>Today Articles Issued</span><strong>${totalArticle} ATOMS</strong></button>
     </div>
 
     <div class="card bm-worker-card">
       <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
       <div class="bm-worker-grid" id="upperWorkerCards">
-        ${upperWorkers.length?upperCards.map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'upper')}${upperDefaultMaterialCard(w)}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
+        ${upperWorkers.length?upperCards.map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'upper')}${upperDefaultMaterialCard(w)}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
       ${selectedWorker?`<div class="bm-selected-line">Selected: <strong>${esc(selectedWorker.name||'')}</strong></div>`:''}
     </div>
@@ -3711,10 +3719,12 @@ function pageDistributeUpper(){
     <div class="card bm-entry-card upper-entry-card">
       <div class="bm-entry-head"><h3>Enter Upper Distribution Details</h3>${selectedWorker?`<span>Worker: <strong>${esc(selectedWorker.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Upper Man above first</span>'}</div>
       <!-- Upper pending is displayed in the entry row. -->
+      ${productionWorkerControls(selectedWorker,'upper')}
       <div id="upperDistributionRows" class="upper-compact-rows">${articles.length||materials.length?`<div class="upper-distribution-row upper-one-row" data-upper-row>
         <div class="upper-search-wrap"><label>Upper Article</label><input type="text" class="upper-article-search" data-selected-id="${esc(productionArticleChoice(selectedWorker,'upper')?.id||'')}" value="${esc(productionArticleChoice(selectedWorker,'upper')?.name||'')}" placeholder="Select article..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>
         <div class="upper-search-wrap"><label>Upper Material</label><input type="text" class="upper-material-search" data-selected-id="${esc(upperMaterialChoice(selectedWorker)?.id||'')}" value="${esc(upperMaterialChoice(selectedWorker)?.name||'')}" placeholder="Select material..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>
         <div><label>Issued Quantity</label><input class="upper-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Received Quantity</label><input class="upper-received-qty" type="number" min="0" step="1" placeholder="Atoms"></div>
+        <div><label>Total Items</label><input id="upperWorkerTotalItems" readonly value="${productionWorkerCompletedItems('upper',selectedWorker?.id)} ATOMS"></div>
         <div><label>Worker Pending</label><input id="upperWorkerPending" type="number" min="0" step="1" value="${selectedWorker?Number(getUpperPendingForWorker(selectedWorker.id)?.qty)||0:0}" ${!selectedWorker?'disabled':getUpperPendingForWorker(selectedWorker.id)?'readonly':''} placeholder="Opening (once)"></div>
         <div><label>Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div>
         <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn ghost small" id="btnAddUpperArticleRow">+ Article</button></div>
@@ -3735,12 +3745,14 @@ function setUpperWorkerSelection(workerId){
   const worker=workers.find(w=>String(w.id)===String(workerId)&&!w.archived&&String(w.category||'').trim().toUpperCase()==='UPPER MANS');
   upperSelWorker=worker?String(worker.id):null;
   if(worker)productionArticleChoices.delete(productionArticleChoiceKey(worker,'upper'));
+  if(worker)productionDefaultSelections.delete(productionArticleChoiceKey(worker,'upper'));
   if(worker)upperMaterialChoices.delete(productionArticleChoiceKey(worker,'upper-material'));
   bindUpperDistributionRows();
   render();
 }
 function getUpperSelectedWorkerId(){return upperSelWorker||'';}
 function setUpperRowSelection(row,kind,id){
+  if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
   const list=kind==='article'?(settings.upperArticles||[]):(settings.upperMaterials||[]);
   const item=list.find(x=>String(x.id)===String(id));
   const input=row.querySelector(kind==='article'?'.upper-article-search':'.upper-material-search');
@@ -3782,7 +3794,14 @@ function upperPendingState(workerId,records=settings.upperDistributions||[],thro
   for(const event of events){qty+=event.delta;if(event.id&&qty<0)valid=false;if(throughId&&String(event.id)===String(throughId))break;}
   return {qty,valid:valid&&qty>=0};
 }
+function productionWorkerCompletedItems(module,workerId){
+  if(workerId===null||workerId===undefined||workerId==='')return 0;
+  if(module==='upper')return (settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(workerId)).reduce((n,r)=>n+upperReceivedTotal(r),0);
+  const entries=module==='batam'?settings.batamMansProduction:module==='finished'?settings.finishedMansProduction:[];
+  return (entries||[]).filter(e=>String(e.workerId)===String(workerId)&&!e.deletedAt&&e.deleted!==true&&e.verifiedQty!==null&&e.verifiedQty!==undefined&&e.verifiedQty!=='').reduce((n,e)=>n+Math.max(0,Number(e.verifiedQty)||0),0);
+}
 function updateUpperWorkflowSummary(){
+  const totalItems=document.getElementById('upperWorkerTotalItems');if(totalItems)totalItems.value=productionWorkerCompletedItems('upper',getUpperSelectedWorkerId())+' ATOMS';
   const field=document.getElementById('upperWorkerPending');if(!field)return;
   const id=String(getUpperSelectedWorkerId()||''),saved=id?getUpperPendingForWorker(id):null;
   if(field.dataset.workerId!==id||saved)field.value=String(saved?.qty||0);
@@ -3874,6 +3893,7 @@ function upperWorkerWeekRecords(workerId,baseDate=new Date(),throughDate=null){
 function upperWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
   const records=upperWorkerWeekRecords(workerId,baseDate,throughDate);let articleAtoms=0,materialAtoms=0,totalAtoms=0,kharcha=0;
   records.forEach(r=>{totalAtoms+=Number(r.totalItems)||0;kharcha+=Number(r.totalAmount)||0;(r.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleName)articleAtoms+=q;if(l.materialName)materialAtoms+=q;});});
+  kharcha+=productionKharchaAdjustmentTotal('upper',workerId,baseDate,throughDate);
   let receivedAtoms=0,grossEarned=0;records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const received=Number(l.receivedQty)||0;receivedAtoms+=received;grossEarned+=received*(Number(l.rate)||0);}));
   return {records,articleAtoms,materialAtoms,totalAtoms,kharcha,receivedAtoms,grossEarned,netEarned:grossEarned-kharcha};
 }
@@ -3888,7 +3908,7 @@ function upperSummaryFilteredRecords(kind,forPrint=false){
 function pageUpperDistributionSummary(kind){
   const isArticle=kind==='article',title=isArticle?'Total Article Atoms':'Total Material Atoms',rows=upperSummaryFilteredRecords(kind),total=rows.reduce((n,x)=>n+x.qty,0),mode=window.__upperSummaryFilterMode||'today';
   const articleBoxes=isArticle?(()=>{const grouped={};rows.forEach(x=>{const k=String(x.name||'Unknown');grouped[k]=(grouped[k]||0)+(Number(x.qty)||0);});const boxes=Object.entries(grouped).sort((a,b)=>a[0].localeCompare(b[0])).map(([name,qty])=>`<div class="card upper-distribution-summary__summary-box"><div class="label">${esc(name)}</div><div class="upper-distribution-summary__value">${qty} ATOMS</div></div>`).join('');return `${boxes||'<div class="card upper-distribution-summary__summary-box"><div class="empty">No Article records for this filter.</div></div>'}<div class="card upper-distribution-summary__summary-box"><div class="label">TOTAL ARTICLES</div><div class="upper-distribution-summary__value">${total} ATOMS</div></div>`;})():'';
-  return `<div class="upper-distribution-summary"><div class="upper-distribution-summary__heading"><h2 class="page-title" style="margin:0;">${title}</h2><button class="btn ghost" id="upperSummaryBack">← Back to Distribute Upper</button></div><div class="card"><div class="upper-distribution-summary__filters"><div><label>Date Filter</label><select id="upperSummaryMode"><option value="today" ${mode==='today'?'selected':''}>Today</option><option value="week" ${mode==='week'?'selected':''}>This Week (Saturday–Thursday)</option><option value="month" ${mode==='month'?'selected':''}>This Month</option><option value="custom" ${mode==='custom'?'selected':''}>Custom Date</option></select></div><div><label>From</label><input id="upperSummaryFrom" type="date" value="${esc(window.__upperSummaryFrom||'')}"></div><div><label>To</label><input id="upperSummaryTo" type="date" value="${esc(window.__upperSummaryTo||'')}"></div><div class="upper-distribution-summary__worker"><label>Worker Search</label><input id="upperSummaryWorker" value="${esc(window.__upperSummaryWorkerQ||'')}" placeholder="Search Worker"></div><button class="btn brass" id="upperSummaryPrint">🖨️ Print</button></div></div><div class="upper-distribution-summary__summary-row">${articleBoxes}<div class="card upper-distribution-summary__summary-box"><div class="label">${title.toUpperCase()}</div><div class="upper-distribution-summary__value">${total} ATOMS</div></div></div><div class="card" id="upperSummaryPrintArea"><table><thead><tr><th>Date</th><th>Worker</th><th>${isArticle?'Article':'Material'}</th><th>Atoms</th><th>Voucher #</th></tr></thead><tbody>${rows.length?rows.map(x=>`<tr><td>${esc(String(x.date).slice(0,10))}</td><td>${esc(x.workerName)}</td><td>${esc(x.name)}</td><td>${x.qty}</td><td><button class="btn ghost small" data-upper-summary-voucher="${esc(x.id)}">#${x.voucherNo}</button></td></tr>`).join(''):`<tr><td colspan="5" class="empty">No matching records.</td></tr>`}</tbody></table><div style="font-weight:900;margin-top:12px;">TOTAL: ${total} ATOMS</div></div>${isArticle?'<div hidden><div id="upperArticleAggregatePrintArea" class="receipt-paper">'+upperArticleReportHtml()+'</div></div>':''}</div>`;
+  return `<div class="upper-distribution-summary"><div class="upper-distribution-summary__heading"><h2 class="page-title" style="margin:0;">${title}</h2><button class="btn ghost" id="upperSummaryBack">← Back to Distribute Upper</button></div><div class="card"><div class="upper-distribution-summary__filters"><div><label>Date Filter</label><select id="upperSummaryMode"><option value="today" ${mode==='today'?'selected':''}>Today</option><option value="week" ${mode==='week'?'selected':''}>This Week (Saturday–Thursday)</option><option value="month" ${mode==='month'?'selected':''}>This Month</option><option value="custom" ${mode==='custom'?'selected':''}>Custom Date</option></select></div><div><label>From</label><input id="upperSummaryFrom" type="date" value="${esc(window.__upperSummaryFrom||'')}"></div><div><label>To</label><input id="upperSummaryTo" type="date" value="${esc(window.__upperSummaryTo||'')}"></div><div class="upper-distribution-summary__worker"><label>Worker Search</label><input id="upperSummaryWorker" value="${esc(window.__upperSummaryWorkerQ||'')}" placeholder="Search Worker"></div><button class="btn brass" id="upperSummaryPrint">🖨️ Print</button></div></div><div class="upper-distribution-summary__summary-row">${articleBoxes}<div class="card upper-distribution-summary__summary-box"><div class="label">${title.toUpperCase()}</div><div class="upper-distribution-summary__value">${total} ATOMS</div></div></div><div class="card" id="upperSummaryPrintArea">${upperReportBoldPrintStyle('upperSummaryPrintArea')}${!isArticle?'<div class="upper-report-print-heading"><h3>'+esc(settings.factoryName||'LEATHER RIGHT SHOES BY ABID')+'</h3><div>Upper Materials Issued</div><div>'+esc(productionReportPeriodLabel(mode,window.__upperSummaryFrom,window.__upperSummaryTo))+'</div></div>':''}<table><thead><tr><th>Date</th><th>Worker</th><th>${isArticle?'Article':'Material'}</th><th>Atoms</th><th>Voucher #</th></tr></thead><tbody>${rows.length?rows.map(x=>`<tr><td>${esc(String(x.date).slice(0,10))}</td><td>${esc(x.workerName)}</td><td>${esc(x.name)}</td><td>${x.qty}</td><td><button class="btn ghost small" data-upper-summary-voucher="${esc(x.id)}">#${x.voucherNo}</button></td></tr>`).join(''):`<tr><td colspan="5" class="empty">No matching records.</td></tr>`}</tbody></table><div style="font-weight:900;margin-top:12px;">TOTAL: ${total} ATOMS</div></div>${isArticle?'<div hidden><div id="upperArticleAggregatePrintArea" class="receipt-paper"><style>#upperArticleAggregatePrintArea,#upperArticleAggregatePrintArea *{font-weight:800!important;}#upperArticleAggregatePrintArea h3{font-weight:900!important;}</style>'+upperArticleReportHtml()+'</div></div>':''}</div>`;
 }
 function refreshUpperSummaryPage(){render();}
 function upperPendingWorkerAccounts(query=''){
@@ -3912,15 +3932,32 @@ function upperPendingReportRows(mode='today',now=new Date()){
   const rows=new Map(upperPendingWorkerAccounts().map(a=>[String(a.workerId),{workerId:String(a.workerId),workerName:a.workerName,issued:0,received:0,pending:a.qty}]));
   workers.filter(w=>String(w.category||'').trim().toUpperCase()==='UPPER MANS').forEach(w=>{const id=String(w.id);if(!rows.has(id))rows.set(id,{workerId:id,workerName:w.name||'',issued:0,received:0,pending:0});else rows.get(id).workerName=w.name||rows.get(id).workerName;});
   (settings.upperDistributions||[]).forEach(r=>{const date=new Date(r.date);if(!Number.isFinite(date.getTime())||(start&&date<start)||date>=end)return;const id=String(r.workerId);if(!rows.has(id))rows.set(id,{workerId:id,workerName:r.workerName||'',issued:0,received:0,pending:getUpperPendingForWorker(id)?.qty||0});const row=rows.get(id);row.issued+=(r.lines||[]).reduce((n,l)=>n+(Number(l.qty)||0),0);row.received+=upperReceivedTotal(r);});
-  return [...rows.values()].sort((a,b)=>String(a.workerName).localeCompare(String(b.workerName)));
+  return [...rows.values()].filter(row=>row.pending>0).sort((a,b)=>String(a.workerName).localeCompare(String(b.workerName)));
 }
+function upperReportBoldPrintStyle(id){return '<style>@media screen{#'+id+' .upper-report-print-heading{display:none;}}@media print{#'+id+',#'+id+' *{font-weight:800!important;}#'+id+' h3{font-weight:900!important;}}</style>';}
 function upperPendingReportTable(rows){
-  const cell='padding:4px 5px;line-height:1.2;border-bottom:1px solid #ddd;',head=(text)=>'<th style="'+cell+'text-align:left;">'+text+'</th>';
-  return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+['#','Worker Name','Issued','Received','Pending'].map(head).join('')+'</tr></thead><tbody>'+rows.map((r,i)=>'<tr><td style="'+cell+'">'+(i+1)+'</td><td style="'+cell+'overflow-wrap:anywhere;">'+esc(r.workerName)+'</td>'+[r.issued,r.received,r.pending].map(n=>'<td style="'+cell+'text-align:right;">'+esc(String(n))+'</td>').join('')+'</tr>').join('')+'</tbody></table><div style="font-weight:900;margin-top:7px;">Total Pending: '+rows.reduce((n,r)=>n+r.pending,0)+' ATOMS</div>';
+  const cell='padding:4px 5px;line-height:1.2;border-bottom:1px solid #ddd;';
+  return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+['#','Worker Name','Pending'].map((text,i)=>'<th style="'+cell+'text-align:'+(i===2?'center':'left')+';">'+text+'</th>').join('')+'</tr></thead><tbody>'+rows.map((r,i)=>'<tr><td style="'+cell+'text-align:left;">'+(i+1)+'</td><td style="'+cell+'text-align:left;overflow-wrap:anywhere;">'+esc(r.workerName)+'</td><td style="'+cell+'text-align:center;">'+esc(String(r.pending))+'</td></tr>').join('')+'</tbody></table><div style="font-weight:900;margin-top:7px;">Total Pending: '+rows.reduce((n,r)=>n+r.pending,0)+' ATOMS</div>';
+}
+
+function upperMovementRows(kind,mode='today',now=new Date()){
+  const end=new Date(now);end.setHours(24,0,0,0);let start=null;
+  if(mode==='today'){start=new Date(now);start.setHours(0,0,0,0);}else if(mode==='week')start=getUpperWorkWeekRange(now).start;else if(mode==='month')start=new Date(now.getFullYear(),now.getMonth(),1);
+  const rows=[];(settings.upperDistributions||[]).forEach(v=>{const date=new Date(v.date);if(!Number.isFinite(date.getTime())||(start&&date<start)||date>=end)return;
+    (v.lines||[]).forEach(line=>{const quantity=kind==='received'?(v.workflowVersion===1?Number(line.receivedQty)||0:0):Number(line.qty)||0;if(quantity<=0)return;rows.push({workerName:v.workerName||'',article:line.articleName||'(Material only)',quantity});});
+  });return rows;
+}
+function upperMovementReportHtml(kind,mode,rows){
+  const label=kind==='received'?'Received':'Issued',period={today:'Today',week:'This Week',month:'This Month',all:'All Time'}[mode],cell='padding:4px 5px;line-height:1.2;border-bottom:1px solid #ddd;';
+  return upperReportBoldPrintStyle('upperMovementPrintArea')+'<h3 style="margin:0 0 5px;">Upper '+label+' Report</h3><div style="font-size:11px;margin-bottom:6px;">'+period+' | ATOMS</div><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;"><thead><tr>'+['#','Worker Name','Article',label+' Quantity'].map((title,i)=>'<th style="'+cell+'text-align:'+(i<2?'left':'center')+';'+(i===0?'width:7%;':'')+'">'+title+'</th>').join('')+'</tr></thead><tbody>'+rows.map((r,i)=>'<tr><td style="'+cell+'text-align:left;">'+(i+1)+'</td><td style="'+cell+'text-align:left;overflow-wrap:anywhere;">'+esc(r.workerName)+'</td><td style="'+cell+'text-align:center;overflow-wrap:anywhere;">'+esc(r.article)+'</td><td style="'+cell+'text-align:center;">'+r.quantity+'</td></tr>').join('')+'</tbody></table><div style="font-weight:900;margin-top:7px;">Total '+label+' Quantity: '+rows.reduce((n,r)=>n+r.quantity,0)+' ATOMS</div>';
+}
+function pageUpperMovementReport(kind){
+  const mode=window.__upperMovementMode||'today',labels={today:'Today',week:'This Week',month:'This Month',all:'All Time'},rows=upperMovementRows(kind,mode);
+  return '<div style="margin-bottom:7px;"><button type="button" class="btn ghost small" id="upperMovementBack">Back to Upper Man</button></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:8px;">'+Object.entries(labels).map(([key,label])=>'<button class="btn '+(key===mode?'brass':'ghost')+' small" data-upper-movement-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="upperMovementPrint">Print</button></div><div id="upperMovementPrintArea">'+upperMovementReportHtml(kind,mode,rows)+'</div></div>';
 }
 function pageUpperPending(){
   const mode=window.__upperPendingReportMode||'today',labels={today:'Today',week:'This Week',month:'This Month',all:'All Time'};
-  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Issued / Received: '+labels[mode]+' | Pending: current balance | Quantities in ATOMS</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Period: '+labels[mode]+' | Pending: current balance | ATOMS</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
 }
 
 function renderUpperPendingPageList(){
@@ -3957,7 +3994,7 @@ async function deleteUpperPendingEntry(id){
 }
 function buildUpperPendingPrintHtml(){
   const mode=window.__upperPendingReportMode||'today',label={today:'Today',week:'This Week',month:'This Month',all:'All Time'}[mode];
-  return '<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Issued / Received: '+label+' | Pending: current balance | ATOMS</div>'+upperPendingReportTable(upperPendingReportRows(mode));
+  return upperReportBoldPrintStyle('upperPendingPrintArea')+'<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Period: '+label+' | Pending: current balance | ATOMS</div>'+upperPendingReportTable(upperPendingReportRows(mode));
 }
 
 function openUpperTodayItemsDetail(){
@@ -3983,8 +4020,9 @@ function upperLabourFilteredRecords(){
   if(mode==='week'){({start,end}=getUpperWorkWeekRange(now));}else if(mode==='previousWeek'){const cur=getUpperWorkWeekRange(now);start=new Date(cur.start);start.setDate(start.getDate()-7);end=new Date(cur.start);}else if(mode==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);end=new Date(now.getFullYear(),now.getMonth()+1,1);}else if(mode==='custom'&&fromVal&&toVal){start=new Date(fromVal+'T00:00:00');end=new Date(toVal+'T00:00:00');end.setDate(end.getDate()+1);}
   return (settings.upperDistributions||[]).filter(r=>{const dt=new Date(r.date);if(start&&dt<start)return false;if(end&&dt>=end)return false;if((mode==='week'||mode==='previousWeek')&&dt.getDay()===5)return false;if(workerQ&&!String(r.workerName||'').toLowerCase().includes(workerQ))return false;return true;}).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 }
+function upperKharchaReportRecords(){return [...upperWeeklyRecords(),...productionKharchaRows('upper').map(r=>({id:r.id,workerName:workers.find(w=>String(w.id)===String(r.workerId))?.name||'Worker',date:r.date,totalAmount:Number(r.delta)||0,kharchaAdjustment:true}))];}
 function pageUpperWeeklyKharcha(){
- const records=upperWeeklyRecords(),total=records.reduce((s,r)=>s+(Number(r.totalAmount)||0),0);
+ const records=upperKharchaReportRecords(),total=records.reduce((s,r)=>s+(Number(r.totalAmount)||0),0);
  return `<div class="bm-compact-page"><h2 class="page-title bm-page-title">Upper Mans — Weekly Kharcha</h2>
  <div class="card upper-detail-top-v17">
   <button class="btn ghost small" id="upperWeeklyBack">← Back</button>
@@ -3992,10 +4030,10 @@ function pageUpperWeeklyKharcha(){
   <input id="upperWeeklyPageSearch" placeholder="Search Worker">
   <button class="btn brass small" id="upperWeeklyPrint">🖨 Print</button>
  </div>
- <div class="card upper-detail-list-v16">${records.length?records.map(r=>`<div class="upper-detail-row-v17" data-upper-weekly-row="${esc(r.id||'')}"><strong>${esc(r.workerName||'Worker')}</strong><span>${esc(String(r.date||r.createdAt||'').slice(0,10))}</span><b>${upperMoney(Number(r.totalAmount)||0)}</b><div><button class="btn blue small" data-upper-weekly-edit="${esc(r.id||'')}">Edit</button> <button class="btn red small" data-upper-weekly-delete="${esc(r.id||'')}">Delete</button></div></div>`).join(''):'<div class="empty">No weekly kharcha records.</div>'}</div></div>`;
+ <div class="card upper-detail-list-v16">${records.length?records.map(r=>`<div class="upper-detail-row-v17" data-upper-weekly-row="${esc(r.id||'')}"><strong>${esc(r.workerName||'Worker')}</strong><span>${esc(String(r.date||r.createdAt||'').slice(0,10))}</span><b>${upperMoney(Number(r.totalAmount)||0)}</b>${r.kharchaAdjustment?'<span>Adjustment</span>':`<div><button class="btn blue small" data-upper-weekly-edit="${esc(r.id||'')}">Edit</button> <button class="btn red small" data-upper-weekly-delete="${esc(r.id||'')}">Delete</button></div>`}</div>`).join(''):'<div class="empty">No weekly kharcha records.</div>'}</div></div>`;
 }
 function upperWeeklyKharchaPrintHtml(){
- const records=upperWeeklyRecords(),total=records.reduce((s,r)=>s+(Number(r.totalAmount)||0),0);
+ const records=upperKharchaReportRecords(),total=records.reduce((s,r)=>s+(Number(r.totalAmount)||0),0);
  return `<div class="receipt-paper" style="width:80mm;margin:auto;"><div class="brand-head"><h3 style="font-size:18px;">${esc(settings.factoryName||'Leather Ride Shoes by Haji')}</h3></div>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub" style="font-weight:800;">UPPER MANS — WEEKLY KHARCHA</div><hr>${records.map(r=>`<div class="rline"><span>${esc(r.workerName||'Worker')} • ${esc(String(r.date||r.createdAt||'').slice(0,10))}</span><strong>${upperMoney(Number(r.totalAmount)||0)}</strong></div>`).join('')}<hr><div class="rline" style="font-weight:900;"><span>WEEKLY TOTAL</span><span>${upperMoney(total)}</span></div></div>`;
 }
 async function editUpperWeeklyKharcha(id){
@@ -4260,13 +4298,60 @@ function pageWorkerHistory(workerId){
 }
 
 const productionArticleChoices=new Map();
+const productionDefaultSelections=new Map();
+let productionKharchaSaving=false;
+function workerDefaultArticleIds(worker,module){const ids=worker?.defaultArticleLists?.[module];return Array.isArray(ids)?[...new Set(ids.map(String))]:(worker?.defaultArticleIds?.[module]?[String(worker.defaultArticleIds[module])]:[]);}
+function workerDefaultArticles(worker,module){return workerDefaultArticleIds(worker,module).map(id=>workerDefaultArticleList(module).find(a=>String(a.id)===id)).filter(Boolean);}
+function productionDefaultSelection(worker,module){const key=productionArticleChoiceKey(worker,module);if(!productionDefaultSelections.has(key))productionDefaultSelections.set(key,new Set(workerDefaultArticles(worker,module).map(a=>String(a.id))));return productionDefaultSelections.get(key);}
+function productionKharchaRows(module,workerId=null,baseDate=new Date(),throughDate=null){const start=getUpperWorkWeekRange(baseDate).start,end=new Date(start);end.setDate(end.getDate()+7);const through=throughDate?new Date(throughDate):null;return (settings.productionKharchaAdjustments||[]).filter(r=>{const date=new Date(r.date);return r.module===module&&(workerId===null||String(r.workerId)===String(workerId))&&date>=start&&date<end&&(!through||date<=through);});}
+function productionKharchaAdjustmentTotal(module,workerId=null,baseDate=new Date(),throughDate=null){return productionKharchaRows(module,workerId,baseDate,throughDate).reduce((n,r)=>n+(Number(r.delta)||0),0);}
+function productionWorkerKharcha(module,workerId){return ({upper:upperWorkerWeekSummary,batam:batamWorkerWeekSummary,finished:finishedWorkerWeekSummary}[module])(workerId).kharcha;}
+function productionWorkerControls(worker,module){if(!worker)return '';const selected=productionDefaultSelection(worker,module);return '<div data-production-controls="'+module+'" data-worker-id="'+esc(worker.id)+'" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0;"><div style="position:relative;padding:6px 48px 6px 8px;border:1px solid var(--line);border-radius:6px;"><span style="font-size:11px;">Weekly Kharcha</span><strong data-worker-kharcha style="display:block;">'+upperMoney(productionWorkerKharcha(module,worker.id))+'</strong><button type="button" class="btn ghost small" data-kharcha-edit style="position:absolute;top:2px;right:2px;padding:2px 4px;font-size:9px;">+ / Edit</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;">'+workerDefaultArticles(worker,module).map(a=>'<label style="margin:0;font-size:11px;"><input type="checkbox" style="width:auto;" data-daily-default="'+esc(a.id)+'" '+(selected.has(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>').join('')+'</div></div>';}
+async function saveProductionKharchaAdjustment(module,workerId,delta){
+  if(productionKharchaSaving||!['upper','batam','finished'].includes(module)||!workers.some(w=>String(w.id)===String(workerId)&&workerDefaultArticleModules(w).includes(module))||!Number.isFinite(delta)||delta===0)return false;
+  delta=Math.round(delta*100)/100;if(!delta||productionWorkerKharcha(module,workerId)+delta<-.001){toast('Subtraction cannot exceed current Weekly Kharcha.');return false;}
+  productionKharchaSaving=true;const existed=Object.prototype.hasOwnProperty.call(settings,'productionKharchaAdjustments'),previous=(settings.productionKharchaAdjustments||[]).slice();
+  try{settings.productionKharchaAdjustments=[...previous,{id:uid(),module,workerId:String(workerId),date:new Date().toISOString(),delta}];if(!await saveCriticalCloudState())throw new Error('Kharcha was not saved');return true;}
+  catch(error){if(existed)settings.productionKharchaAdjustments=previous;else delete settings.productionKharchaAdjustments;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Kharcha was not saved. Previous amount restored.');return false;}
+  finally{productionKharchaSaving=false;}
+}
+function openProductionKharchaEdit(module,workerId){const w=workers.find(w=>String(w.id)===String(workerId));if(!w)return;modal('<h3>'+esc(w.name)+' - Weekly Kharcha</h3><div>Current: '+upperMoney(productionWorkerKharcha(module,workerId))+'</div><label>Action</label><select id="productionKharchaAction"><option value="add">Add amount</option><option value="subtract">Subtract amount</option></select><label>Amount</label><input id="productionKharchaAmount" type="number" min="0.01" step="0.01"><div class="modal-actions"><button class="btn brass" id="productionKharchaSave">Save</button><button class="btn ghost" id="productionKharchaCancel">Cancel</button></div>');document.getElementById('productionKharchaCancel').onclick=closeModal;document.getElementById('productionKharchaSave').onclick=async()=>{const amount=Number(document.getElementById('productionKharchaAmount').value),subtract=document.getElementById('productionKharchaAction').value==='subtract';if(!Number.isFinite(amount)||amount<=0){toast('Enter a positive amount.');return;}const button=document.getElementById('productionKharchaSave');button.disabled=true;if(await saveProductionKharchaAdjustment(module,workerId,subtract?-amount:amount)){closeModal();document.querySelectorAll('[data-production-controls]').forEach(host=>{const value=host.querySelector('[data-worker-kharcha]');if(value)value.textContent=upperMoney(productionWorkerKharcha(host.dataset.productionControls,host.dataset.workerId));});const total=document.querySelector('#upperWeeklyKharchaCard strong');if(total)total.textContent=upperMoney(upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaAdjustmentTotal('upper'));}else button.disabled=false;};}
+
+function productionDefaultRowContext(module){
+  if(module==='upper')return {host:document.getElementById('upperDistributionRows'),primary:document.querySelector('.upper-distribution-row'),rows:()=>[...document.querySelectorAll('.upper-distribution-row')],field:row=>row?.querySelector('.upper-article-search'),value:field=>field?.dataset.selectedId||'',add:()=>addUpperDistributionRow('article'),quantities:'.upper-qty,.upper-received-qty'};
+  const prefix=module==='batam'?'bm':'fm',primary=document.getElementById(prefix+'Article')?.closest('.bm-entry-row'),host=document.getElementById(prefix+'ExtraItemRows');
+  return {host,primary,rows:()=>[primary,...(host?.querySelectorAll('.'+prefix+'-extra-item-row')||[])].filter(Boolean),field:row=>row?.querySelector('#'+prefix+'Article,[data-'+prefix+'-extra-article]'),value:field=>field?.value||'',add:()=>module==='batam'?addBatamDraftItem():addFinishedDraftItem(),quantities:'#'+prefix+'Reported,[data-'+prefix+'-extra-qty]'};
+}
+function detachProductionDefaultRow(row){const id=row?.dataset.productionDefaultId,module=row?.dataset.productionDefaultModule;if(!id||!module)return;const host=document.querySelector('[data-production-controls="'+module+'"]'),worker=workers.find(w=>String(w.id)===String(host?.dataset.workerId));if(worker){productionDefaultSelection(worker,module).delete(id);host.querySelectorAll('[data-daily-default]').forEach(box=>{if(box.dataset.dailyDefault===id)box.checked=false;});}delete row.dataset.productionDefaultId;}
+function bindProductionDefaultRow(row,module){if(row.dataset.productionDefaultBound)return;row.dataset.productionDefaultBound='1';const context=productionDefaultRowContext(module),field=context.field(row);field?.addEventListener(module==='upper'?'input':'change',()=>detachProductionDefaultRow(row));row.querySelector('.upper-remove,[data-bm-extra-remove],[data-fm-extra-remove]')?.addEventListener('click',()=>detachProductionDefaultRow(row));}
+function syncProductionDefaultRows(host){
+  const module=host.dataset.productionControls,worker=workers.find(w=>String(w.id)===String(host.dataset.workerId));if(!worker)return;
+  const context=productionDefaultRowContext(module),selected=productionDefaultSelection(worker,module);if(!context.host||!context.primary)return;
+  workerDefaultArticles(worker,module).filter(a=>selected.has(String(a.id))).forEach(article=>{
+    let row=context.rows().find(r=>context.value(context.field(r))===String(article.id));
+    if(!row){row=!context.value(context.field(context.primary))?context.primary:null;if(!row){context.add();row=context.host.lastElementChild;}if(!row)return;
+      if(module==='upper')setUpperRowSelection(row,'article',article.id);else {context.field(row).value=String(article.id);if(row===context.primary)rememberProductionArticleChoice(worker.id,module,article.id);}
+    }
+    row.dataset.productionDefaultId=String(article.id);row.dataset.productionDefaultModule=module;bindProductionDefaultRow(row,module);
+  });
+}
+function bindProductionWorkerFeatures(){document.querySelectorAll('[data-production-controls]').forEach(host=>{
+  const module=host.dataset.productionControls,worker=workers.find(w=>String(w.id)===String(host.dataset.workerId));if(!worker||host.dataset.bound)return;host.dataset.bound='1';syncProductionDefaultRows(host);
+  host.querySelector('[data-kharcha-edit]')?.addEventListener('click',()=>openProductionKharchaEdit(module,worker.id));
+  host.querySelectorAll('[data-daily-default]').forEach(box=>box.addEventListener('change',()=>{
+    const id=box.dataset.dailyDefault,selection=productionDefaultSelection(worker,module);if(box.checked){selection.add(id);syncProductionDefaultRows(host);return;}selection.delete(id);
+    const context=productionDefaultRowContext(module);context.rows().filter(row=>row.dataset.productionDefaultId===id).forEach(row=>{
+      if(row===context.primary){const field=context.field(row);field.value='';if(module==='upper')field.dataset.selectedId='';row.querySelectorAll(context.quantities).forEach(input=>input.value='');rememberProductionArticleChoice(worker.id,module,'');delete row.dataset.productionDefaultId;if(module==='upper')updateUpperDistributionRow(row);}else row.remove();
+    });if(module==='upper')updateUpperDistributionTotals();
+  }));
+});}
 function workerDefaultArticleModules(worker){const category=String(worker?.category||'').trim().toUpperCase(),hay=[category,...(Array.isArray(worker?.tags)?worker.tags:[])].join(' ').toUpperCase(),modules=[];if(category==='UPPER MANS')modules.push('upper');if(hay.includes('BATAM')||hay.includes('BOTTOM'))modules.push('batam');if(hay.includes('FINISHED MAN')||hay.includes('FINISH MAN')||hay.includes('FINISHING'))modules.push('finished');return modules}
 function workerDefaultArticleList(module){return ({upper:settings.upperArticles,batam:settings.batamMansProductionArticles,finished:settings.finishedMansProductionArticles}[module])||[]}
-function workerDefaultArticle(worker,module){const id=worker?.defaultArticleIds?.[module];return id?workerDefaultArticleList(module).find(a=>String(a.id)===String(id))||null:null}
+function workerDefaultArticle(worker,module){return workerDefaultArticles(worker,module)[0]||null;}
 function productionArticleChoiceKey(worker,module){const d=new Date();return JSON.stringify([module,String(worker?.id||''),d.getFullYear(),d.getMonth(),d.getDate()])}
-function productionArticleChoice(worker,module){if(!worker)return null;const key=productionArticleChoiceKey(worker,module);if(productionArticleChoices.has(key)){const id=productionArticleChoices.get(key);return workerDefaultArticleList(module).find(a=>String(a.id)===String(id))||null}return workerDefaultArticle(worker,module)}
+function productionArticleChoice(worker,module){if(!worker)return null;const key=productionArticleChoiceKey(worker,module);if(productionArticleChoices.has(key)){const id=productionArticleChoices.get(key);return workerDefaultArticleList(module).find(a=>String(a.id)===String(id))||null}return workerDefaultArticles(worker,module).find(a=>productionDefaultSelection(worker,module).has(String(a.id)))||null}
 function rememberProductionArticleChoice(workerId,module,id){const worker=workers.find(w=>String(w.id)===String(workerId));if(worker)productionArticleChoices.set(productionArticleChoiceKey(worker,module),String(id||''))}
-function workerDefaultArticleCard(worker,module){const name=workerDefaultArticle(worker,module)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Article: '+esc(name)+'">Default Article: '+esc(name)+'</div>'}
+function workerDefaultArticleCard(worker,module){const name=workerDefaultArticles(worker,module).map(a=>a.name).join(', ')||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Article: '+esc(name)+'">Default Article: '+esc(name)+'</div>'}
 const upperMaterialChoices=new Map();
 function upperDefaultMaterial(worker){const id=worker?.upperDefaultMaterialId;return id?(settings.upperMaterials||[]).find(m=>String(m.id)===String(id))||null:null}
 function upperMaterialChoice(worker){if(!worker)return null;const key=productionArticleChoiceKey(worker,'upper-material');return upperMaterialChoices.has(key)?(settings.upperMaterials||[]).find(m=>String(m.id)===upperMaterialChoices.get(key))||null:upperDefaultMaterial(worker)}
@@ -4319,8 +4404,8 @@ function openWorkerModal(id){
   const pendingBfMaterials={batam:String(w?.batamDefaultMaterialId||''),finished:String(w?.finishedDefaultMaterialId||'')};
   const refreshBfMaterials=()=>{document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerDefaultArticleModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
   refreshBfMaterials();document.getElementById('wCategory')?.addEventListener('change',refreshBfMaterials);
-  const pendingDefaults={...(w?.defaultArticleIds||{})};
-  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-default-article]').forEach(el=>pendingDefaults[el.dataset.workerDefaultArticle]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerDefaultArticleModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=workerDefaultArticleList(module),id=String(pendingDefaults[module]||''),missing=id&&!list.some(a=>String(a.id)===id);return '<div><label>Default Article'+(modules.length>1?' ('+module+')':'')+'</label><select data-worker-default-article="'+module+'"><option value="">No default article</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable article</option>':'')+list.map(a=>'<option value="'+esc(a.id)+'" '+(String(a.id)===id?'selected':'')+'>'+esc(a.name||'')+'</option>').join('')+'</select></div>'}).join('');};
+  const pendingDefaults=Object.fromEntries(['upper','batam','finished'].map(module=>[module,workerDefaultArticleIds(w,module)]));
+  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-default-module]').forEach(group=>{pendingDefaults[group.dataset.workerDefaultModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value);});const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerDefaultArticleModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=workerDefaultArticleList(module),ids=pendingDefaults[module],options=[...list,...ids.filter(id=>!list.some(a=>String(a.id)===id)).map(id=>({id,name:'Unavailable article'}))];return '<fieldset data-worker-default-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Articles'+(modules.length>1?' ('+module+')':'')+'</legend>'+options.map(a=>'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" style="width:auto;" value="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>').join('')+'</fieldset>';}).join('');};
   refreshWorkerDefaults();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerDefaults);
   const applyWorkerCrop=async cropped=>{if(!cropped)return;try{pendingPhoto=await compressImageDataUrl(cropped,700,.78);const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview zoomable" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
   const cropWorkerPhoto=()=>{if(pendingPhoto)openImageCropper(pendingPhoto,applyWorkerCrop);else{const file=document.getElementById('wPhoto').files?.[0];if(file)openImageCropper(file,applyWorkerCrop);else toast('پہلے Worker کی تصویر منتخب کریں');}};
@@ -4371,7 +4456,7 @@ function openWorkerModal(id){
     if(!name){ toast('Please enter a name'); return; }
     const customFields = {};
     document.querySelectorAll('.wCustomField').forEach(inp=>{ customFields[inp.dataset.colid] = inp.value.trim(); });
-    const defaultArticleUpdates={};let invalidDefault=false;document.querySelectorAll('[data-worker-default-article]').forEach(el=>{const module=el.dataset.workerDefaultArticle,value=el.value,old=String(w?.defaultArticleIds?.[module]||'');if(value!==old){if(value&&!workerDefaultArticleList(module).some(a=>String(a.id)===value))invalidDefault=true;else defaultArticleUpdates[module]=value;}});if(invalidDefault){toast('Select a valid Default Article');return;}
+    const defaultArticleUpdates={};let invalidDefault=false;document.querySelectorAll('[data-worker-default-module]').forEach(group=>{const module=group.dataset.workerDefaultModule,ids=[...group.querySelectorAll('input:checked')].map(el=>el.value),old=workerDefaultArticleIds(w,module);if(ids.some(id=>!old.includes(id)&&!workerDefaultArticleList(module).some(a=>String(a.id)===id)))invalidDefault=true;if(ids.length!==old.length||ids.some(id=>!old.includes(id)))defaultArticleUpdates[module]=ids;});if(invalidDefault){toast('Select valid Default Articles');return;}
     const materialSelect=document.getElementById('wDefaultMaterial'),materialValue=materialSelect?.value||'',materialChanged=!!materialSelect&&materialValue!==String(w?.upperDefaultMaterialId||'');
     if(materialChanged&&materialValue&&!(settings.upperMaterials||[]).some(m=>String(m.id)===materialValue)){toast('Select a valid Default Material');return;}
     const bfMaterialUpdates={};let invalidBfMaterial=false;document.querySelectorAll('[data-bf-default-material]').forEach(el=>{const module=el.dataset.bfDefaultMaterial,value=el.value,key=module+'DefaultMaterialId';if(value!==String(w?.[key]||'')){if(value&&!bfMaterialList(module).some(m=>String(m.id)===value))invalidBfMaterial=true;else bfMaterialUpdates[key]=value;}});if(invalidBfMaterial){toast('Select a valid Default Material');return;}
@@ -4379,7 +4464,7 @@ function openWorkerModal(id){
     if(saveBtn) saveBtn.disabled=true;
     if(w){ w.name=name; w.category=category; w.phone=phone; w.whatsapp=whatsapp; w.photo=pendingPhoto; w.customFields=customFields; }
     else { workers.push({id:uid(), name, category, phone, whatsapp, photo:pendingPhoto, customFields}); }
-    if(Object.keys(defaultArticleUpdates).length){const target=w||workers[workers.length-1];target.defaultArticleIds={...(target.defaultArticleIds||{}),...defaultArticleUpdates};}
+    if(Object.keys(defaultArticleUpdates).length){const target=w||workers[workers.length-1];target.defaultArticleLists={...(target.defaultArticleLists||{}),...defaultArticleUpdates};}
     if(materialChanged)(w||workers[workers.length-1]).upperDefaultMaterialId=materialValue;
     Object.assign(w||workers[workers.length-1],bfMaterialUpdates);
     const workerSaved=await saveCriticalCloudState();
@@ -4389,6 +4474,7 @@ function openWorkerModal(id){
       toast('Worker could not be saved. Please try again.');
       return;
     }
+    const savedWorker=w||workers[workers.length-1];Object.keys(defaultArticleUpdates).forEach(module=>{productionDefaultSelections.delete(productionArticleChoiceKey(savedWorker,module));productionArticleChoices.delete(productionArticleChoiceKey(savedWorker,module));});
     audit(w?'Worker Updated':'Worker Created',name); closeModal(); render(); toast('Saved successfully');
   };
 }
@@ -8945,6 +9031,7 @@ function batamWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
  const vouchers=batamMansVouchers().filter(v=>{if(v.deletedAt||String(v.workerId)!==String(workerId))return false;const d=new Date(v.createdAt);return d>=range.start&&d<range.end&&d.getDay()!==5&&(!through||d<=through);});
  let articleAtoms=0,materialAtoms=0,kharcha=0;
  vouchers.forEach(v=>{articleAtoms+=(v.items||[]).reduce((s,i)=>s+(Number(i.reportedQty)||0),0);materialAtoms+=(v.materials||[]).reduce((s,m)=>s+(Number(m.qty)||0),0);kharcha+=Number(v.expenseAmount)||0;});
+ kharcha+=productionKharchaAdjustmentTotal('batam',workerId,baseDate,throughDate);
  return {vouchers,articleAtoms,materialAtoms,totalAtoms:articleAtoms,kharcha};
 }
 function batamVoucherHtml(v){
@@ -9058,14 +9145,15 @@ function addBatamDraftMaterial(){
 function removeBatamDraftMaterial(id){batamMansDraftMaterials=batamMansDraftMaterials.filter(x=>String(x.id)!==String(id));render();}
 async function createBatamProductionVoucher(){
  if(!batamMansSelectedWorker){toast('Select Batam Man first.');return;}
+ const voucherDraftItems=batamMansDraftItems.slice();
  const currentArticle=document.getElementById('bmArticle')?.value||'',currentQty=Number(document.getElementById('bmReported')?.value);
- if(currentArticle||document.getElementById('bmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole Atoms.');return;}batamMansDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
+ if(currentArticle||document.getElementById('bmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole Atoms.');return;}voucherDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
  const extraRows=[...document.querySelectorAll('#bmExtraItemRows .bm-extra-item-row')];
- for(const row of extraRows){const articleId=row.querySelector('[data-bm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-bm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole Atoms.');return;}batamMansDraftItems.push({id:uid(),articleId,reportedQty:qty});}
- if(!batamMansDraftItems.length){toast('Select Production Article and enter positive whole Atoms.');return;}
+ for(const row of extraRows){const articleId=row.querySelector('[data-bm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-bm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole Atoms.');return;}voucherDraftItems.push({id:uid(),articleId,reportedQty:qty});}
+ if(!voucherDraftItems.length){toast('Select Production Article and enter positive whole Atoms.');return;}
  const notes=document.getElementById('bmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('bmExpenseAmount')?.value)||0),pendingQty=Math.max(0,Number(document.getElementById('bmPendingQtyEntry')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=batamMansVoucherNo(),voucherId=uid();if(!Number.isInteger(pendingQty)){toast('Pending must be a positive whole Atom quantity.');return;}
  for(const dm of batamMansDraftMaterials){const mat=getBatamMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
- const items=batamMansDraftItems.map(i=>({id:uid(),articleId:i.articleId,reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
+ const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
  const materials=batamMansDraftMaterials.map(dm=>({id:uid(),materialId:dm.materialId,materialName:getBatamMansProductionMaterial(dm.materialId)?.name||'',qty:Number(dm.qty)}));
  materials.forEach(dm=>{const mat=getBatamMansProductionMaterial(dm.materialId);mat.stock=Number(mat.stock)-dm.qty;});
  const previousWorkerTotal=batamMansVouchers().filter(x=>String(x.workerId)===String(batamMansSelectedWorker)&&!x.deletedAt).reduce((s,x)=>s+(x.items||[]).reduce((q,i)=>q+(Number(i.reportedQty)||0),0),0);
@@ -9422,18 +9510,19 @@ function pageBatamMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Batam Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'batam')}${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'batam')}${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
  <div class="card bm-entry-card">
    <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Batam Man above first</span>'}</div>
+   ${productionWorkerControls(selected,'batam')}
    <div class="bm-entry-row">
      <div class="bm-field bm-article-field"><label>Production Article</label><select id="bmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}" ${String(productionArticleChoice(selected,'batam')?.id||'')===String(a.id)?'selected':''}>${esc(a.name||'')}</option>`).join('')}</select></div>
      <div class="bm-field bm-qty-field"><label>Quantity / Items</label><input id="bmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
      <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="bmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
      <div class="bm-field bm-pending-field"><label>Pending</label><input id="bmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
-     <div class="bm-field bm-notes-field"><label>Notes (Optional)</label><input id="bmNotes" placeholder="Notes"></div>
+     <div class="bm-field bm-notes-field"><label>Total Items</label><input id="bmWorkerTotalItems" readonly value="${productionWorkerCompletedItems('batam',selected?.id)} ATOMS"></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="bmAddDraft">+ Add Item</button></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn brass" id="bmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
    </div>
@@ -9686,6 +9775,7 @@ function finishedWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null
  const vouchers=finishedMansVouchers().filter(v=>{if(v.deletedAt||String(v.workerId)!==String(workerId))return false;const d=new Date(v.createdAt);return d>=range.start&&d<range.end&&d.getDay()!==5&&(!through||d<=through);});
  let articleAtoms=0,materialAtoms=0,kharcha=0;
  vouchers.forEach(v=>{articleAtoms+=(v.items||[]).reduce((s,i)=>s+(Number(i.reportedQty)||0),0);materialAtoms+=(v.materials||[]).reduce((s,m)=>s+(Number(m.qty)||0),0);kharcha+=Number(v.expenseAmount)||0;});
+ kharcha+=productionKharchaAdjustmentTotal('finished',workerId,baseDate,throughDate);
  return {vouchers,articleAtoms,materialAtoms,totalAtoms:articleAtoms,kharcha};
 }
 function finishedVoucherHtml(v){
@@ -9799,14 +9889,15 @@ function addFinishedDraftMaterial(){
 function removeFinishedDraftMaterial(id){finishedMansDraftMaterials=finishedMansDraftMaterials.filter(x=>String(x.id)!==String(id));render();}
 async function createFinishedProductionVoucher(){
  if(!finishedMansSelectedWorker){toast('Select Finished Man first.');return;}
+ const voucherDraftItems=finishedMansDraftItems.slice();
  const currentArticle=document.getElementById('fmArticle')?.value||'',currentQty=Number(document.getElementById('fmReported')?.value);
- if(currentArticle||document.getElementById('fmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole Atoms.');return;}finishedMansDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
+ if(currentArticle||document.getElementById('fmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole Atoms.');return;}voucherDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
  const extraRows=[...document.querySelectorAll('#fmExtraItemRows .fm-extra-item-row')];
- for(const row of extraRows){const articleId=row.querySelector('[data-fm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-fm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole Atoms.');return;}finishedMansDraftItems.push({id:uid(),articleId,reportedQty:qty});}
- if(!finishedMansDraftItems.length){toast('Select Production Article and enter positive whole Atoms.');return;}
+ for(const row of extraRows){const articleId=row.querySelector('[data-fm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-fm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole Atoms.');return;}voucherDraftItems.push({id:uid(),articleId,reportedQty:qty});}
+ if(!voucherDraftItems.length){toast('Select Production Article and enter positive whole Atoms.');return;}
  const notes=document.getElementById('fmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('fmExpenseAmount')?.value)||0),pendingQty=Math.max(0,Number(document.getElementById('fmPendingQtyEntry')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=finishedMansVoucherNo(),voucherId=uid();if(!Number.isInteger(pendingQty)){toast('Pending must be a positive whole Atom quantity.');return;}
  for(const dm of finishedMansDraftMaterials){const mat=getFinishedMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
- const items=finishedMansDraftItems.map(i=>({id:uid(),articleId:i.articleId,reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
+ const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
  const materials=finishedMansDraftMaterials.map(dm=>({id:uid(),materialId:dm.materialId,materialName:getFinishedMansProductionMaterial(dm.materialId)?.name||'',qty:Number(dm.qty)}));
  materials.forEach(dm=>{const mat=getFinishedMansProductionMaterial(dm.materialId);mat.stock=Number(mat.stock)-dm.qty;});
  const previousWorkerTotal=finishedMansVouchers().filter(x=>String(x.workerId)===String(finishedMansSelectedWorker)&&!x.deletedAt).reduce((s,x)=>s+(x.items||[]).reduce((q,i)=>q+(Number(i.reportedQty)||0),0),0);
@@ -10154,18 +10245,19 @@ function pageFinishedMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Finished Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<div class="bm-completed-badge">✓ Completed</div>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'finished')}${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'finished')}${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
  <div class="card bm-entry-card">
    <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Date & time automatic</span>`:'<span>Select Finished Man above first</span>'}</div>
+   ${productionWorkerControls(selected,'finished')}
    <div class="bm-entry-row">
      <div class="bm-field bm-article-field"><label>Production Article</label><select id="fmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}" ${String(productionArticleChoice(selected,'finished')?.id||'')===String(a.id)?'selected':''}>${esc(a.name||'')}</option>`).join('')}</select></div>
      <div class="bm-field bm-qty-field"><label>Quantity / Items</label><input id="fmReported" type="number" min="1" step="1" placeholder="Atoms"></div>
      <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="fmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
      <div class="bm-field bm-pending-field"><label>Pending</label><input id="fmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
-     <div class="bm-field bm-notes-field"><label>Notes (Optional)</label><input id="fmNotes" placeholder="Notes"></div>
+     <div class="bm-field bm-notes-field"><label>Total Items</label><input id="fmWorkerTotalItems" readonly value="${productionWorkerCompletedItems('finished',selected?.id)} ATOMS"></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="fmAddDraft">+ Add Item</button></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn brass" id="fmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
    </div>
@@ -10250,6 +10342,7 @@ function pageFinishedMansReports(){
 
 /* ============ PAGE EVENT WIRING ============ */
 function attachPageHandlers(){
+  bindProductionWorkerFeatures();
   document.getElementById('btnBackDashboard')?.addEventListener('click', ()=>goto('dashboard'));
   document.getElementById('btnBackPage')?.addEventListener('click', goBack);
   // Dashboard
@@ -10381,6 +10474,11 @@ function attachPageHandlers(){
   document.getElementById('btnAddUpperMaterialRow')?.addEventListener('click',()=>addUpperDistributionRow('material'));
   if(document.getElementById('upperDistributionRows')) bindUpperDistributionRows();
   document.getElementById('btnCreateUpperVoucher')?.addEventListener('click',createUpperDistribution);   document.getElementById('btnSaveUpperPending')?.addEventListener('click',saveUpperPending);
+  document.getElementById('upperTodayIssuedCard')?.addEventListener('click',()=>{window.__upperMovementMode='today';goto('upperIssuedReport');});
+  document.getElementById('upperTodayReceivedCard')?.addEventListener('click',()=>{window.__upperMovementMode='today';goto('upperReceivedReport');});
+  document.getElementById('upperMovementBack')?.addEventListener('click',()=>goto('distributeUpper'));
+  document.querySelectorAll('[data-upper-movement-period]').forEach(b=>b.addEventListener('click',()=>{window.__upperMovementMode=b.dataset.upperMovementPeriod;render();}));
+  document.getElementById('upperMovementPrint')?.addEventListener('click',()=>printElement('upperMovementPrintArea'));
   document.getElementById('upperPendingCard')?.addEventListener('click',()=>{window.__upperPendingReportMode='today';goto('upperPending');});
   document.getElementById('upperTodayArticlesCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperArticleSummary');});
   document.getElementById('upperTodayMaterialsCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperMaterialSummary');});
@@ -10461,7 +10559,7 @@ function attachPageHandlers(){
   if(currentPage==='batamMansPending')renderBatamPendingPageList();
   document.querySelectorAll('[data-batam-pickworker]').forEach(card=>card.addEventListener('click',e=>{
     if(e.target.closest('[data-batam-photo]'))return;
-    batamMansSelectedWorker=card.dataset.batamPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));render();
+    batamMansSelectedWorker=card.dataset.batamPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));productionDefaultSelections.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));render();
   }));
   document.querySelectorAll('[data-batam-photo]').forEach(photo=>photo.addEventListener('click',e=>{
     e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.batamPhoto));if(w?.photo)openImageLightbox(w.photo);
@@ -10527,7 +10625,7 @@ function attachPageHandlers(){
   if(currentPage==='finishedMansPending')renderFinishedPendingPageList();
   document.querySelectorAll('[data-finished-pickworker]').forEach(card=>card.addEventListener('click',e=>{
     if(e.target.closest('[data-finished-photo]'))return;
-    finishedMansSelectedWorker=card.dataset.finishedPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));render();
+    finishedMansSelectedWorker=card.dataset.finishedPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));productionDefaultSelections.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));render();
   }));
   document.querySelectorAll('[data-finished-photo]').forEach(photo=>photo.addEventListener('click',e=>{
     e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.finishedPhoto));if(w?.photo)openImageLightbox(w.photo);
