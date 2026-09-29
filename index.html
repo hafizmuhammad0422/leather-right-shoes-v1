@@ -3765,6 +3765,31 @@ function openWorkerSummaryDetail(type){
   render();
 }
 
+function workerCategoryCompareKey(value){return String(value||'').trim().replace(/\s+/g,' ').toLowerCase();}
+function workerCategoryOptions(current=''){
+  const names=[current,...(workers||[]).map(w=>w.category),...(Array.isArray(settings.workerCategories)?settings.workerCategories:[]),...(settings.customStats||[]).filter(c=>c&&c.name).map(c=>c.name)],seen=new Set();
+  return names.filter(name=>{if(typeof name!=='string')return false;const key=workerCategoryCompareKey(name);if(!key||seen.has(key))return false;seen.add(key);return true;});
+}
+function workerEditorDefaultModules(worker){
+  const keys=[worker?.category,...(Array.isArray(worker?.tags)?worker.tags:[])].map(workerCategoryCompareKey),modules=[];
+  if(keys.some(key=>/^upper mans?$/.test(key)))modules.push('upper');
+  if(keys.some(key=>/^(?:battam|batam|bottom)(?: mans?)?$/.test(key)))modules.push('batam');
+  if(keys.some(key=>/^(?:finished mans?|finish mans?|finishing)$/.test(key)))modules.push('finished');
+  return modules;
+}
+function openWorkerCategoryModal(){
+  modal('<h3>Add Worker Filter / Category</h3><label>Category name</label><input id="workerCategoryName" placeholder="e.g. Stitch Man"><div class="modal-actions"><button type="button" class="btn brass" id="workerCategorySave">Save</button><button type="button" class="btn ghost" id="workerCategoryCancel">Cancel</button></div>');
+  document.getElementById('workerCategoryCancel').onclick=closeModal;
+  document.getElementById('workerCategorySave').onclick=async()=>{
+    const button=document.getElementById('workerCategorySave');if(button.disabled)return;
+    const name=document.getElementById('workerCategoryName').value.trim();if(!name){toast('Enter a category name');return;}
+    if(workerCategoryOptions().some(value=>workerCategoryCompareKey(value)===workerCategoryCompareKey(name))){toast('This Worker category already exists');return;}
+    const before=captureCloudState();button.disabled=true;
+    settings.workerCategories=[...(Array.isArray(settings.workerCategories)?settings.workerCategories:[]),name];
+    if(!await saveCriticalCloudState()){applyCloudState(before);button.disabled=false;toast('Worker category could not be saved. Please try again.');return;}
+    closeModal();render();toast('Worker category saved');
+  };
+}
 function pageWorkers(){
   const activeWorkers = workers.filter(w=>!w.archived);
   const q = String(workerSearchQuery||'').trim().toLowerCase();
@@ -3772,7 +3797,7 @@ function pageWorkers(){
     const custom = Object.values(w.customFields||{}).join(' ');
     return [w.name,w.category,w.phone,w.whatsapp,custom].join(' ').toLowerCase().includes(q);
   }) : activeWorkers;
-  const shown = workerCategoryFilter ? searched.filter(w=>w.category===workerCategoryFilter) : searched;
+  const shown = workerCategoryFilter ? searched.filter(w=>workerCategoryCompareKey(w.category)===workerCategoryCompareKey(workerCategoryFilter)) : searched;
   normalizeWorkerColumnOrder();
   const defs = getWorkerFieldDefs();
   const order = settings.workerColumnOrder;
@@ -3787,8 +3812,9 @@ function pageWorkers(){
       <button class="btn ghost" id="btnManageColumns">⚙️ Manage Columns</button>
       <select id="workerCategoryFilterSelect" style="width:auto;min-width:150px;max-width:210px;height:38px;padding:7px 10px;">
         <option value="">Worker Filter — All</option>
-        ${(settings.customStats||[]).filter(cs=>cs&&cs.name).map(cs=>`<option value="${esc(cs.name)}" ${workerCategoryFilter===cs.name?'selected':''}>${esc(cs.name)}</option>`).join('')}
+        ${workerCategoryOptions().map(name=>`<option value="${esc(name)}" ${workerCategoryCompareKey(workerCategoryFilter)===workerCategoryCompareKey(name)?'selected':''}>${esc(name)}</option>`).join('')}
       </select>
+      <button type="button" class="btn ghost small" id="btnAddWorkerCategory">+ Add Worker Filter / Category</button>
       <input type="text" id="workerSearchInput" value="${esc(workerSearchQuery||'')}" placeholder="Search Worker..." autocomplete="off" style="width:180px;max-width:100%;height:38px;padding:7px 10px;">
       <button type="button" class="btn ghost" data-worker-summary="baqi" style="min-height:38px;">Total BAQI <strong style="margin-left:4px;">Rs. ${getFilteredWorkerSummaryList().reduce((s,w)=>s+getWorkerSummaryAmount(w,'baqi'),0).toLocaleString('en-PK')}</strong></button>
       <button type="button" class="btn ghost" data-worker-summary="additionalAdvance" style="min-height:38px;">Total Additional Advance <strong style="margin-left:4px;">Rs. ${getFilteredWorkerSummaryList().reduce((s,w)=>s+getWorkerSummaryAmount(w,'additionalAdvance'),0).toLocaleString('en-PK')}</strong></button>
@@ -4643,7 +4669,7 @@ function openWorkerModal(id){
     if(fid==='category') return `<div><label>Category</label>
       <select id="wCategory">
         <option value="">— Uncategorized —</option>
-        ${settings.customStats.filter(cs=>cs&&cs.name).map(cs=>`<option value="${esc(cs.name)}" ${w&&w.category===cs.name?'selected':''}>${esc(cs.icon||'📌')} ${esc(cs.name)}</option>`).join('')}
+        ${workerCategoryOptions(w?.category||'').map(name=>`<option value="${esc(name)}" ${w&&w.category===name?'selected':''}>${esc(name)}</option>`).join('')}
       </select>
     </div>`;
     if(fid==='phone') return `<div><label>Phone Number</label><input id="wPhone" value="${w?esc(w.phone||''):''}" placeholder="e.g. 0300-1234567"></div>`;
@@ -4670,13 +4696,13 @@ function openWorkerModal(id){
     </div>
   `);
   let pendingMaterial=String(w?.upperDefaultMaterialId||'');
-  const refreshWorkerMaterial=()=>{const current=document.getElementById('wDefaultMaterial');if(current)pendingMaterial=current.value;const category=document.getElementById('wCategory')?.value??w?.category??'',list=settings.upperMaterials||[],missing=pendingMaterial&&!list.some(m=>String(m.id)===pendingMaterial);document.getElementById('workerDefaultMaterial').innerHTML=String(category).trim().toUpperCase()==='UPPER MANS'?'<label>Default Material</label><select id="wDefaultMaterial"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(pendingMaterial)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===pendingMaterial?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>':'';};
+  const refreshWorkerMaterial=()=>{const current=document.getElementById('wDefaultMaterial');if(current)pendingMaterial=current.value;const category=document.getElementById('wCategory')?.value??w?.category??'',list=settings.upperMaterials||[],missing=pendingMaterial&&!list.some(m=>String(m.id)===pendingMaterial);document.getElementById('workerDefaultMaterial').innerHTML=workerEditorDefaultModules({...w,category}).includes('upper')?'<label>Default Material</label><select id="wDefaultMaterial"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(pendingMaterial)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===pendingMaterial?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>':'';};
   refreshWorkerMaterial();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerMaterial);
   const pendingBfMaterials={batam:String(w?.batamDefaultMaterialId||''),finished:String(w?.finishedDefaultMaterialId||'')};
-  const refreshBfMaterials=()=>{document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerDefaultArticleModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
+  const refreshBfMaterials=()=>{document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerEditorDefaultModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
   refreshBfMaterials();document.getElementById('wCategory')?.addEventListener('change',refreshBfMaterials);
   const pendingDefaults=Object.fromEntries(['upper','batam','finished'].map(module=>[module,workerDefaultArticleIds(w,module)]));
-  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-default-module]').forEach(group=>{pendingDefaults[group.dataset.workerDefaultModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value);});const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerDefaultArticleModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=workerDefaultArticleList(module),ids=pendingDefaults[module],options=[...list,...ids.filter(id=>!list.some(a=>String(a.id)===id)).map(id=>({id,name:'Unavailable article'}))];return '<fieldset data-worker-default-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Articles'+(modules.length>1?' ('+module+')':'')+'</legend>'+options.map(a=>'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" style="width:auto;" value="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>').join('')+'</fieldset>';}).join('');};
+  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-default-module]').forEach(group=>{pendingDefaults[group.dataset.workerDefaultModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value);});const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerEditorDefaultModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=workerDefaultArticleList(module),ids=pendingDefaults[module],options=[...list,...ids.filter(id=>!list.some(a=>String(a.id)===id)).map(id=>({id,name:'Unavailable article'}))];return '<fieldset data-worker-default-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Articles'+(modules.length>1?' ('+module+')':'')+'</legend>'+options.map(a=>'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" style="width:auto;" value="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>').join('')+'</fieldset>';}).join('');};
   refreshWorkerDefaults();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerDefaults);
   const applyWorkerCrop=async cropped=>{if(!cropped)return;try{pendingPhoto=await compressImageDataUrl(cropped,700,.78);const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview zoomable" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
   const cropWorkerPhoto=()=>{if(pendingPhoto)openImageCropper(pendingPhoto,applyWorkerCrop);else{const file=document.getElementById('wPhoto').files?.[0];if(file)openImageCropper(file,applyWorkerCrop);else toast('پہلے Worker کی تصویر منتخب کریں');}};
@@ -4721,7 +4747,7 @@ function openWorkerModal(id){
     const categoryEl=document.getElementById('wCategory');
     const phoneEl=document.getElementById('wPhone');
     const whatsappEl=document.getElementById('wWhatsapp');
-    const category=categoryEl ? categoryEl.value : '';
+    const category=categoryEl ? categoryEl.value : (w?.category||'');
     const phone=phoneEl ? phoneEl.value.trim() : '';
     const whatsapp=whatsappEl ? whatsappEl.value.trim() : '';
     if(!name){ toast('Please enter a name'); return; }
@@ -10694,6 +10720,7 @@ function attachPageHandlers(){
   document.getElementById('btnBackWorkerSummary')?.addEventListener('click', ()=>goBack());
   document.getElementById('btnPrintWorkerSummary')?.addEventListener('click', ()=>printWorkerSummary(workerSummaryDetailType));
   document.getElementById('btnAddWorker')?.addEventListener('click', ()=>openWorkerModal());
+  document.getElementById('btnAddWorkerCategory')?.addEventListener('click',openWorkerCategoryModal);
   document.getElementById('btnClearWorkerFilter')?.addEventListener('click', ()=>{ workerCategoryFilter=null; render(); });
   document.getElementById('workerCategoryFilterSelect')?.addEventListener('change', e=>{
     workerCategoryFilter = e.target.value || null;
