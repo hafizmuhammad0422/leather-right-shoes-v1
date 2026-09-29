@@ -3702,8 +3702,8 @@ function pageDistributeUpper(){
   localDayStart.setHours(0,0,0,0);
   const nextLocalDayStart=new Date(localDayStart);
   nextLocalDayStart.setDate(nextLocalDayStart.getDate()+1);
-  const upperCards=upperWorkers.map((w,originalIndex)=>({w,originalIndex,completed:(settings.upperDistributions||[]).some(d=>{const date=new Date(d.date||d.createdAt||'');return String(d.workerId)===String(w.id)&&date>=localDayStart&&date<nextLocalDayStart;})})).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex);
-  const allUpperRecords=(settings.upperDistributions||[]).filter(record=>{const distributedAt=new Date(record.date);return distributedAt>=localDayStart&&distributedAt<nextLocalDayStart;});
+  const upperCards=upperWorkers.map((w,originalIndex)=>({w,originalIndex,completed:(settings.upperDistributions||[]).some(d=>{const date=d.workDate?new Date(d.workDate+'T00:00:00'):new Date(d.date||d.createdAt||'');return String(d.workerId)===String(w.id)&&date>=localDayStart&&date<nextLocalDayStart;})})).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex);
+  const allUpperRecords=(settings.upperDistributions||[]).filter(record=>{const distributedAt=record.workDate?new Date(record.workDate+'T00:00:00'):new Date(record.date);return distributedAt>=localDayStart&&distributedAt<nextLocalDayStart;});
   let totalArticle=0,totalMaterial=0;
   allUpperRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)totalArticle+=q;if(l.materialId||l.materialName)totalMaterial+=q;}));
   const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaAdjustmentTotal('upper');
@@ -3877,7 +3877,7 @@ function getUpperPendingForWorker(workerId){
 
 function upperWeeklyVoucherData(v,now=new Date()){
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
-  const through=new Date(now);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
+  const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
   const records=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
   const days=[];for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
     const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
@@ -3887,12 +3887,12 @@ function upperWeeklyVoucherData(v,now=new Date()){
   }
   const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0);
   const receivedArticles=new Map();records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const display=upperLineDisplay(l),qty=display.received;if(qty<=0||(!l.articleId&&!l.articleName))return;const key=(l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName))+'|'+display.unit,a=receivedArticles.get(key)||{articleIdentity:l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName),name:l.articleName||String(l.articleId),unit:display.unit,qty:0};a.qty+=qty;receivedArticles.set(key,a);}));
-  return {days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:upperPendingState(v.workerId).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
+  return {through,days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
 }
 function weeklyUrduTimeHtml(label){const parts=String(label).split(' \u2022 '),date=parts.shift(),time=parts.join(' \u2022 ');return '<span dir="ltr" style="display:inline-flex;align-items:baseline;direction:ltr;unicode-bidi:isolate;"><span>[&nbsp;</span><bdi dir="rtl">'+esc(date)+'</bdi>'+(time?'<span>&nbsp;&#8226;&nbsp;</span><bdi dir="ltr" style="white-space:nowrap;">'+esc(time)+'</bdi>':'')+'<span>&nbsp;]</span></span>';}
-function upperVoucherPendingArticles(workerId,total){
-  const articles=new Map();let attributable=!(settings.upperPendingRecords||[]).some(p=>String(p.workerId)===String(workerId)&&(Number.isFinite(Number(p.delta))?Number(p.delta):Number(p.qty)||0)!==0);
-  (settings.upperDistributions||[]).filter(r=>r.workflowVersion===1&&String(r.workerId)===String(workerId)).forEach(r=>(r.lines||[]).forEach(l=>{
+function upperVoucherPendingArticles(workerId,total,through=null){
+  const articles=new Map();let attributable=!(settings.upperPendingRecords||[]).some(p=>(!through||new Date(p.date)<through)&&String(p.workerId)===String(workerId)&&(Number.isFinite(Number(p.delta))?Number(p.delta):Number(p.qty)||0)!==0);
+  (settings.upperDistributions||[]).filter(r=>(!through||upperWorkTimestamp(r)<through)&&r.workflowVersion===1&&String(r.workerId)===String(workerId)).forEach(r=>(r.lines||[]).forEach(l=>{
     const delta=(Number(l.qty)||0)-(Number(l.receivedQty)||0),display=upperLineDisplay(l);
     if(!l.articleId&&!l.articleName){if(delta!==0)attributable=false;return;}
     if(display.issued*display.factor!==(Number(l.qty)||0)||display.received*display.factor!==(Number(l.receivedQty)||0))attributable=false;
@@ -3906,7 +3906,7 @@ function upperVoucherHtml(v){
   const week=upperWeeklyVoucherData(v),rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">',dayRule='<hr style="border:0;border-top:1px dashed #000;margin:4px 0;">';
   const row=(label,value,large=false)=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0;'+(large?'font-size:16px;font-weight:900;':'')+'"><span style="min-width:0;">'+esc(label)+'</span><span style="white-space:nowrap;">'+esc(String(value))+'</span></div>';
   const box=(title,articles,fallback=null)=>'<div style="box-sizing:border-box;border:2px solid #000;margin:0;margin-top:'+(title==='CURRENT PENDING'?'3px':'0')+';padding:5px 2px;line-height:1.1;"><div style="font-size:15px;font-weight:1000;">'+esc(title)+'</div>'+ (fallback!==null?row('TOTAL ATOMS',fallback+' ATOMS',true):['ATOMS','SET'].map(unit=>{const qty=articles.filter(a=>a.unit===unit).reduce((n,a)=>n+a.qty,0);return qty>0?row('TOTAL '+unit,qty+' '+unit,true):'';}).join(''))+(new Set(articles.filter(a=>a.qty>0).map(a=>a.articleIdentity)).size>=2?'<div style="border-top:1px solid #000;">'+articles.filter(a=>a.qty>0).map(a=>'<div style="display:flex;justify-content:space-between;gap:5px;font-size:12px;font-weight:600;"><span style="min-width:0;overflow-wrap:anywhere;">'+esc(a.name)+'</span><span style="white-space:nowrap;">'+esc(String(a.qty))+' '+a.unit+'</span></div>').join('')+'</div>':'')+'</div>';
-  const pendingArticles=upperVoucherPendingArticles(v.workerId,week.pending),pendingBox=week.pending>0?box('CURRENT PENDING',pendingArticles||[],pendingArticles===null?week.pending:null):'';
+  const pendingArticles=upperVoucherPendingArticles(v.workerId,week.pending,week.through),pendingBox=week.pending>0?box('CURRENT PENDING',pendingArticles||[],pendingArticles===null?week.pending:null):'';
   const days=week.days.map(day=>'<div style="text-align:center;margin:4px 0;">'+weeklyUrduTimeHtml(day.label)+'</div>'+day.articles.map(a=>'<div>'+esc(a.name)+'</div>'+row('Issued',a.issued+' '+a.unit)+row('Received',a.received+' '+a.unit)).join('')+dayRule).join('');
   return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">UPPER MAN WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">'+esc(v.workerName)+' | #'+esc(v.voucherNo)+'</div>'+rule+days+box('WEEKLY RECEIVED',week.receivedArticles)+pendingBox+row('WEEKLY KHARCHA',upperMoney(week.kharcha))+rule+'<div style="text-align:center;">For Contact Dial 03226574565</div></div>';
 }
@@ -3934,7 +3934,7 @@ function upperLegacyVoucherHtml(v){
 
 function upperTodayRecords(){
   const today=new Date(); today.setHours(0,0,0,0);
-  return (settings.upperDistributions||[]).filter(d=>new Date(d.date)>=today && new Date(d.date)<new Date(today.getTime()+86400000));
+  return (settings.upperDistributions||[]).filter(d=>(d.workDate?new Date(d.workDate+'T00:00:00'):new Date(d.date))>=today && (d.workDate?new Date(d.workDate+'T00:00:00'):new Date(d.date))<new Date(today.getTime()+86400000));
 }
 function getUpperWorkWeekRange(baseDate=new Date()){
   const d=new Date(baseDate); d.setHours(0,0,0,0);
@@ -3946,11 +3946,11 @@ function getUpperWorkWeekRange(baseDate=new Date()){
 }
 function upperWeeklyRecords(baseDate=new Date()){
   const {start,end}=getUpperWorkWeekRange(baseDate);
-  return (settings.upperDistributions||[]).filter(d=>{const dt=new Date(d.date);return dt>=start&&dt<end&&dt.getDay()!==5;});
+  return (settings.upperDistributions||[]).filter(d=>{const dt=d.workDate?new Date(d.workDate+'T00:00:00'):new Date(d.date);return dt>=start&&dt<end&&dt.getDay()!==5;});
 }
 function upperWorkerWeekRecords(workerId,baseDate=new Date(),throughDate=null){
   const {start,end}=getUpperWorkWeekRange(baseDate),through=throughDate?new Date(throughDate):null;
-  return (settings.upperDistributions||[]).filter(r=>{const dt=new Date(r.date);return String(r.workerId)===String(workerId)&&dt>=start&&dt<end&&dt.getDay()!==5&&(!through||dt<=through);});
+  return (settings.upperDistributions||[]).filter(r=>{const dt=r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date);return String(r.workerId)===String(workerId)&&dt>=start&&dt<end&&dt.getDay()!==5&&(!through||dt<=through);});
 }
 function upperWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
   const records=upperWorkerWeekRecords(workerId,baseDate,throughDate);let articleAtoms=0,materialAtoms=0,totalAtoms=0,kharcha=0;
@@ -4005,7 +4005,7 @@ function upperPendingReportTable(rows){
 function upperMovementRows(kind,mode='today',now=new Date()){
   const end=new Date(now);end.setHours(24,0,0,0);let start=null;
   if(mode==='today'){start=new Date(now);start.setHours(0,0,0,0);}else if(mode==='week')start=getUpperWorkWeekRange(now).start;else if(mode==='month')start=new Date(now.getFullYear(),now.getMonth(),1);
-  const rows=[];(settings.upperDistributions||[]).forEach(v=>{const date=new Date(v.date);if(!Number.isFinite(date.getTime())||(start&&date<start)||date>=end)return;
+  const rows=[];(settings.upperDistributions||[]).forEach(v=>{const date=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.date);if(!Number.isFinite(date.getTime())||(start&&date<start)||date>=end)return;
     (v.lines||[]).forEach(line=>{const quantity=kind==='received'?(v.workflowVersion===1?Number(line.receivedQty)||0:0):Number(line.qty)||0;if(quantity<=0)return;rows.push({workerName:v.workerName||'',article:line.articleName||'(Material only)',quantity});});
   });return rows;
 }
@@ -4026,11 +4026,11 @@ function renderUpperPendingPageList(){
   const host=document.getElementById('upperPendingPageList');if(!host)return;
   const mode=window.__upperPendingReportMode||'today',rows=upperPendingReportRows(mode),end=new Date();end.setHours(24,0,0,0);let start=null;
   if(mode==='today'){start=new Date();start.setHours(0,0,0,0);}else if(mode==='week')start=getUpperWorkWeekRange(new Date()).start;else if(mode==='month'){const now=new Date();start=new Date(now.getFullYear(),now.getMonth(),1);}
-  const records=[...(settings.upperDistributions||[]).map(record=>({record,kind:'voucher'})),...(settings.upperPendingRecords||[]).map(record=>({record,kind:'opening'}))].filter(({record})=>{const date=new Date(record.date);return record.id!==undefined&&record.id!==null&&Number.isFinite(date.getTime())&&(!start||date>=start)&&date<end;});
+  const records=[...(settings.upperDistributions||[]).map(record=>({record,kind:'voucher'})),...(settings.upperPendingRecords||[]).map(record=>({record,kind:'opening'}))].filter(({record})=>{const date=record.workDate?new Date(record.workDate+'T00:00:00'):new Date(record.date);return record.id!==undefined&&record.id!==null&&Number.isFinite(date.getTime())&&(!start||date>=start)&&date<end;});
   host.innerHTML=upperPendingReportTable(rows);
   Array.from(host.querySelectorAll('tbody tr')).forEach((tr,index)=>{
     const workerRecords=records.filter(({record})=>String(record.workerId)===String(rows[index].workerId)).sort((a,b)=>new Date(b.record.date)-new Date(a.record.date));
-    const details=workerRecords.map(({record,kind})=>'<div style="padding:4px 0;border-bottom:1px solid #ddd;">'+esc(fmtDate(record.date))+' | '+esc(kind==='voucher'?'Voucher #'+record.voucherNo:'Opening / adjustment')+' '+['View','Edit','Delete'].map(action=>'<button type="button" class="btn ghost small" data-upper-pending-record-action="'+action.toLowerCase()+'" data-record-kind="'+kind+'" data-record-id="'+esc(record.id)+'" data-worker-id="'+esc(record.workerId)+'">'+action+'</button>').join(' ')+'</div>').join('');
+    const details=workerRecords.map(({record,kind})=>'<div style="padding:4px 0;border-bottom:1px solid #ddd;">'+esc(fmtDate(record.workDate?record.workDate+'T00:00:00':record.date))+' | '+esc(kind==='voucher'?'Voucher #'+record.voucherNo:'Opening / adjustment')+' '+['View','Edit','Delete'].map(action=>'<button type="button" class="btn ghost small" data-upper-pending-record-action="'+action.toLowerCase()+'" data-record-kind="'+kind+'" data-record-id="'+esc(record.id)+'" data-worker-id="'+esc(record.workerId)+'">'+action+'</button>').join(' ')+'</div>').join('');
     tr.insertAdjacentHTML('afterend','<tr><td colspan="3" style="padding:3px 5px;"><details><summary>Records ('+workerRecords.length+')</summary>'+ (details||'<div>No records in this period.</div>')+'</details></td></tr>');
   });
   host.onclick=event=>{
@@ -4109,7 +4109,7 @@ function openUpperTodayItemsDetail(){
 function upperLabourFilteredRecords(){
   const mode=window.__upperLabourFilterMode||'week',workerQ=String(window.__upperLabourWorkerQ||'').trim().toLowerCase(),fromVal=window.__upperLabourFrom||'',toVal=window.__upperLabourTo||'',now=new Date();let start=null,end=null;
   if(mode==='week'){({start,end}=getUpperWorkWeekRange(now));}else if(mode==='previousWeek'){const cur=getUpperWorkWeekRange(now);start=new Date(cur.start);start.setDate(start.getDate()-7);end=new Date(cur.start);}else if(mode==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);end=new Date(now.getFullYear(),now.getMonth()+1,1);}else if(mode==='custom'&&fromVal&&toVal){start=new Date(fromVal+'T00:00:00');end=new Date(toVal+'T00:00:00');end.setDate(end.getDate()+1);}
-  return (settings.upperDistributions||[]).filter(r=>{const dt=new Date(r.date);if(start&&dt<start)return false;if(end&&dt>=end)return false;if((mode==='week'||mode==='previousWeek')&&dt.getDay()===5)return false;if(workerQ&&!String(r.workerName||'').toLowerCase().includes(workerQ))return false;return true;}).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  return (settings.upperDistributions||[]).filter(r=>{const dt=r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date);if(start&&dt<start)return false;if(end&&dt>=end)return false;if((mode==='week'||mode==='previousWeek')&&dt.getDay()===5)return false;if(workerQ&&!String(r.workerName||'').toLowerCase().includes(workerQ))return false;return true;}).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
 }
 function upperKharchaReportRecords(){return [...upperWeeklyRecords(),...productionKharchaRows('upper').map(r=>({id:r.id,workerName:workers.find(w=>String(w.id)===String(r.workerId))?.name||'Worker',date:r.date,totalAmount:Number(r.delta)||0,kharchaAdjustment:true}))];}
 function pageUpperWeeklyKharcha(){
@@ -9075,7 +9075,7 @@ function batamFilteredVouchers(){
  const now=new Date(),today=batamLocalDateKey(now),ws=batamWeekStart(now),we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(0,0,0,0);
  const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(batamMansProductionSearch||'').trim().toLowerCase();
  return batamMansVouchers().filter(v=>{
-   const d=new Date(v.createdAt||v.date||0),key=batamLocalDateKey(d);let ok=true;
+   const d=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.createdAt||v.date||0),key=batamLocalDateKey(d);let ok=true;
    if(batamMansProductionFilter==='today')ok=key===today;
    else if(batamMansProductionFilter==='week')ok=d>=ws&&d<we&&d.getDay()!==5;
    else if(batamMansProductionFilter==='month')ok=key.startsWith(month);
@@ -9127,7 +9127,7 @@ function openBatamVoucherCustomize(){
 
 function batamWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
  const range=getUpperWorkWeekRange(baseDate),through=throughDate?new Date(throughDate):null;
- const vouchers=batamMansVouchers().filter(v=>{if(v.deletedAt||String(v.workerId)!==String(workerId))return false;const d=new Date(v.createdAt);return d>=range.start&&d<range.end&&d.getDay()!==5&&(!through||d<=through);});
+ const vouchers=batamMansVouchers().filter(v=>{if(v.deletedAt||String(v.workerId)!==String(workerId))return false;const d=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.createdAt);return d>=range.start&&d<range.end&&d.getDay()!==5&&(!through||d<=through);});
  let articleAtoms=0,materialAtoms=0,kharcha=0;
  vouchers.forEach(v=>{articleAtoms+=(v.items||[]).reduce((s,i)=>s+(Number(i.reportedQty)||0),0);materialAtoms+=(v.materials||[]).reduce((s,m)=>s+(Number(m.qty)||0),0);kharcha+=Number(v.expenseAmount)||0;});
  kharcha+=productionKharchaAdjustmentTotal('batam',workerId,baseDate,throughDate);
@@ -9143,7 +9143,7 @@ function bfWeeklyWorkDateValid(value,now=new Date()){
 }
 function bfWeeklyVoucherData(module,v,now=new Date()){
  const vouchers=settings[module+'MansProductionVouchers']||[],entries=settings[module+'MansProduction']||[],dateOf=r=>r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date||r.createdAt);
- const base=dateOf(v),start=new Date(base);start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+1)%7);const end=new Date(start);end.setDate(end.getDate()+7);const through=new Date(now);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
+ const base=dateOf(v),start=new Date(base);start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+1)%7);const end=new Date(start);end.setDate(end.getDate()+7);const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
  const active=r=>!r.deletedAt&&r.deleted!==true,worker=r=>String(r.workerId)===String(v.workerId),inPeriod=date=>date>=start&&date<through;
  const weekVouchers=vouchers.filter(r=>active(r)&&worker(r)&&inPeriod(dateOf(r))),rows=[];
  entries.filter(r=>active(r)&&worker(r)).forEach(r=>{
@@ -9604,7 +9604,9 @@ function pageBatamMansProduction(){
  if(!selected)batamMansSelectedWorker=null;
  const workDates=bfWeeklyWorkDateRange();
  const prodArticles=settings.batamMansProductionArticles||[];
- const todayKey=batamLocalDateKey(new Date()),todayVouchers=batamMansVouchers().filter(v=>!v.deletedAt&&batamLocalDateKey(v.createdAt||v.date)===todayKey);
+ const todayKey=batamLocalDateKey(new Date()),todayVouchers=batamMansVouchers().filter(v=>!v.deletedAt&&(v.workDate||batamLocalDateKey(v.createdAt||v.date))===todayKey);
+ const completedWorkerIds=new Set(todayVouchers.map(v=>String(v.workerId)));
+ const pendingWorkers=batamWorkers.filter(w=>!completedWorkerIds.has(String(w.id))).length;
  const todayKharcha=todayVouchers.reduce((s,v)=>s+(Number(v.expenseAmount)||0),0);
  const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
  const backDisabled=navHistory.length?'':'disabled';
@@ -9625,8 +9627,8 @@ function pageBatamMansProduction(){
  </div>
 
  <div class="card bm-worker-card">
-   <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Batam Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&batamLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'batam')}${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Batam Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong><small style="display:block;font-size:11px;color:var(--muted);">Pending: ${pendingWorkers}</small></span></div>
+   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&(v.workDate||batamLocalDateKey(v.createdAt||v.date))===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'batam')}${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
@@ -9837,7 +9839,7 @@ function finishedFilteredVouchers(){
  const now=new Date(),today=finishedLocalDateKey(now),ws=finishedWeekStart(now),we=new Date(ws);we.setDate(we.getDate()+6);we.setHours(0,0,0,0);
  const month=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,q=String(finishedMansProductionSearch||'').trim().toLowerCase();
  return finishedMansVouchers().filter(v=>{
-   const d=new Date(v.createdAt||v.date||0),key=finishedLocalDateKey(d);let ok=true;
+   const d=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.createdAt||v.date||0),key=finishedLocalDateKey(d);let ok=true;
    if(finishedMansProductionFilter==='today')ok=key===today;
    else if(finishedMansProductionFilter==='week')ok=d>=ws&&d<we&&d.getDay()!==5;
    else if(finishedMansProductionFilter==='month')ok=key.startsWith(month);
@@ -9889,7 +9891,7 @@ function openFinishedVoucherCustomize(){
 
 function finishedWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
  const range=getUpperWorkWeekRange(baseDate),through=throughDate?new Date(throughDate):null;
- const vouchers=finishedMansVouchers().filter(v=>{if(v.deletedAt||String(v.workerId)!==String(workerId))return false;const d=new Date(v.createdAt);return d>=range.start&&d<range.end&&d.getDay()!==5&&(!through||d<=through);});
+ const vouchers=finishedMansVouchers().filter(v=>{if(v.deletedAt||String(v.workerId)!==String(workerId))return false;const d=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.createdAt);return d>=range.start&&d<range.end&&d.getDay()!==5&&(!through||d<=through);});
  let articleAtoms=0,materialAtoms=0,kharcha=0;
  vouchers.forEach(v=>{articleAtoms+=(v.items||[]).reduce((s,i)=>s+(Number(i.reportedQty)||0),0);materialAtoms+=(v.materials||[]).reduce((s,m)=>s+(Number(m.qty)||0),0);kharcha+=Number(v.expenseAmount)||0;});
  kharcha+=productionKharchaAdjustmentTotal('finished',workerId,baseDate,throughDate);
@@ -10317,7 +10319,7 @@ function pageFinishedMansProduction(){
  if(!selected)finishedMansSelectedWorker=null;
  const workDates=bfWeeklyWorkDateRange();
  const prodArticles=settings.finishedMansProductionArticles||[];
- const todayKey=finishedLocalDateKey(new Date()),todayVouchers=finishedMansVouchers().filter(v=>!v.deletedAt&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);
+ const todayKey=finishedLocalDateKey(new Date()),todayVouchers=finishedMansVouchers().filter(v=>!v.deletedAt&&(v.workDate||finishedLocalDateKey(v.createdAt||v.date))===todayKey);
  const todayKharcha=todayVouchers.reduce((s,v)=>s+(Number(v.expenseAmount)||0),0);
  const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
  const backDisabled=navHistory.length?'':'disabled';
@@ -10339,7 +10341,7 @@ function pageFinishedMansProduction(){
 
  <div class="card bm-worker-card">
    <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Finished Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&finishedLocalDateKey(v.createdAt||v.date)===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'finished')}${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&(v.workDate||finishedLocalDateKey(v.createdAt||v.date))===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'finished')}${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
@@ -11275,11 +11277,12 @@ function mb20ArticleStarted(id){return mb20s().vouchers.some(v=>v.workflowVersio
 function mb20WorkflowRow(){return '<div data-mb20-work-row style="display:grid;grid-template-columns:minmax(140px,1.5fr) repeat(3,minmax(90px,1fr));gap:5px;align-items:end;margin-bottom:5px;"><div><label>Magzi/Batava Article</label><select data-mb20-article><option value="">Select Article</option>'+mb20s().products.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></div><div><label>Issued Quantity</label><input data-mb20-issued type="number" min="0" step="1" value="0"></div><div><label>Received Quantity</label><input data-mb20-received type="number" min="0" step="1" value="0"></div><div><label>Supplier Pending</label><input data-mb20-item-pending type="number" min="0" step="1" value="0" disabled title="Article opening pending: set once"></div></div>';}
 function mb20BindWorkflowRows(){document.querySelectorAll('[data-mb20-work-row]').forEach(row=>{const select=row.querySelector('[data-mb20-article]');if(select.dataset.bound)return;select.dataset.bound='1';select.onchange=()=>{const id=select.value,field=row.querySelector('[data-mb20-item-pending]');field.disabled=!id;field.readOnly=mb20ArticleStarted(id);field.value=String(mb20ItemPending().articles.get(String(id))||0);field.title=field.readOnly?'Current saved article pending':'Opening item pending: set once';};});}
 function mb20WeeklyData(v,now=new Date()){
- const start=new Date(v.workDate+'T00:00:00');start.setDate(start.getDate()-(start.getDay()+1)%7);const end=new Date(start);end.setDate(end.getDate()+7);const through=new Date(now);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
- const records=mb20s().vouchers.filter(r=>r.workflowVersion===1&&mb20WorkTime(r)>=start&&mb20WorkTime(r)<through).slice().sort((a,b)=>mb20WorkTime(a)-mb20WorkTime(b));const days=[],receivedArticles=new Map();let received=0,kharcha=0;
+ const dateOf=r=>{if(r.workDate)return new Date(r.workDate+'T00:00:00');const raw=r.date||r.createdAt;return new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw)?raw+'T00:00:00':raw);};
+ const start=dateOf(v);start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+1)%7);const end=new Date(start);end.setDate(end.getDate()+7);const through=dateOf(v);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
+ const records=mb20s().vouchers.filter(r=>r.workflowVersion===1&&dateOf(r)>=start&&dateOf(r)<through).slice().sort((a,b)=>dateOf(a)-dateOf(b)||new Date(a.createdAt)-new Date(b.createdAt));const days=[],receivedArticles=new Map();let received=0,kharcha=0;
  records.forEach(r=>{kharcha+=Number(r.kharcha)||0;(r.lines||[]).forEach(l=>{const q=Number(l.receivedQty)||0;received+=q;if(q<=0)return;const key=String(l.productId),a=receivedArticles.get(key)||{name:l.productName,qty:0};a.qty+=q;receivedArticles.set(key,a);});});
- for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){const next=new Date(day);next.setDate(next.getDate()+1);const daily=records.filter(r=>mb20WorkTime(r)>=day&&mb20WorkTime(r)<next),articles=new Map();let dailyReceived=0;daily.forEach(r=>(r.lines||[]).forEach(l=>{dailyReceived+=Number(l.receivedQty)||0;const q=Number(l.issuedQty)||0;if(q<=0)return;const key=String(l.productId),a=articles.get(key)||{name:l.productName,qty:0};a.qty+=q;articles.set(key,a);}));const last=daily[daily.length-1],time=last?new Date(last.createdAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:dailyReceived,pending:mb20ItemPending(mb20s().vouchers,next).total});}
- return {days,received,receivedArticles:[...receivedArticles.values()],pending:mb20ItemPending().total,kharcha};
+ for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){const next=new Date(day);next.setDate(next.getDate()+1);const daily=records.filter(r=>dateOf(r)>=day&&dateOf(r)<next),articles=new Map();let dailyReceived=0;daily.forEach(r=>(r.lines||[]).forEach(l=>{dailyReceived+=Number(l.receivedQty)||0;const q=Number(l.issuedQty)||0;if(q<=0)return;const key=String(l.productId),a=articles.get(key)||{name:l.productName,qty:0};a.qty+=q;articles.set(key,a);}));const last=daily[daily.length-1],time=last?new Date(last.createdAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:dailyReceived,pending:mb20ItemPending(mb20s().vouchers.filter(r=>dateOf(r)<next)).total});}
+ return {days,received,receivedArticles:[...receivedArticles.values()],pending:mb20ItemPending(mb20s().vouchers.filter(r=>dateOf(r)<through)).total,kharcha};
 }
 function mb20PrintVoucher(v){if(v.workflowVersion===1)return printAggregateThermal(mb20voucherHtml(v),'Magzi & Batava Weekly Voucher','element');return printBatamMansHtml(mb20voucherHtml(v),'Magzi & Batava Receive Voucher');}
 function pageMagziBatavaVoucher(){const range=mb20WorkRange(),sp=mb20s().supplier||{},total=mb20s().vouchers.filter(v=>v.workflowVersion===1).reduce((n,v)=>n+(v.lines||[]).reduce((q,l)=>q+(Number(l.receivedQty)||0),0),0);return '<div class="mb20"><div class="mb20-row"><button class="btn ghost small" id="mb20vback">Back</button><b>Enter Magzi/Batava Distribution Details</b></div><div class="mb20-card"><strong>'+esc(sp.shopName||sp.ownerName||'Magzi & Batava Supplier')+'</strong><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:end;margin:5px 0;"><div><label>Work Date</label><input id="mb20WorkDate" type="date" value="'+range.today+'" min="'+range.min+'" max="'+range.today+'"></div><div><label>Weekly Kharcha</label><input id="mb20WorkflowKharcha" type="number" min="0" step="0.01" value="0" title="Separate voucher expense; does not settle the supplier balance"></div><div><label>Total ATOMS</label><input readonly value="'+total+' ATOMS"></div></div><div style="overflow-x:auto;"><div id="mb20WorkflowRows" style="min-width:450px;">'+mb20WorkflowRow()+'</div></div><div style="display:flex;gap:5px;justify-content:flex-end;"><button class="btn ghost small" id="mb20AddArticle">+ Article</button><button class="btn brass" id="mb20savev">Create Voucher</button></div></div>'+'</div>';}
