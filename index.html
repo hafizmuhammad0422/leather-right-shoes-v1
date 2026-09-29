@@ -416,45 +416,6 @@
   .sss-product-list{display:grid;gap:4px;width:100%;}.sss-product-row{min-width:0;}.sss-product-row .btn{white-space:nowrap;}.sss-product-photo img{width:100%;height:100%;object-fit:cover;}
   @media(max-width:700px){.sss-product-list{overflow-x:hidden;}.sss-product-row{grid-template-columns:34px minmax(0,1fr) minmax(48px,.65fr) minmax(72px,.9fr)!important;gap:5px!important;padding:4px!important;}.sss-product-photo{width:34px!important;height:34px!important;}.sss-product-row .btn{padding:4px 6px!important;font-size:10px!important;}.sss-product-row>div:nth-child(2) div:first-child{font-size:12px;}.sss-product-row>div:nth-child(2) div:last-child,.sss-product-row>div:nth-child(3) div:last-child,.sss-product-row>div:nth-child(4) div:last-child{font-size:8px!important;}.sss-product-row>div:last-child{grid-column:2/-1;justify-content:flex-start!important;}}
   @media(max-width:430px){.sss-product-row{grid-template-columns:32px minmax(0,1fr) minmax(55px,.8fr)!important;}.sss-product-row>div:nth-child(4){grid-column:2/-1;}.sss-product-row>div:last-child{grid-column:2/-1;}}
-
-/* Browser-local sidebar menu customization */
-#navItems .sidebar-menu-group-toggle,#navItems .sidebar-menu-settings{width:100%;text-align:left;border:0;background:transparent;color:inherit;padding:9px 14px;cursor:pointer;font:inherit;}
-#navItems .sidebar-menu-group-toggle{font-weight:700;}
-#navItems .sidebar-menu-group-toggle.has-active{box-shadow:inset 3px 0 var(--brass);}
-#navItems .sidebar-menu-children{padding-left:10px;}
-#navItems .sidebar-menu-children[hidden]{display:none!important;}
-#navItems .sidebar-menu-settings{font-size:12px;opacity:.85;}
-#sidebarMenuEditor .sidebar-menu-add{display:flex;gap:6px;margin-bottom:10px;}
-#sidebarMenuEditor .sidebar-menu-edit-list{max-height:55vh;overflow:auto;}
-#sidebarMenuEditor .sidebar-menu-edit-row{display:grid;grid-template-columns:minmax(110px,1fr) minmax(90px,.7fr) auto;gap:6px;align-items:end;padding:6px 0;border-bottom:1px solid var(--line);}
-#sidebarMenuEditor .sidebar-menu-edit-row.is-child{padding-left:10px;}
-#sidebarMenuEditor .sidebar-menu-edit-row label{margin:0;}
-#sidebarMenuEditor .sidebar-menu-edit-row small{font-size:10px;}
-#sidebarMenuEditor input,#sidebarMenuEditor select{min-width:0;font-size:12px;padding:5px;}
-#sidebarMenuEditor .sidebar-menu-edit-actions{display:flex;gap:3px;}
-#sidebarMenuEditor .sidebar-menu-group-caption{font-size:11px;color:var(--muted);}
-@media(max-width:700px){#navItems .sidebar-menu-group-toggle,#navItems .sidebar-menu-settings{min-height:44px;}#sidebarMenuEditor .sidebar-menu-edit-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}#sidebarMenuEditor .sidebar-menu-edit-actions{grid-column:1/-1;}}
-
-/* Browser-local dashboard shortcut settings */
-.dashboard-shortcut{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;}
-.dashboard-shortcut-icon{font-size:22px;}
-.dashboard-shortcut-label{font-size:12px;font-weight:700;overflow-wrap:anywhere;}
-#dashboardCardsEditor .dashboard-card-edit-row{display:grid;grid-template-columns:40px minmax(100px,1fr) auto;gap:6px;align-items:center;margin:6px 0;}
-#dashboardCardsEditor select{min-width:0;font-size:12px;padding:5px;}
-#dashboardCardsEditor{max-height:75vh;overflow:auto;}
-#dashboardCardsEditor .dashboard-card-edit-actions{display:flex;gap:3px;flex-wrap:wrap;}
-@media(max-width:600px){#dashboardCardsEditor .dashboard-card-edit-row{grid-template-columns:40px minmax(0,1fr);}#dashboardCardsEditor .dashboard-card-edit-actions{grid-column:2;}}
-
-/* Dashboard-only original-size cards with external labels */
-.dashboard-stats-grid:has(> .dashboard-card-tile){row-gap:48px!important;margin-bottom:48px!important;}
-.dashboard-stats-grid > .dashboard-card-tile{position:relative;min-width:0;align-self:start;}
-.dashboard-card-tile > .dashboard-visual-card{width:100%;}
-.dashboard-card-tile > .dashboard-visual-card::before{display:none;}
-.dashboard-card-tile .dashboard-visual-card > .dashboard-card-image{position:absolute;inset:0;display:block;width:100%;height:100%;background-size:cover;background-position:center;pointer-events:none;}
-.dashboard-card-tile > .dashboard-card-footer{position:absolute;top:calc(100% + 3px);left:0;right:0;text-align:center;}
-.dashboard-card-footer > .dashboard-card-caption{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;max-height:28px;padding:0 3px;line-height:14px;font-size:11px;font-weight:500;color:var(--ink);text-align:center;background:none;border:0;}
-.dashboard-card-tile .dashboard-visual-card > .box-icons{position:absolute;top:6px;right:7px;z-index:2;}
-.dashboard-card-tile .dashboard-visual-card > .box-icons span{opacity:.65;font-size:10px;}
 </style>
 
 <style>
@@ -2614,95 +2575,14 @@ function toast(msg){
 /* ============ ROUTER ============ */
 let currentPage='dashboard';
 let navHistory=[];
-function sidebarMenuDefault(){
-  return {version:1,entries:NAV_KEYS.map(([id])=>({id,kind:'item',label:null,parent:null}))};
-}
-function sidebarMenuValid(config){
-  if(!config||config.version!==1||!Array.isArray(config.entries))return false;
-  const ids=new Set(),routes=new Set(NAV_KEYS.map(([id])=>id)),groups=new Set();
-  for(const e of config.entries){
-    if(!e||typeof e.id!=='string'||ids.has(e.id))return false;ids.add(e.id);
-    if(e.kind==='group'){
-      if(!/^group-[a-z0-9-]+$/.test(e.id)||typeof e.label!=='string'||!e.label.trim()||e.label.length>100||e.parent!==null||typeof e.collapsed!=='boolean')return false;
-      groups.add(e.id);
-    }else if(e.kind==='item'){
-      if(!routes.delete(e.id)||(e.label!==null&&(typeof e.label!=='string'||!e.label.trim()||e.label.length>100))||(e.parent!==null&&typeof e.parent!=='string'))return false;
-    }else return false;
-  }
-  return routes.size===0&&config.entries.every(e=>e.parent===null||groups.has(e.parent));
-}
-function sidebarMenuLoad(){
-  try{const config=JSON.parse(localStorage.getItem('fac_sidebar_menu_ui_v1'));if(sidebarMenuValid(config))return config;}catch(e){}
-  return sidebarMenuDefault();
-}
-function sidebarMenuSave(config){
-  if(!sidebarMenuValid(config))return false;
-  try{localStorage.setItem('fac_sidebar_menu_ui_v1',JSON.stringify(config));return true;}catch(e){toast('Menu preferences could not be saved in this browser.');return false;}
-}
-function sidebarMenuChange(config,action,id,value){
-  const next=JSON.parse(JSON.stringify(config)),entries=next.entries,item=entries.find(e=>e.id===id);
-  if(action==='add'){
-    const label=String(value||'').trim();if(!label||label.length>100)return null;
-    let groupId='group-'+Date.now().toString(36);while(entries.some(e=>e.id===groupId))groupId+='-1';
-    entries.push({id:groupId,kind:'group',label,parent:null,collapsed:false});
-  }else if(!item)return null;
-  else if(action==='label'){const label=String(value||'').trim();item.label=label||(item.kind==='item'?null:'');}
-  else if(action==='parent'&&item.kind==='item'){item.parent=value||null;entries.splice(entries.indexOf(item),1);entries.push(item);}
-  else if(action==='up'||action==='down'){
-    const peers=entries.filter(e=>e.parent===item.parent),index=peers.indexOf(item),other=peers[index+(action==='up'?-1:1)];
-    if(other){const a=entries.indexOf(item),b=entries.indexOf(other);[entries[a],entries[b]]=[entries[b],entries[a]];}
-  }else if(action==='remove'&&item.kind==='group'){
-    entries.filter(e=>e.parent===id).forEach(e=>e.parent=null);entries.splice(entries.indexOf(item),1);
-  }else if(action==='toggle'&&item.kind==='group')item.collapsed=!item.collapsed;
-  else return null;
-  return sidebarMenuValid(next)?next:null;
-}
 function renderNav(){
-  const container=document.getElementById('navItems'),config=sidebarMenuLoad();
-  const itemHtml=e=>{const route=NAV_KEYS.find(([id])=>id===e.id);return '<button class="nav-item" data-page="'+e.id+'">'+route[1]+' '+esc(e.label===null?navLabel(e.id):e.label)+'</button>';};
-  container.innerHTML=config.entries.filter(e=>e.parent===null).map(e=>{
-    if(e.kind==='item')return itemHtml(e);
-    const children=config.entries.filter(child=>child.parent===e.id),active=children.some(child=>child.id===currentPage);
-    return '<div class="sidebar-menu-group"><button type="button" class="sidebar-menu-group-toggle'+(active?' has-active':'')+'" data-menu-group="'+e.id+'" aria-expanded="'+!e.collapsed+'" aria-controls="'+e.id+'">'+esc(e.label)+' <span aria-hidden="true">'+(e.collapsed?'&#9656;':'&#9662;')+'</span></button><div class="sidebar-menu-children" id="'+e.id+'"'+(e.collapsed?' hidden':'')+'>'+children.map(itemHtml).join('')+'</div></div>';
-  }).join('')+'<button type="button" class="sidebar-menu-settings" id="sidebarMenuSettings">&#9881; Menu Settings</button><button type="button" class="sidebar-menu-settings" id="dashboardCardsSettings">Dashboard Settings</button>';
+  const container = document.getElementById('navItems');
+  container.innerHTML = NAV_KEYS.map(([key,icon])=>`<button class="nav-item" data-page="${key}">${icon} ${esc(navLabel(key))}</button>`).join('');
   container.querySelectorAll('.nav-item').forEach(btn=>{
-    btn.addEventListener('click',()=>{goto(btn.dataset.page);});
-    btn.classList.toggle('active',btn.dataset.page===currentPage);
+    btn.addEventListener('click', ()=>{ goto(btn.dataset.page); });
+    btn.classList.toggle('active', btn.dataset.page===currentPage);
   });
-  container.querySelectorAll('[data-menu-group]').forEach(btn=>btn.addEventListener('click',()=>{
-    const next=sidebarMenuChange(config,'toggle',btn.dataset.menuGroup);if(!next)return;
-    sidebarMenuSave(next);config.entries=next.entries;
-    const group=next.entries.find(e=>e.id===btn.dataset.menuGroup);
-    btn.setAttribute('aria-expanded',String(!group.collapsed));
-    btn.querySelector('span').innerHTML=group.collapsed?'&#9656;':'&#9662;';
-    document.getElementById(group.id).hidden=group.collapsed;
-  }));
-  document.getElementById('sidebarMenuSettings').addEventListener('click',openSidebarMenuSettings);
-  document.getElementById('dashboardCardsSettings').addEventListener('click',()=>openDashboardCardsSettings());
 }
-function openSidebarMenuSettings(){
-  const config=sidebarMenuLoad(),groups=config.entries.filter(e=>e.kind==='group');
-  const ordered=config.entries.filter(e=>e.parent===null).flatMap(e=>e.kind==='group'?[e,...config.entries.filter(child=>child.parent===e.id)]:[e]);
-  modal('<div id="sidebarMenuEditor"><h3>Menu Settings</h3><p style="font-size:12px;color:var(--muted);">Saved in this browser only. Renaming changes sidebar labels only.</p><div class="sidebar-menu-add"><input id="sidebarMenuGroupName" maxlength="100" placeholder="New group name" aria-label="New group name"><button type="button" class="btn small" id="sidebarMenuAddGroup">Add Group</button></div><div class="sidebar-menu-edit-list">'+ordered.map(e=>{
-    const group=e.kind==='group',label=e.label===null?navLabel(e.id):e.label,peers=config.entries.filter(p=>p.parent===e.parent),index=peers.findIndex(p=>p.id===e.id);
-    return '<div class="sidebar-menu-edit-row'+(e.parent?' is-child':'')+'" data-menu-row="'+e.id+'"><label><small>'+esc(group?'Group':NAV_KEYS.find(([id])=>id===e.id)[2])+'</small><input data-menu-label maxlength="100" aria-label="Rename '+esc(label)+'" value="'+esc(label)+'"></label>'+(group?'<span class="sidebar-menu-group-caption">Parent group</span>':'<select data-menu-parent aria-label="Parent for '+esc(label)+'"><option value="">Top level</option>'+groups.map(g=>'<option value="'+g.id+'"'+(e.parent===g.id?' selected':'')+'>'+esc(g.label)+'</option>').join('')+'</select>')+'<div class="sidebar-menu-edit-actions"><button type="button" class="btn ghost small" data-menu-action="up" aria-label="Move up"'+(index===0?' disabled':'')+'>&#8593;</button><button type="button" class="btn ghost small" data-menu-action="down" aria-label="Move down"'+(index===peers.length-1?' disabled':'')+'>&#8595;</button>'+(group?'<button type="button" class="btn ghost small" data-menu-action="remove" title="Move children to top level and remove group">Remove</button>':'')+'</div></div>';
-  }).join('')+'</div><div class="modal-actions"><button type="button" class="btn ghost" id="sidebarMenuReset">Reset to Default Menu</button><button type="button" class="btn brass" id="sidebarMenuClose">Close</button></div></div>');
-  const host=document.getElementById('sidebarMenuEditor');
-  const change=(action,id,value)=>{const next=sidebarMenuChange(config,action,id,value);if(!next){toast('Enter a valid menu label or group.');return;}if(sidebarMenuSave(next)){renderNav();openSidebarMenuSettings();}};
-  host.querySelectorAll('[data-menu-row]').forEach(row=>{
-    const id=row.dataset.menuRow;
-    row.querySelector('[data-menu-label]').addEventListener('change',e=>change('label',id,e.target.value));
-    row.querySelector('[data-menu-parent]')?.addEventListener('change',e=>change('parent',id,e.target.value));
-    row.querySelectorAll('[data-menu-action]').forEach(btn=>btn.addEventListener('click',()=>change(btn.dataset.menuAction,id)));
-  });
-  document.getElementById('sidebarMenuAddGroup').onclick=()=>change('add',null,document.getElementById('sidebarMenuGroupName').value);
-  document.getElementById('sidebarMenuReset').onclick=()=>{
-    try{localStorage.removeItem('fac_sidebar_menu_ui_v1');}catch(e){toast('Menu preferences could not be reset in this browser.');return;}
-    renderNav();openSidebarMenuSettings();
-  };
-  document.getElementById('sidebarMenuClose').onclick=closeModal;
-}
-
 function goto(page,skipSecurity=false,keepFilters=false,fromBack=false){
   if(!skipSecurity && !ensureOwnerUnlocked(page)) return;
   if(!keepFilters) workerCategoryFilter = null;
@@ -2990,78 +2870,6 @@ async function shareStockOnWhatsApp(id){
   }catch(err){toast('Could not generate stock picture');}
 }
 
-function dashboardCardsDefault(){
-  return {version:1,slots:[],order:{main:['materials','workers','articles','today','lowstock','customers'],cat:Array.from({length:6},(_,i)=>'cat'+i),mid:Array.from({length:6},(_,i)=>'mid'+i),act:Array.from({length:6},(_,i)=>'act'+i)}};
-}
-function dashboardCardsValid(config){
-  if(!config||config.version!==1||!Array.isArray(config.slots)||!config.order)return false;
-  const defaults=dashboardCardsDefault(),ids=new Set(),routes=new Set(NAV_KEYS.map(([id])=>id));
-  for(const row of ['main','cat','mid','act']){
-    const order=config.order[row];if(order===undefined&&(row==='main'||row==='cat'))continue;if(!Array.isArray(order)||order.length!==6||new Set(order).size!==6||order.some(id=>!defaults.order[row].includes(id)))return false;
-  }
-  return config.slots.every(slot=>{
-    if(!slot||!Object.values(defaults.order).flat().includes(slot.id)||ids.has(slot.id)||(slot.route!==null&&!routes.has(slot.route)))return false;
-    ids.add(slot.id);return true;
-  });
-}
-function dashboardCardsLoad(){
-  try{const config=JSON.parse(localStorage.getItem('fac_dashboard_cards_ui_v1'));if(dashboardCardsValid(config))return {...config,order:{...dashboardCardsDefault().order,...config.order}};}catch(e){}
-  return dashboardCardsDefault();
-}
-function dashboardCardsSave(config){
-  if(!dashboardCardsValid(config))return false;
-  try{localStorage.setItem('fac_dashboard_cards_ui_v1',JSON.stringify(config));return true;}catch(e){toast('Dashboard preferences could not be saved in this browser.');return false;}
-}
-function dashboardCardsChange(config,action,id,route=null){
-  const defaults=dashboardCardsDefault(),row=Object.keys(defaults.order).find(row=>defaults.order[row].includes(id));
-  if(!dashboardCardsValid(config)||!row)return null;
-  const next=JSON.parse(JSON.stringify(config));next.order={...defaults.order,...next.order};
-  if(action==='set'||action==='remove'){
-    next.slots=next.slots.filter(slot=>slot.id!==id);next.slots.push({id,route:action==='remove'?null:route});
-  }else if(action==='up'||action==='down'){
-    const order=next.order[row],index=order.indexOf(id),target=index+(action==='up'?-1:1);
-    if(target>=0&&target<order.length)[order[index],order[target]]=[order[target],order[index]];
-  }else return null;
-  return dashboardCardsValid(next)?next:null;
-}
-function dashboardCardsLabel(route){
-  const item=sidebarMenuLoad().entries.find(e=>e.kind==='item'&&e.id===route);
-  return item&&item.label!==null?item.label:navLabel(route);
-}
-function dashboardCardsRowHtml(row,original){
-  const config=dashboardCardsLoad();
-  const outsideCaption=html=>{
-    const caption=html.match(/<span class="dashboard-card-caption">[\s\S]*?<\/span>/)?.[0]||'';
-    const card=html.replace(caption,'');
-    return '<div class="dashboard-card-tile">'+card+'<div class="dashboard-card-footer">'+caption+'</div></div>';
-  };
-  return config.order[row].map(id=>{
-    const slot=config.slots.find(slot=>slot.id===id);if(!slot)return outsideCaption(original[dashboardCardsDefault().order[row].indexOf(id)]);
-    const image='<span class="dashboard-card-image" aria-hidden="true" style="'+boxBgStyle(id)+'"></span>';
-    const photo='<span class="box-icons"><span data-boximg="'+id+'|'+esc(id)+'" role="button" tabindex="0" aria-label="Change photo">&#128444;</span></span>';
-    if(slot.route===null)return outsideCaption('<button type="button" class="stat dashboard-visual-card custom-empty dashboard-shortcut" id="dashBox-'+id+'" data-dashboard-add="'+id+'" >'+(settings.boxImages?.[id]?image:'')+'<span class="dashboard-card-caption">+ Add</span>'+photo+'</button>');
-    return outsideCaption('<button type="button" class="stat dashboard-visual-card dashboard-shortcut" id="dashBox-'+id+'" data-page="'+slot.route+'" >'+image+'<span class="dashboard-card-caption">'+esc(dashboardCardsLabel(slot.route))+'</span>'+photo+'</button>');
-  }).join('');
-}
-function openDashboardCardsSettings(focusSlot=null){
-  const config=dashboardCardsLoad();
-  modal('<div id="dashboardCardsEditor"><h3>Dashboard Settings</h3><p style="font-size:12px;color:var(--muted);">Customize all 24 slots. Shortcuts are saved in this browser; photos use the existing image settings.</p>'+['main','cat','mid','act'].map(row=>'<h4>'+ ({main:'Row 1',cat:'Row 2 ? Worker categories',mid:'Row 3 ? Middle slots',act:'Row 4 ? Action slots'}[row])+'</h4>'+config.order[row].map((id,index)=>{
-    const slot=config.slots.find(slot=>slot.id===id),value=slot?(slot.route||''):'original';
-    return '<div class="dashboard-card-edit-row" data-dashboard-slot="'+id+'"><label for="dashboardSlot-'+id+'">'+id+'</label><select id="dashboardSlot-'+id+'" data-dashboard-module><option value="original" disabled'+(value==='original'?' selected':'')+'>Original card (unchanged)</option><option value=""'+(value===''?' selected':'')+'>+ Add / empty slot</option>'+NAV_KEYS.map(([route,icon])=>'<option value="'+route+'"'+(value===route?' selected':'')+'>'+icon+' '+esc(dashboardCardsLabel(route))+'</option>').join('')+'</select><div class="dashboard-card-edit-actions"><button type="button" class="btn ghost small" data-dashboard-action="up" aria-label="Move '+id+' up"'+(index===0?' disabled':'')+'>&#8593;</button><button type="button" class="btn ghost small" data-dashboard-action="down" aria-label="Move '+id+' down"'+(index===5?' disabled':'')+'>&#8595;</button><button type="button" class="btn ghost small" data-dashboard-action="remove">Remove</button><button type="button" class="btn ghost small" data-dashboard-photo>Change / Remove Photo</button></div></div>';
-  }).join('')).join('')+'<div class="modal-actions"><button type="button" class="btn ghost" id="dashboardCardsReset">Reset Dashboard</button><button type="button" class="btn brass" id="dashboardCardsClose">Close</button></div></div>');
-  const update=(action,id,route)=>{const next=dashboardCardsChange(config,action,id,route);if(next&&dashboardCardsSave(next)){render();openDashboardCardsSettings(id);}};
-  document.getElementById('dashboardCardsEditor').querySelectorAll('[data-dashboard-slot]').forEach(row=>{
-    const id=row.dataset.dashboardSlot;row.querySelector('[data-dashboard-module]').addEventListener('change',e=>update(e.target.value?'set':'remove',id,e.target.value));
-    row.querySelector('[data-dashboard-photo]').addEventListener('click',()=>openBoxImageModal(id,id));
-    row.querySelectorAll('[data-dashboard-action]').forEach(btn=>btn.addEventListener('click',()=>update(btn.dataset.dashboardAction,id)));
-  });
-  document.getElementById('dashboardCardsReset').onclick=()=>{
-    try{localStorage.removeItem('fac_dashboard_cards_ui_v1');}catch(e){toast('Dashboard preferences could not be reset in this browser.');return;}
-    render();openDashboardCardsSettings();
-  };
-  document.getElementById('dashboardCardsClose').onclick=closeModal;
-  if(focusSlot)document.getElementById('dashboardSlot-'+focusSlot)?.focus();
-}
 function pageDashboard(){
   const todayStr = new Date().toISOString().slice(0,10);
   const activeMaterials = materials.filter(m=>!m.archived);
@@ -3092,85 +2900,105 @@ function pageDashboard(){
     
     <!-- KEY METRICS SECTION -->
     <div class="dashboard-stats-grid">
-${dashboardCardsRowHtml('main',[`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-materials" data-statclick="materials"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('materials')}"></span>
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-materials" data-statclick="materials" style="${boxBgStyle('materials')}">
         <div class="box-icons"><span data-boximg="materials|Materials">🖼️</span></div>
+        <div style="font-size:20px;margin-bottom:4px;">📦</div>
         ${numBadge(0, activeMaterials.length)}
-        <span class="dashboard-card-caption">${esc("MATERIALS")}</span>
+        ${labelBadge(0, "MATERIALS")}
       </div>
-`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-workers" data-statclick="workers"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('workers')}"></span>
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-workers" data-statclick="workers" style="${boxBgStyle('workers')}">
         <div class="box-icons"><span data-boximg="workers|Workers">🖼️</span></div>
+        <div style="font-size:20px;margin-bottom:4px;">👷</div>
         ${numBadge(1, activeWorkers.length)}
-        <span class="dashboard-card-caption">${esc("WORKERS")}</span>
+        ${labelBadge(1, "WORKERS")}
       </div>
-`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-articles" data-statclick="articles"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('articles')}"></span>
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-articles" data-statclick="articles" style="${boxBgStyle('articles')}">
         <div class="box-icons"><span data-boximg="articles|Articles">🖼️</span></div>
+        <div style="font-size:20px;margin-bottom:4px;">👞</div>
         ${numBadge(2, activeArticles.length)}
-        <span class="dashboard-card-caption">${esc("ARTICLES")}</span>
+        ${labelBadge(2, "ARTICLES")}
       </div>
-`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-today" data-statclick="today"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('today')}"></span>
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-today" data-statclick="today" style="${boxBgStyle('today')}">
         <div class="box-icons"><span data-boximg="today|Today's Dist.">🖼️</span></div>
+        <div style="font-size:20px;margin-bottom:4px;">📤</div>
         ${numBadge(3, todayIssues.length)}
-        <span class="dashboard-card-caption">${esc("TODAY'S DIST.")}</span>
+        ${labelBadge(3, "TODAY'S DIST.")}
       </div>
-`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide ${lowStock.length? 'warn':''}" id="dashBox-lowstock"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('lowstock')}"></span>
+      <div class="stat dashboard-card-presentation-hide ${lowStock.length? 'warn':''}" id="dashBox-lowstock" style="${boxBgStyle('lowstock')}">
         <div class="box-icons"><span data-boximg="lowstock|Low Stock">🖼️</span></div>
+        <div style="font-size:20px;margin-bottom:4px;">⚠️</div>
         ${numBadge(4, lowStock.length)}
-        <span class="dashboard-card-caption">${esc("LOW STOCK")}</span>
+        ${labelBadge(4, "LOW STOCK")}
       </div>
-`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-customers" data-statclick="shopkeepers"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('customers')}"></span>
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-customers" data-statclick="shopkeepers" style="${boxBgStyle('customers')}">
         <div class="box-icons"><span data-boximg="customers|Customers">🖼️</span></div>
+        <div style="font-size:20px;margin-bottom:4px;">🛒</div>
         ${numBadge(5, shopkeepers.length)}
-        <span class="dashboard-card-caption">${esc("CUSTOMERS")}</span>
+        ${labelBadge(5, "CUSTOMERS")}
       </div>
-`])}
     </div>
 
     <!-- CUSTOM / EDITABLE METRICS SECTION (Worker Categories) -->
     <div class="dashboard-stats-grid">
-      ${dashboardCardsRowHtml('cat',settings.customStats.map((cs,i)=> cs && cs.name ? `
-      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-cat${i}" data-customstat="${i}" data-categorybox="1"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('cat'+i)}"></span>
+      ${settings.customStats.map((cs,i)=> cs && cs.name ? `
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-cat${i}" data-customstat="${i}" data-categorybox="1" style="${boxBgStyle('cat'+i)}">
         <div class="box-icons"><span data-editcustomstat="${i}">✏️</span><span data-boximg="cat${i}|${esc(cs.name)}">🖼️</span></div>
+        <div style="font-size:20px;margin-bottom:4px;">${esc(cs.icon||'📌')}</div>
         ${numBadge(6+i, activeWorkers.filter(w=>w.category===cs.name).length)}
-        <span class="dashboard-card-caption">${esc(cs.name.toUpperCase())}</span>
+        ${labelBadge(6+i, esc(cs.name.toUpperCase()))}
       </div>` : `
-      <div class="stat dashboard-visual-card custom-empty" data-customstat="${i}">
-        <span class="dashboard-card-caption">+ Add</span>
-      </div>`))}
+      <div class="stat custom-empty" data-customstat="${i}">
+        <div style="font-size:18px;margin-bottom:4px;">➕</div>
+        <div class="lbl">ADD BOX</div>
+      </div>`).join('')}
     </div>
 
     <!-- MIDDLE SECTION (6 boxes, features to be added later) -->
     <div class="dashboard-stats-grid">
-      ${dashboardCardsRowHtml('mid',settings.dashboardMiddleBoxes.map((mb,i)=> mb && mb.name ? `
-      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-mid${i}" data-midbox="${i}"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('mid'+i)}"></span>
+      ${settings.dashboardMiddleBoxes.map((mb,i)=> mb && mb.name ? `
+      <div class="stat dashboard-card-presentation-hide" id="dashBox-mid${i}" data-midbox="${i}" style="${boxBgStyle('mid'+i)}">
         <div class="box-icons"><span data-editmidbox="${i}">✏️</span><span data-boximg="mid${i}|${esc(mb.name)}">🖼️</span></div>
-        <span class="dashboard-card-caption">${esc(mb.name.toUpperCase())}</span>
+        <div style="font-size:20px;margin-bottom:4px;">${esc(mb.icon||'📦')}</div>
+        ${labelBadge(12+i, esc(mb.name.toUpperCase()))}
       </div>` : `
-      <div class="stat dashboard-visual-card custom-empty" data-midbox="${i}">
-        <span class="dashboard-card-caption">+ Add</span>
-      </div>`))}
+      <div class="stat custom-empty" data-midbox="${i}">
+        <div style="font-size:18px;margin-bottom:4px;">➕</div>
+        <div class="lbl">ADD BOX</div>
+      </div>`).join('')}
     </div>
 
     <!-- ACTION BUTTONS (same size as boxes above) -->
     <div class="dashboard-stats-grid">
-${dashboardCardsRowHtml('act',[`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act0" data-page="issue"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act0')}"></span>
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act0" data-page="issue" style="${boxBgStyle('act0')}">
         <div class="box-icons"><span data-boximg="act0|New Distribution">🖼️</span></div>
-        <span class="dashboard-card-caption">${esc("NEW DISTRIBUTION")}</span>
-      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act1" data-page="articles"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act1')}"></span>
+        <div style="font-size:20px;margin-bottom:4px;">➕</div>
+        ${labelBadge(18, "NEW DISTRIBUTION")}
+      </button>
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act1" data-page="articles" style="${boxBgStyle('act1')}">
         <div class="box-icons"><span data-boximg="act1|New Article">🖼️</span></div>
-        <span class="dashboard-card-caption">${esc("NEW ARTICLE")}</span>
-      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act2" data-page="bills"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act2')}"></span>
+        <div style="font-size:20px;margin-bottom:4px;">➕</div>
+        ${labelBadge(19, "NEW ARTICLE")}
+      </button>
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act2" data-page="bills" style="${boxBgStyle('act2')}">
         <div class="box-icons"><span data-boximg="act2|New Bill">🖼️</span></div>
-        <span class="dashboard-card-caption">${esc("NEW BILL")}</span>
-      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act3" data-page="materials"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act3')}"></span>
+        <div style="font-size:20px;margin-bottom:4px;">📋</div>
+        ${labelBadge(20, "NEW BILL")}
+      </button>
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act3" data-page="materials" style="${boxBgStyle('act3')}">
         <div class="box-icons"><span data-boximg="act3|Materials">🖼️</span></div>
-        <span class="dashboard-card-caption">${esc("MATERIALS")}</span>
-      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act4" data-page="workers"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act4')}"></span>
+        <div style="font-size:20px;margin-bottom:4px;">📦</div>
+        ${labelBadge(21, "MATERIALS")}
+      </button>
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act4" data-page="workers" style="${boxBgStyle('act4')}">
         <div class="box-icons"><span data-boximg="act4|Workers">🖼️</span></div>
-        <span class="dashboard-card-caption">${esc("WORKERS")}</span>
-      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act5" data-page="settings"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act5')}"></span>
+        <div style="font-size:20px;margin-bottom:4px;">👷</div>
+        ${labelBadge(22, "WORKERS")}
+      </button>
+      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act5" data-page="settings" style="${boxBgStyle('act5')}">
         <div class="box-icons"><span data-boximg="act5|Settings">🖼️</span></div>
-        <span class="dashboard-card-caption">${esc("SETTINGS")}</span>
-      </button>`])}
+        <div style="font-size:20px;margin-bottom:4px;">⚙️</div>
+        ${labelBadge(23, "SETTINGS")}
+      </button>
     </div>
 
     <!-- TODAY'S DISTRIBUTION -->
@@ -4088,9 +3916,7 @@ function upperVoucherHtml(v){
 function upperLegacyVoucherHtml(v){
   const s=settings,c=upperVoucherFieldStyle;
   const factory=c('factoryName'),title=c('title'),voucherNo=c('voucherNo'),date=c('date'),time=c('time'),worker=c('worker'),workerType=c('workerType'),am=c('articleMaterial'),qty=c('quantity'),labour=c('labourWeeklyKharcha'),summary=c('receivingSummary'),total=c('totalItems');
-  const through=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.date);through.setHours(24,0,0,0);
-  const historicalPending=upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty;
-  const pending=historicalPending>0?{workerName:v.workerName,qty:historicalPending}:null,weekSummary=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);
+  const pending=getUpperPendingForWorker(v.workerId),weekSummary=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);
   let totalArticleAtoms=0,totalMaterialAtoms=0;
   const rows=(v.lines||[]).map(l=>{
     const cells=[];
@@ -4195,45 +4021,42 @@ function pageUpperMovementReport(kind){
 }
 function pageUpperPending(){
   const mode=window.__upperPendingReportMode||'today',labels={today:'Today',week:'This Week',month:'This Month',all:'All Time'};
-  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Period: '+labels[mode]+'</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Period: '+labels[mode]+' | Pending: current balance | ATOMS</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
 }
 
-function upperPendingVoucherRows(mode='today',now=new Date()){
-  let start=null,end=new Date(now);end.setHours(24,0,0,0);
-  if(mode==='today'){start=new Date(now);start.setHours(0,0,0,0);}
-  else if(mode==='week')start=getUpperWorkWeekRange(now).start;
-  else if(mode==='month')start=new Date(now.getFullYear(),now.getMonth(),1);
-  else if(mode==='all')end=null;
-  return (settings.upperDistributions||[]).filter(v=>v.id!==undefined&&v.id!==null).map(v=>{
-    const date=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.date);
-    if(!Number.isFinite(+date)||(start&&date<start)||(end&&date>=end))return null;
-    let pending,through,pendingText;
-    if(v.workflowVersion===1){
-      const historical=upperWeeklyVoucherData(v);pending=historical.pending;through=historical.through;
-      if(pending<=0)return null;
-      const articles=upperVoucherPendingArticles(v.workerId,pending,through);
-      pendingText=articles===null?pending+' ATOMS':['ATOMS','SET'].map(unit=>{const qty=articles.filter(a=>a.unit===unit).reduce((n,a)=>n+a.qty,0);return qty>0?qty+' '+unit:'';}).filter(Boolean).join(' + ');
-    }else{
-      through=new Date(date);through.setHours(24,0,0,0);
-      pending=upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty;
-      if(pending<=0)return null;pendingText=pending+' ATOMS';
-    }
-    return {id:v.id,voucherNo:v.voucherNo,date:upperLocalDateKey(date),workerName:v.workerName||'',articles:[...new Set((v.lines||[]).map(l=>l.articleName).filter(Boolean))],pendingText};
-  }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date));
-}
-function upperPendingVoucherTable(rows,print=false){
-  const cell='padding:4px 5px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;';
-  return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+['Date','Worker','Upper Article','Pending','Voucher #'].map(label=>'<th style="'+cell+'">'+label+'</th>').join('')+'</tr></thead><tbody>'+(rows.length?rows.map(row=>'<tr data-upper-pending-voucher-row="'+esc(String(row.id))+'">'+[esc(row.date),esc(row.workerName),row.articles.map(esc).join('<br>')||'?',esc(row.pendingText),print?'#'+esc(String(row.voucherNo)):'<button type="button" class="btn ghost small" data-upper-pending-voucher="'+esc(String(row.id))+'">#'+esc(String(row.voucherNo))+'</button>'].map(value=>'<td style="'+cell+'">'+value+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="5" class="empty">No matching pending vouchers.</td></tr>')+'</tbody></table>';
-}
 function renderUpperPendingPageList(){
   const host=document.getElementById('upperPendingPageList');if(!host)return;
-  host.innerHTML=upperPendingVoucherTable(upperPendingVoucherRows(window.__upperPendingReportMode||'today'));
+  const mode=window.__upperPendingReportMode||'today',rows=upperPendingReportRows(mode),end=new Date();end.setHours(24,0,0,0);let start=null;
+  if(mode==='today'){start=new Date();start.setHours(0,0,0,0);}else if(mode==='week')start=getUpperWorkWeekRange(new Date()).start;else if(mode==='month'){const now=new Date();start=new Date(now.getFullYear(),now.getMonth(),1);}
+  const records=[...(settings.upperDistributions||[]).map(record=>({record,kind:'voucher'})),...(settings.upperPendingRecords||[]).map(record=>({record,kind:'opening'}))].filter(({record})=>{const date=record.workDate?new Date(record.workDate+'T00:00:00'):new Date(record.date);return record.id!==undefined&&record.id!==null&&Number.isFinite(date.getTime())&&(!start||date>=start)&&date<end;});
+  host.innerHTML=upperPendingReportTable(rows);
+  Array.from(host.querySelectorAll('tbody tr')).forEach((tr,index)=>{
+    const workerRecords=records.filter(({record})=>String(record.workerId)===String(rows[index].workerId)).sort((a,b)=>new Date(b.record.date)-new Date(a.record.date));
+    const details=workerRecords.map(({record,kind})=>'<div style="padding:4px 0;border-bottom:1px solid #ddd;">'+esc(fmtDate(record.workDate?record.workDate+'T00:00:00':record.date))+' | '+esc(kind==='voucher'?'Voucher #'+record.voucherNo:'Opening / adjustment')+' '+['View','Edit','Delete'].map(action=>'<button type="button" class="btn ghost small" data-upper-pending-record-action="'+action.toLowerCase()+'" data-record-kind="'+kind+'" data-record-id="'+esc(record.id)+'" data-worker-id="'+esc(record.workerId)+'">'+action+'</button>').join(' ')+'</div>').join('');
+    tr.insertAdjacentHTML('afterend','<tr><td colspan="3" style="padding:3px 5px;"><details><summary>Records ('+workerRecords.length+')</summary>'+ (details||'<div>No records in this period.</div>')+'</details></td></tr>');
+  });
   host.onclick=event=>{
-    const button=event.target.closest('[data-upper-pending-voucher]');if(!button||!host.contains(button))return;
-    const record=(settings.upperDistributions||[]).find(v=>String(v.id)===String(button.dataset.upperPendingVoucher));
-    if(record)showUpperVoucher(record);
+    const button=event.target.closest('[data-upper-pending-record-action]');if(!button||!host.contains(button))return;
+    const {recordKind:kind,recordId:id,workerId,upperPendingRecordAction:action}=button.dataset,collection=kind==='voucher'?settings.upperDistributions:settings.upperPendingRecords;
+    const record=(collection||[]).find(r=>String(r.id)===String(id)&&String(r.workerId)===String(workerId));if(!record)return;
+    if(kind==='opening'){
+      if(action==='edit')return editUpperPendingEntry(record.id);
+      if(action==='delete')return deleteUpperPendingEntry(record.id);
+      modal('<h3>Opening / adjustment</h3><div>'+esc(record.workerName||'')+'</div><div>'+esc(fmtDate(record.date))+'</div><div>Record: '+esc(record.id)+'</div><div>Pending adjustment: '+esc(String(Number.isFinite(Number(record.delta))?Number(record.delta):Number(record.qty)||0))+' ATOMS</div><div class="modal-actions"><button class="btn ghost" id="upperPendingRecordClose">Close</button></div>');
+      document.getElementById('upperPendingRecordClose').onclick=closeModal;return;
+    }
+    if(action==='view')return showUpperVoucher(record,false);
+    if(action==='delete')return deleteUpperDistribution(record.id);
+    if(action==='edit'){
+      openUpperDistributionEditor(record.id);
+      const selector=document.getElementById('upperEditWorker'),save=document.getElementById('saveUpperEdit');if(!selector||!save)return;
+      selector.value=String(record.workerId);selector.disabled=true;
+      document.getElementById('cancelUpperEdit').onclick=()=>showUpperVoucher(record,false);
+      save.onclick=async()=>{selector.value=String(record.workerId);await saveUpperDistributionEdit(record.id);renderUpperPendingPageList();if(document.getElementById('upperVoucherEdit'))showUpperVoucher(record,false);};
+    }
   };
 }
+
 function openUpperPendingWorkerDetail(workerId){
   const rows=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   const account=getUpperPendingForWorker(workerId),name=account?.workerName||rows[0]?.workerName||'Worker';
@@ -4264,7 +4087,7 @@ async function deleteUpperPendingEntry(id){
 }
 function buildUpperPendingPrintHtml(){
   const mode=window.__upperPendingReportMode||'today',label={today:'Today',week:'This Week',month:'This Month',all:'All Time'}[mode];
-  return upperReportBoldPrintStyle('upperPendingPrintArea')+'<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Period: '+label+'</div>'+upperPendingVoucherTable(upperPendingVoucherRows(mode),true);
+  return upperReportBoldPrintStyle('upperPendingPrintArea')+'<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Period: '+label+' | Pending: current balance | ATOMS</div>'+upperPendingReportTable(upperPendingReportRows(mode));
 }
 
 function openUpperTodayItemsDetail(){
@@ -10648,7 +10471,6 @@ function attachPageHandlers(){
   document.getElementById('btnBackDashboard')?.addEventListener('click', ()=>goto('dashboard'));
   document.getElementById('btnBackPage')?.addEventListener('click', goBack);
   // Dashboard
-  document.querySelectorAll('[data-dashboard-add]').forEach(btn=>btn.addEventListener('click',()=>openDashboardCardsSettings(btn.dataset.dashboardAdd)));
   document.querySelectorAll('[data-statclick]').forEach(el=>el.addEventListener('click', ()=>{
     const type = el.dataset.statclick;
     if(type==='materials') goto('materials');
@@ -11384,14 +11206,15 @@ initApp();
     toggle.setAttribute('aria-expanded',open?'true':'false');
     toggle.textContent=open?'✕':'☰';
   });
-  nav.addEventListener('click',e=>{
-    if(!e.target.closest('#navItems .nav-item[data-page]'))return;
+  nav.querySelectorAll('#navItems .nav-item').forEach(btn=>{
+    btn.addEventListener('click',()=>{
       if(window.matchMedia && window.matchMedia('(max-width:700px)').matches){
         nav.classList.remove('mobile-nav-open');
         toggle.setAttribute('aria-expanded','false');
         toggle.textContent='☰';
       }
-  },true);
+    });
+  });
 })();
 
 document.addEventListener('click',e=>{});
