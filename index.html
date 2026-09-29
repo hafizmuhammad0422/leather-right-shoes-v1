@@ -444,6 +444,17 @@
 #dashboardCardsEditor{max-height:75vh;overflow:auto;}
 #dashboardCardsEditor .dashboard-card-edit-actions{display:flex;gap:3px;flex-wrap:wrap;}
 @media(max-width:600px){#dashboardCardsEditor .dashboard-card-edit-row{grid-template-columns:40px minmax(0,1fr);}#dashboardCardsEditor .dashboard-card-edit-actions{grid-column:2;}}
+
+/* Dashboard-only original-size cards with external labels */
+.dashboard-stats-grid:has(> .dashboard-card-tile){row-gap:48px!important;margin-bottom:48px!important;}
+.dashboard-stats-grid > .dashboard-card-tile{position:relative;min-width:0;align-self:start;}
+.dashboard-card-tile > .dashboard-visual-card{width:100%;}
+.dashboard-card-tile > .dashboard-visual-card::before{display:none;}
+.dashboard-card-tile .dashboard-visual-card > .dashboard-card-image{position:absolute;inset:0;display:block;width:100%;height:100%;background-size:cover;background-position:center;pointer-events:none;}
+.dashboard-card-tile > .dashboard-card-footer{position:absolute;top:calc(100% + 3px);left:0;right:0;text-align:center;}
+.dashboard-card-footer > .dashboard-card-caption{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;max-height:28px;padding:0 3px;line-height:14px;font-size:11px;font-weight:500;color:var(--ink);text-align:center;background:none;border:0;}
+.dashboard-card-tile .dashboard-visual-card > .box-icons{position:absolute;top:6px;right:7px;z-index:2;}
+.dashboard-card-tile .dashboard-visual-card > .box-icons span{opacity:.65;font-size:10px;}
 </style>
 
 <style>
@@ -3019,12 +3030,17 @@ function dashboardCardsLabel(route){
 }
 function dashboardCardsRowHtml(row,original){
   const config=dashboardCardsLoad();
+  const outsideCaption=html=>{
+    const caption=html.match(/<span class="dashboard-card-caption">[\s\S]*?<\/span>/)?.[0]||'';
+    const card=html.replace(caption,'');
+    return '<div class="dashboard-card-tile">'+card+'<div class="dashboard-card-footer">'+caption+'</div></div>';
+  };
   return config.order[row].map(id=>{
-    const slot=config.slots.find(slot=>slot.id===id);if(!slot)return original[dashboardCardsDefault().order[row].indexOf(id)];
+    const slot=config.slots.find(slot=>slot.id===id);if(!slot)return outsideCaption(original[dashboardCardsDefault().order[row].indexOf(id)]);
+    const image='<span class="dashboard-card-image" aria-hidden="true" style="'+boxBgStyle(id)+'"></span>';
     const photo='<span class="box-icons"><span data-boximg="'+id+'|'+esc(id)+'" role="button" tabindex="0" aria-label="Change photo">&#128444;</span></span>';
-    if(slot.route===null)return '<button type="button" class="stat custom-empty dashboard-shortcut" id="dashBox-'+id+'" data-dashboard-add="'+id+'" style="'+boxBgStyle(id)+'">'+photo+'<span>+ Add</span></button>';
-    const module=NAV_KEYS.find(([route])=>route===slot.route);
-    return '<button type="button" class="stat dashboard-shortcut" id="dashBox-'+id+'" data-page="'+slot.route+'" style="'+boxBgStyle(id)+'">'+photo+'<span class="dashboard-shortcut-icon" aria-hidden="true">'+module[1]+'</span><span class="dashboard-shortcut-label">'+esc(dashboardCardsLabel(slot.route))+'</span></button>';
+    if(slot.route===null)return outsideCaption('<button type="button" class="stat dashboard-visual-card custom-empty dashboard-shortcut" id="dashBox-'+id+'" data-dashboard-add="'+id+'" >'+(settings.boxImages?.[id]?image:'')+'<span class="dashboard-card-caption">+ Add</span>'+photo+'</button>');
+    return outsideCaption('<button type="button" class="stat dashboard-visual-card dashboard-shortcut" id="dashBox-'+id+'" data-page="'+slot.route+'" >'+image+'<span class="dashboard-card-caption">'+esc(dashboardCardsLabel(slot.route))+'</span>'+photo+'</button>');
   }).join('');
 }
 function openDashboardCardsSettings(focusSlot=null){
@@ -3076,41 +3092,35 @@ function pageDashboard(){
     
     <!-- KEY METRICS SECTION -->
     <div class="dashboard-stats-grid">
-${dashboardCardsRowHtml('main',[`      <div class="stat dashboard-card-presentation-hide" id="dashBox-materials" data-statclick="materials" style="${boxBgStyle('materials')}">
+${dashboardCardsRowHtml('main',[`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-materials" data-statclick="materials"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('materials')}"></span>
         <div class="box-icons"><span data-boximg="materials|Materials">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">📦</div>
         ${numBadge(0, activeMaterials.length)}
-        ${labelBadge(0, "MATERIALS")}
+        <span class="dashboard-card-caption">${esc("MATERIALS")}</span>
       </div>
-`,`      <div class="stat dashboard-card-presentation-hide" id="dashBox-workers" data-statclick="workers" style="${boxBgStyle('workers')}">
+`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-workers" data-statclick="workers"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('workers')}"></span>
         <div class="box-icons"><span data-boximg="workers|Workers">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">👷</div>
         ${numBadge(1, activeWorkers.length)}
-        ${labelBadge(1, "WORKERS")}
+        <span class="dashboard-card-caption">${esc("WORKERS")}</span>
       </div>
-`,`      <div class="stat dashboard-card-presentation-hide" id="dashBox-articles" data-statclick="articles" style="${boxBgStyle('articles')}">
+`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-articles" data-statclick="articles"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('articles')}"></span>
         <div class="box-icons"><span data-boximg="articles|Articles">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">👞</div>
         ${numBadge(2, activeArticles.length)}
-        ${labelBadge(2, "ARTICLES")}
+        <span class="dashboard-card-caption">${esc("ARTICLES")}</span>
       </div>
-`,`      <div class="stat dashboard-card-presentation-hide" id="dashBox-today" data-statclick="today" style="${boxBgStyle('today')}">
+`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-today" data-statclick="today"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('today')}"></span>
         <div class="box-icons"><span data-boximg="today|Today's Dist.">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">📤</div>
         ${numBadge(3, todayIssues.length)}
-        ${labelBadge(3, "TODAY'S DIST.")}
+        <span class="dashboard-card-caption">${esc("TODAY'S DIST.")}</span>
       </div>
-`,`      <div class="stat dashboard-card-presentation-hide ${lowStock.length? 'warn':''}" id="dashBox-lowstock" style="${boxBgStyle('lowstock')}">
+`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide ${lowStock.length? 'warn':''}" id="dashBox-lowstock"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('lowstock')}"></span>
         <div class="box-icons"><span data-boximg="lowstock|Low Stock">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">⚠️</div>
         ${numBadge(4, lowStock.length)}
-        ${labelBadge(4, "LOW STOCK")}
+        <span class="dashboard-card-caption">${esc("LOW STOCK")}</span>
       </div>
-`,`      <div class="stat dashboard-card-presentation-hide" id="dashBox-customers" data-statclick="shopkeepers" style="${boxBgStyle('customers')}">
+`,`      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-customers" data-statclick="shopkeepers"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('customers')}"></span>
         <div class="box-icons"><span data-boximg="customers|Customers">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">🛒</div>
         ${numBadge(5, shopkeepers.length)}
-        ${labelBadge(5, "CUSTOMERS")}
+        <span class="dashboard-card-caption">${esc("CUSTOMERS")}</span>
       </div>
 `])}
     </div>
@@ -3118,58 +3128,48 @@ ${dashboardCardsRowHtml('main',[`      <div class="stat dashboard-card-presentat
     <!-- CUSTOM / EDITABLE METRICS SECTION (Worker Categories) -->
     <div class="dashboard-stats-grid">
       ${dashboardCardsRowHtml('cat',settings.customStats.map((cs,i)=> cs && cs.name ? `
-      <div class="stat dashboard-card-presentation-hide" id="dashBox-cat${i}" data-customstat="${i}" data-categorybox="1" style="${boxBgStyle('cat'+i)}">
+      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-cat${i}" data-customstat="${i}" data-categorybox="1"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('cat'+i)}"></span>
         <div class="box-icons"><span data-editcustomstat="${i}">✏️</span><span data-boximg="cat${i}|${esc(cs.name)}">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">${esc(cs.icon||'📌')}</div>
         ${numBadge(6+i, activeWorkers.filter(w=>w.category===cs.name).length)}
-        ${labelBadge(6+i, esc(cs.name.toUpperCase()))}
+        <span class="dashboard-card-caption">${esc(cs.name.toUpperCase())}</span>
       </div>` : `
-      <div class="stat custom-empty" data-customstat="${i}">
-        <div style="font-size:18px;margin-bottom:4px;">➕</div>
-        <div class="lbl">ADD BOX</div>
+      <div class="stat dashboard-visual-card custom-empty" data-customstat="${i}">
+        <span class="dashboard-card-caption">+ Add</span>
       </div>`))}
     </div>
 
     <!-- MIDDLE SECTION (6 boxes, features to be added later) -->
     <div class="dashboard-stats-grid">
       ${dashboardCardsRowHtml('mid',settings.dashboardMiddleBoxes.map((mb,i)=> mb && mb.name ? `
-      <div class="stat dashboard-card-presentation-hide" id="dashBox-mid${i}" data-midbox="${i}" style="${boxBgStyle('mid'+i)}">
+      <div class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-mid${i}" data-midbox="${i}"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('mid'+i)}"></span>
         <div class="box-icons"><span data-editmidbox="${i}">✏️</span><span data-boximg="mid${i}|${esc(mb.name)}">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">${esc(mb.icon||'📦')}</div>
-        ${labelBadge(12+i, esc(mb.name.toUpperCase()))}
+        <span class="dashboard-card-caption">${esc(mb.name.toUpperCase())}</span>
       </div>` : `
-      <div class="stat custom-empty" data-midbox="${i}">
-        <div style="font-size:18px;margin-bottom:4px;">➕</div>
-        <div class="lbl">ADD BOX</div>
+      <div class="stat dashboard-visual-card custom-empty" data-midbox="${i}">
+        <span class="dashboard-card-caption">+ Add</span>
       </div>`))}
     </div>
 
     <!-- ACTION BUTTONS (same size as boxes above) -->
     <div class="dashboard-stats-grid">
-${dashboardCardsRowHtml('act',[`      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act0" data-page="issue" style="${boxBgStyle('act0')}">
+${dashboardCardsRowHtml('act',[`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act0" data-page="issue"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act0')}"></span>
         <div class="box-icons"><span data-boximg="act0|New Distribution">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">➕</div>
-        ${labelBadge(18, "NEW DISTRIBUTION")}
-      </button>`,`      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act1" data-page="articles" style="${boxBgStyle('act1')}">
+        <span class="dashboard-card-caption">${esc("NEW DISTRIBUTION")}</span>
+      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act1" data-page="articles"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act1')}"></span>
         <div class="box-icons"><span data-boximg="act1|New Article">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">➕</div>
-        ${labelBadge(19, "NEW ARTICLE")}
-      </button>`,`      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act2" data-page="bills" style="${boxBgStyle('act2')}">
+        <span class="dashboard-card-caption">${esc("NEW ARTICLE")}</span>
+      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act2" data-page="bills"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act2')}"></span>
         <div class="box-icons"><span data-boximg="act2|New Bill">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">📋</div>
-        ${labelBadge(20, "NEW BILL")}
-      </button>`,`      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act3" data-page="materials" style="${boxBgStyle('act3')}">
+        <span class="dashboard-card-caption">${esc("NEW BILL")}</span>
+      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act3" data-page="materials"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act3')}"></span>
         <div class="box-icons"><span data-boximg="act3|Materials">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">📦</div>
-        ${labelBadge(21, "MATERIALS")}
-      </button>`,`      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act4" data-page="workers" style="${boxBgStyle('act4')}">
+        <span class="dashboard-card-caption">${esc("MATERIALS")}</span>
+      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act4" data-page="workers"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act4')}"></span>
         <div class="box-icons"><span data-boximg="act4|Workers">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">👷</div>
-        ${labelBadge(22, "WORKERS")}
-      </button>`,`      <button type="button" class="stat dashboard-card-presentation-hide" id="dashBox-act5" data-page="settings" style="${boxBgStyle('act5')}">
+        <span class="dashboard-card-caption">${esc("WORKERS")}</span>
+      </button>`,`      <button type="button" class="stat dashboard-visual-card dashboard-card-presentation-hide" id="dashBox-act5" data-page="settings"><span class="dashboard-card-image" aria-hidden="true" style="${boxBgStyle('act5')}"></span>
         <div class="box-icons"><span data-boximg="act5|Settings">🖼️</span></div>
-        <div style="font-size:20px;margin-bottom:4px;">⚙️</div>
-        ${labelBadge(23, "SETTINGS")}
+        <span class="dashboard-card-caption">${esc("SETTINGS")}</span>
       </button>`])}
     </div>
 
@@ -4088,7 +4088,9 @@ function upperVoucherHtml(v){
 function upperLegacyVoucherHtml(v){
   const s=settings,c=upperVoucherFieldStyle;
   const factory=c('factoryName'),title=c('title'),voucherNo=c('voucherNo'),date=c('date'),time=c('time'),worker=c('worker'),workerType=c('workerType'),am=c('articleMaterial'),qty=c('quantity'),labour=c('labourWeeklyKharcha'),summary=c('receivingSummary'),total=c('totalItems');
-  const pending=getUpperPendingForWorker(v.workerId),weekSummary=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);
+  const through=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.date);through.setHours(24,0,0,0);
+  const historicalPending=upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty;
+  const pending=historicalPending>0?{workerName:v.workerName,qty:historicalPending}:null,weekSummary=upperWorkerWeekSummary(v.workerId,new Date(v.date),v.date);
   let totalArticleAtoms=0,totalMaterialAtoms=0;
   const rows=(v.lines||[]).map(l=>{
     const cells=[];
@@ -4193,42 +4195,45 @@ function pageUpperMovementReport(kind){
 }
 function pageUpperPending(){
   const mode=window.__upperPendingReportMode||'today',labels={today:'Today',week:'This Week',month:'This Month',all:'All Time'};
-  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Period: '+labels[mode]+' | Pending: current balance | ATOMS</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Period: '+labels[mode]+'</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
 }
 
+function upperPendingVoucherRows(mode='today',now=new Date()){
+  let start=null,end=new Date(now);end.setHours(24,0,0,0);
+  if(mode==='today'){start=new Date(now);start.setHours(0,0,0,0);}
+  else if(mode==='week')start=getUpperWorkWeekRange(now).start;
+  else if(mode==='month')start=new Date(now.getFullYear(),now.getMonth(),1);
+  else if(mode==='all')end=null;
+  return (settings.upperDistributions||[]).filter(v=>v.id!==undefined&&v.id!==null).map(v=>{
+    const date=v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.date);
+    if(!Number.isFinite(+date)||(start&&date<start)||(end&&date>=end))return null;
+    let pending,through,pendingText;
+    if(v.workflowVersion===1){
+      const historical=upperWeeklyVoucherData(v);pending=historical.pending;through=historical.through;
+      if(pending<=0)return null;
+      const articles=upperVoucherPendingArticles(v.workerId,pending,through);
+      pendingText=articles===null?pending+' ATOMS':['ATOMS','SET'].map(unit=>{const qty=articles.filter(a=>a.unit===unit).reduce((n,a)=>n+a.qty,0);return qty>0?qty+' '+unit:'';}).filter(Boolean).join(' + ');
+    }else{
+      through=new Date(date);through.setHours(24,0,0,0);
+      pending=upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty;
+      if(pending<=0)return null;pendingText=pending+' ATOMS';
+    }
+    return {id:v.id,voucherNo:v.voucherNo,date:upperLocalDateKey(date),workerName:v.workerName||'',articles:[...new Set((v.lines||[]).map(l=>l.articleName).filter(Boolean))],pendingText};
+  }).filter(Boolean).sort((a,b)=>b.date.localeCompare(a.date));
+}
+function upperPendingVoucherTable(rows,print=false){
+  const cell='padding:4px 5px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;';
+  return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+['Date','Worker','Upper Article','Pending','Voucher #'].map(label=>'<th style="'+cell+'">'+label+'</th>').join('')+'</tr></thead><tbody>'+(rows.length?rows.map(row=>'<tr data-upper-pending-voucher-row="'+esc(String(row.id))+'">'+[esc(row.date),esc(row.workerName),row.articles.map(esc).join('<br>')||'?',esc(row.pendingText),print?'#'+esc(String(row.voucherNo)):'<button type="button" class="btn ghost small" data-upper-pending-voucher="'+esc(String(row.id))+'">#'+esc(String(row.voucherNo))+'</button>'].map(value=>'<td style="'+cell+'">'+value+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="5" class="empty">No matching pending vouchers.</td></tr>')+'</tbody></table>';
+}
 function renderUpperPendingPageList(){
   const host=document.getElementById('upperPendingPageList');if(!host)return;
-  const mode=window.__upperPendingReportMode||'today',rows=upperPendingReportRows(mode),end=new Date();end.setHours(24,0,0,0);let start=null;
-  if(mode==='today'){start=new Date();start.setHours(0,0,0,0);}else if(mode==='week')start=getUpperWorkWeekRange(new Date()).start;else if(mode==='month'){const now=new Date();start=new Date(now.getFullYear(),now.getMonth(),1);}
-  const records=[...(settings.upperDistributions||[]).map(record=>({record,kind:'voucher'})),...(settings.upperPendingRecords||[]).map(record=>({record,kind:'opening'}))].filter(({record})=>{const date=record.workDate?new Date(record.workDate+'T00:00:00'):new Date(record.date);return record.id!==undefined&&record.id!==null&&Number.isFinite(date.getTime())&&(!start||date>=start)&&date<end;});
-  host.innerHTML=upperPendingReportTable(rows);
-  Array.from(host.querySelectorAll('tbody tr')).forEach((tr,index)=>{
-    const workerRecords=records.filter(({record})=>String(record.workerId)===String(rows[index].workerId)).sort((a,b)=>new Date(b.record.date)-new Date(a.record.date));
-    const details=workerRecords.map(({record,kind})=>'<div style="padding:4px 0;border-bottom:1px solid #ddd;">'+esc(fmtDate(record.workDate?record.workDate+'T00:00:00':record.date))+' | '+esc(kind==='voucher'?'Voucher #'+record.voucherNo:'Opening / adjustment')+' '+['View','Edit','Delete'].map(action=>'<button type="button" class="btn ghost small" data-upper-pending-record-action="'+action.toLowerCase()+'" data-record-kind="'+kind+'" data-record-id="'+esc(record.id)+'" data-worker-id="'+esc(record.workerId)+'">'+action+'</button>').join(' ')+'</div>').join('');
-    tr.insertAdjacentHTML('afterend','<tr><td colspan="3" style="padding:3px 5px;"><details><summary>Records ('+workerRecords.length+')</summary>'+ (details||'<div>No records in this period.</div>')+'</details></td></tr>');
-  });
+  host.innerHTML=upperPendingVoucherTable(upperPendingVoucherRows(window.__upperPendingReportMode||'today'));
   host.onclick=event=>{
-    const button=event.target.closest('[data-upper-pending-record-action]');if(!button||!host.contains(button))return;
-    const {recordKind:kind,recordId:id,workerId,upperPendingRecordAction:action}=button.dataset,collection=kind==='voucher'?settings.upperDistributions:settings.upperPendingRecords;
-    const record=(collection||[]).find(r=>String(r.id)===String(id)&&String(r.workerId)===String(workerId));if(!record)return;
-    if(kind==='opening'){
-      if(action==='edit')return editUpperPendingEntry(record.id);
-      if(action==='delete')return deleteUpperPendingEntry(record.id);
-      modal('<h3>Opening / adjustment</h3><div>'+esc(record.workerName||'')+'</div><div>'+esc(fmtDate(record.date))+'</div><div>Record: '+esc(record.id)+'</div><div>Pending adjustment: '+esc(String(Number.isFinite(Number(record.delta))?Number(record.delta):Number(record.qty)||0))+' ATOMS</div><div class="modal-actions"><button class="btn ghost" id="upperPendingRecordClose">Close</button></div>');
-      document.getElementById('upperPendingRecordClose').onclick=closeModal;return;
-    }
-    if(action==='view')return showUpperVoucher(record,false);
-    if(action==='delete')return deleteUpperDistribution(record.id);
-    if(action==='edit'){
-      openUpperDistributionEditor(record.id);
-      const selector=document.getElementById('upperEditWorker'),save=document.getElementById('saveUpperEdit');if(!selector||!save)return;
-      selector.value=String(record.workerId);selector.disabled=true;
-      document.getElementById('cancelUpperEdit').onclick=()=>showUpperVoucher(record,false);
-      save.onclick=async()=>{selector.value=String(record.workerId);await saveUpperDistributionEdit(record.id);renderUpperPendingPageList();if(document.getElementById('upperVoucherEdit'))showUpperVoucher(record,false);};
-    }
+    const button=event.target.closest('[data-upper-pending-voucher]');if(!button||!host.contains(button))return;
+    const record=(settings.upperDistributions||[]).find(v=>String(v.id)===String(button.dataset.upperPendingVoucher));
+    if(record)showUpperVoucher(record);
   };
 }
-
 function openUpperPendingWorkerDetail(workerId){
   const rows=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId)).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   const account=getUpperPendingForWorker(workerId),name=account?.workerName||rows[0]?.workerName||'Worker';
@@ -4259,7 +4264,7 @@ async function deleteUpperPendingEntry(id){
 }
 function buildUpperPendingPrintHtml(){
   const mode=window.__upperPendingReportMode||'today',label={today:'Today',week:'This Week',month:'This Month',all:'All Time'}[mode];
-  return upperReportBoldPrintStyle('upperPendingPrintArea')+'<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Period: '+label+' | Pending: current balance | ATOMS</div>'+upperPendingReportTable(upperPendingReportRows(mode));
+  return upperReportBoldPrintStyle('upperPendingPrintArea')+'<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Period: '+label+'</div>'+upperPendingVoucherTable(upperPendingVoucherRows(mode),true);
 }
 
 function openUpperTodayItemsDetail(){
