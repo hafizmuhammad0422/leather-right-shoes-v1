@@ -3702,7 +3702,9 @@ function pageDistributeUpper(){
   localDayStart.setHours(0,0,0,0);
   const nextLocalDayStart=new Date(localDayStart);
   nextLocalDayStart.setDate(nextLocalDayStart.getDate()+1);
-  const upperCards=upperWorkers.map((w,originalIndex)=>({w,originalIndex,completed:(settings.upperDistributions||[]).some(d=>{const date=d.workDate?new Date(d.workDate+'T00:00:00'):new Date(d.date||d.createdAt||'');return String(d.workerId)===String(w.id)&&date>=localDayStart&&date<nextLocalDayStart;})})).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex);
+  const upperCards=upperWorkers.map((w,originalIndex)=>({w,originalIndex,completed:(settings.upperDistributions||[]).some(d=>{return String(d.workerId)===String(w.id)&&d.workDate===workDates.today;})})).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex);
+  const completedWorkers=upperCards.filter(card=>card.completed).length;
+  const pendingWorkers=upperWorkers.length-completedWorkers;
   const allUpperRecords=(settings.upperDistributions||[]).filter(record=>{const distributedAt=record.workDate?new Date(record.workDate+'T00:00:00'):new Date(record.date);return distributedAt>=localDayStart&&distributedAt<nextLocalDayStart;});
   let totalArticle=0,totalMaterial=0;
   allUpperRecords.forEach(d=>(d.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleId||l.articleName)totalArticle+=q;if(l.materialId||l.materialName)totalMaterial+=q;}));
@@ -3723,7 +3725,7 @@ function pageDistributeUpper(){
     </div>
 
     <div class="card bm-worker-card">
-      <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Upper Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong></span></div>
+      <div class="bm-worker-heading upper-worker-heading-v16"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><h3>Select Upper Man</h3><input id="upperWorkerSearch" type="search" aria-label="Search Upper Man" placeholder="Search worker" autocomplete="off" style="width:130px;max-width:100%;padding:4px 6px;font-size:12px;"></div><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div><span>Total Upper Mans: <strong>${upperWorkers.length}</strong> • Pending: <strong>${pendingTotal} ATOMS</strong><small style="display:block;font-size:11px;color:var(--muted);">Completed: ${completedWorkers} &bull; Pending: ${pendingWorkers}</small></span></div>
       <div class="bm-worker-grid" id="upperWorkerCards">
         ${upperWorkers.length?upperCards.map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'upper')}${upperDefaultMaterialCard(w)}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Worker with category “UPPER MANS” found.</div>'}
       </div>
@@ -9605,8 +9607,9 @@ function pageBatamMansProduction(){
  const workDates=bfWeeklyWorkDateRange();
  const prodArticles=settings.batamMansProductionArticles||[];
  const todayKey=batamLocalDateKey(new Date()),todayVouchers=batamMansVouchers().filter(v=>!v.deletedAt&&(v.workDate||batamLocalDateKey(v.createdAt||v.date))===todayKey);
- const completedWorkerIds=new Set(todayVouchers.map(v=>String(v.workerId)));
- const pendingWorkers=batamWorkers.filter(w=>!completedWorkerIds.has(String(w.id))).length;
+ const completedWorkerIds=new Set(batamMansVouchers().filter(v=>!v.deletedAt&&v.workDate===todayKey).map(v=>String(v.workerId)));
+ const completedWorkers=batamWorkers.filter(w=>completedWorkerIds.has(String(w.id))).length;
+ const pendingWorkers=batamWorkers.length-completedWorkers;
  const todayKharcha=todayVouchers.reduce((s,v)=>s+(Number(v.expenseAmount)||0),0);
  const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
  const backDisabled=navHistory.length?'':'disabled';
@@ -9627,8 +9630,8 @@ function pageBatamMansProduction(){
  </div>
 
  <div class="card bm-worker-card">
-   <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Batam Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong><small style="display:block;font-size:11px;color:var(--muted);">Pending: ${pendingWorkers}</small></span></div>
-   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const todayKey=batamLocalDateKey(new Date()),completed=batamMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&(v.workDate||batamLocalDateKey(v.createdAt||v.date))===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'batam')}${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-heading upper-worker-heading-v16"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><h3>Select Batam Man</h3><input id="batamWorkerSearch" type="search" aria-label="Search Batam Man" placeholder="Search worker" autocomplete="off" style="width:130px;max-width:100%;padding:4px 6px;font-size:12px;"></div><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Batam Mans: <strong>${batamWorkers.length}</strong><small style="display:block;font-size:11px;color:var(--muted);">Completed: ${completedWorkers} &bull; Pending: ${pendingWorkers}</small></span></div>
+   <div class="bm-worker-grid">${batamWorkers.length?batamWorkers.map((w,originalIndex)=>{const completed=completedWorkerIds.has(String(w.id));return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(batamMansSelectedWorker)===String(w.id)?'selected':''}" data-batam-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-batam-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'batam')}${bfDefaultMaterialCard(w,'batam')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Batam/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
@@ -10320,6 +10323,9 @@ function pageFinishedMansProduction(){
  const workDates=bfWeeklyWorkDateRange();
  const prodArticles=settings.finishedMansProductionArticles||[];
  const todayKey=finishedLocalDateKey(new Date()),todayVouchers=finishedMansVouchers().filter(v=>!v.deletedAt&&(v.workDate||finishedLocalDateKey(v.createdAt||v.date))===todayKey);
+ const completedWorkerIds=new Set(finishedMansVouchers().filter(v=>!v.deletedAt&&v.workDate===todayKey).map(v=>String(v.workerId)));
+ const completedWorkers=finishedWorkers.filter(w=>completedWorkerIds.has(String(w.id))).length;
+ const pendingWorkers=finishedWorkers.length-completedWorkers;
  const todayKharcha=todayVouchers.reduce((s,v)=>s+(Number(v.expenseAmount)||0),0);
  const todayProduction=todayVouchers.reduce((s,v)=>s+(v.items||[]).reduce((a,i)=>a+(Number(i.reportedQty)||0),0),0);
  const backDisabled=navHistory.length?'':'disabled';
@@ -10340,8 +10346,8 @@ function pageFinishedMansProduction(){
  </div>
 
  <div class="card bm-worker-card">
-   <div class="bm-worker-heading upper-worker-heading-v16"><h3>Select Finished Man</h3><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong></span></div>
-   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const todayKey=finishedLocalDateKey(new Date()),completed=finishedMansVouchers().some(v=>!v.deletedAt&&String(v.workerId)===String(w.id)&&(v.workDate||finishedLocalDateKey(v.createdAt||v.date))===todayKey);return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'finished')}${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
+   <div class="bm-worker-heading upper-worker-heading-v16"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><h3>Select Finished Man</h3><input id="finishedWorkerSearch" type="search" aria-label="Search Finished Man" placeholder="Search worker" autocomplete="off" style="width:130px;max-width:100%;padding:4px 6px;font-size:12px;"></div><div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(productionTotalBaqi)}</strong></div><span>Total Finished Mans: <strong>${finishedWorkers.length}</strong><small style="display:block;font-size:11px;color:var(--muted);">Completed: ${completedWorkers} &bull; Pending: ${pendingWorkers}</small></span></div>
+   <div class="bm-worker-grid">${finishedWorkers.length?finishedWorkers.map((w,originalIndex)=>{const completed=completedWorkerIds.has(String(w.id));return{w,originalIndex,completed}}).sort((a,b)=>Number(b.completed)-Number(a.completed)||a.originalIndex-b.originalIndex).map(({w,completed})=>{return `<button type="button" class="pick-box bm-worker-box ${String(finishedMansSelectedWorker)===String(w.id)?'selected':''}" data-finished-pickworker="${esc(w.id)}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" data-finished-photo="${esc(w.id)}">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'finished')}${bfDefaultMaterialCard(w,'finished')}<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div></button>`;}).join(''):'<div class="empty">No active Finished/Bottom Man worker found.</div>'}</div>
    ${selected?`<div class="bm-selected-line">Selected: <strong>${esc(selected.name||'')}</strong></div>`:''}
  </div>
 
@@ -10438,6 +10444,28 @@ function pageFinishedMansReports(){
 
 
 /* ============ PAGE EVENT WIRING ============ */
+function bindProductionWorkerSearch(module){
+  if(!['upper','batam','finished'].includes(module))return;
+  const inputId=module+'WorkerSearch',input=document.getElementById(inputId);if(!input)return;
+  const values=bindProductionWorkerSearch.values||(bindProductionWorkerSearch.values={});
+  input.value=values[module]||'';
+  const filter=()=>{
+    const query=input.value.trim().toLowerCase(),matches=[];
+    document.querySelectorAll('[data-'+module+'-pickworker]').forEach(card=>{
+      const name=String(card.querySelector('.bm-worker-name')?.textContent||'').toLowerCase();
+      const match=!query||name.includes(query);card.style.display=match?'':'none';if(match)matches.push(card);
+    });
+    return query&&matches.length===1?matches[0]:null;
+  };
+  filter();
+  input.addEventListener('input',()=>{
+    values[module]=input.value;
+    const card=filter();if(!card||card.classList.contains('selected'))return;
+    const start=input.selectionStart,end=input.selectionEnd;
+    card.click();
+    const next=document.getElementById(inputId);if(next){next.focus();if(start!==null&&end!==null)next.setSelectionRange(start,end);}
+  });
+}
 function attachPageHandlers(){
   bindProductionWorkerFeatures();
   document.getElementById('btnBackDashboard')?.addEventListener('click', ()=>goto('dashboard'));
@@ -10613,14 +10641,7 @@ function attachPageHandlers(){
   document.getElementById('upperArticleSummaryCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperArticleSummary');});document.getElementById('upperMaterialSummaryCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperMaterialSummary');});
   document.getElementById('upperTotalLabour')?.addEventListener('click',()=>{window.__upperLabourFilterMode='week';goto('upperLabourSummary');});
   document.querySelectorAll('[data-upper-pickworker]').forEach(b=>b.addEventListener('click',()=>setUpperWorkerSelection(b.dataset.upperPickworker)));
-  document.getElementById('upperWorkerSearch')?.addEventListener('input',e=>{
-    const q=String(e.target.value||'').trim().toLowerCase();
-    document.querySelectorAll('[data-upper-pickworker]').forEach(card=>{
-      const name=String(card.dataset.upperWorkerName||'').toLowerCase();
-      card.style.display=!q||name.includes(q)?'':'none';
-    });
-  });
-
+  bindProductionWorkerSearch('upper');
   // Batam Mans Production — scoped first-stage controls
   // Batam Mans Production — compact layout hubs (existing workflows)
   document.getElementById('bmOpenArticlesHub')?.addEventListener('click',()=>goto('batamMansProductionArticles'));
@@ -10658,6 +10679,7 @@ function attachPageHandlers(){
     if(e.target.closest('[data-batam-photo]'))return;
     batamMansSelectedWorker=card.dataset.batamPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));productionDefaultSelections.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));render();
   }));
+  bindProductionWorkerSearch('batam');
   document.querySelectorAll('[data-batam-photo]').forEach(photo=>photo.addEventListener('click',e=>{
     e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.batamPhoto));if(w?.photo)openImageLightbox(w.photo);
   }));
@@ -10724,6 +10746,7 @@ function attachPageHandlers(){
     if(e.target.closest('[data-finished-photo]'))return;
     finishedMansSelectedWorker=card.dataset.finishedPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));productionDefaultSelections.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));render();
   }));
+  bindProductionWorkerSearch('finished');
   document.querySelectorAll('[data-finished-photo]').forEach(photo=>photo.addEventListener('click',e=>{
     e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.finishedPhoto));if(w?.photo)openImageLightbox(w.photo);
   }));
