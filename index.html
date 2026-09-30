@@ -455,6 +455,21 @@
 .dashboard-card-footer > .dashboard-card-caption{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;max-height:28px;padding:0 3px;line-height:14px;font-size:11px;font-weight:500;color:var(--ink);text-align:center;background:none;border:0;}
 .dashboard-card-tile .dashboard-visual-card > .box-icons{position:absolute;top:6px;right:7px;z-index:2;}
 .dashboard-card-tile .dashboard-visual-card > .box-icons span{opacity:.65;font-size:10px;}
+
+/* Battam/Finished production entry totals stay in the existing control row. */
+@media(min-width:901px){
+ .bm-entry-row.bf-worker-entry-row{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.65fr) minmax(0,.8fr) minmax(0,.65fr) minmax(0,1.6fr) minmax(0,.7fr) minmax(0,1.1fr)!important;gap:5px!important}
+ .bm-entry-row.bf-worker-entry-row>div{min-width:0}
+ .bm-entry-row.bf-worker-entry-row input,.bm-entry-row.bf-worker-entry-row select,.bm-entry-row.bf-worker-entry-row .btn{min-width:0;width:100%;font-size:10px!important;padding:4px!important}
+ .bm-entry-row.bf-worker-entry-row label{font-size:9px!important}
+}
+
+/* Shoes Lamination Suppliers only. */
+.lm-page{min-width:0}.lm-page .card{margin-bottom:10px}.lm-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.lm-actions h3{margin:0;flex:1}.lm-suppliers{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}.lm-supplier{border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--text);padding:10px;cursor:pointer;text-align:left;min-width:0}.lm-supplier.selected{border:2px solid var(--brass,#a98745)}.lm-supplier strong,.lm-supplier span{display:block;overflow-wrap:anywhere}.lm-supplier span{font-size:11px;margin-top:5px}.lm-entry-line{display:grid;grid-template-columns:minmax(130px,1.4fr) minmax(80px,.7fr) minmax(80px,.7fr) minmax(140px,1.3fr) auto;gap:7px;align-items:end;margin:8px 0}.lm-entry-line>*{min-width:0}.lm-entry-line output{display:block;font-size:12px;padding:8px 0;overflow-wrap:anywhere}.lm-history{overflow-x:auto;margin-top:10px}.lm-history table{width:100%;border-collapse:collapse;font-size:12px}.lm-history th,.lm-history td{padding:7px;text-align:left;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.lm-history small{display:block;font-size:10px}.lm-page input,.lm-page select{max-width:100%}
+@media(max-width:700px){.lm-entry-line{grid-template-columns:1fr 1fr}.lm-entry-line>label:first-child{grid-column:1/-1}.lm-suppliers{grid-template-columns:1fr 1fr}.lm-history table{font-size:10px}.lm-history th,.lm-history td{padding:4px}.lm-actions .btn{white-space:normal}}
+
+.lm-entry-line{grid-template-columns:minmax(110px,1fr) minmax(120px,1.2fr) minmax(65px,.7fr) minmax(65px,.7fr) minmax(90px,.9fr) minmax(110px,1fr);gap:6px}.lm-entry-line label{font-size:11px}.lm-entry-line input,.lm-entry-line select{width:100%;min-width:0;padding:5px;font-size:11px}.lm-entry-actions{display:flex;gap:4px;flex-wrap:wrap}.lm-entry-actions .btn{font-size:10px;padding:5px}.lm-report-controls label{font-size:11px}.lm-report-controls input{width:140px;padding:4px}.lm-report-actions{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}.lm-report-actions .btn{font-size:10px;padding:4px 6px}.lm-edit-line{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:7px;align-items:end;margin:8px 0}.lm-edit-line>*{min-width:0}.lm-edit-line input,.lm-edit-line select{min-width:0;width:100%}
+@media(max-width:700px){.lm-entry-line{grid-template-columns:1fr 1fr}.lm-entry-line>label:first-child{grid-column:auto}.lm-edit-line{grid-template-columns:1fr 1fr}.lm-report-controls input{width:130px}}
 </style>
 
 <style>
@@ -1545,6 +1560,7 @@ const NAV_KEYS = [
   ['magziBatavaSupplier','🧵','Magzi & Batava Supplier'],
   ['shoeBoxSuppliers','📦','Shoe Box Suppliers'],
   ['shoeSoleSuppliers','👞','Shoe Sole Suppliers'],
+  ['laminationSuppliers','&#128230;','Shoes Lamination Suppliers'],
   ['history','📜','Transaction History'],
   ['audit','🛡️','Audit Log'],
   ['settings','⚙️','Settings'],
@@ -2423,6 +2439,7 @@ function getSearchableBoxes(){
   list.push({label:'New Bill', run:()=>goto('bills')});
   list.push({label:'Shoe Box Suppliers', run:()=>goto('shoeBoxSuppliers')});
   list.push({label:'Shoe Sole Suppliers', run:()=>goto('shoeSoleSuppliers')});
+  list.push({label:'Shoes Lamination Suppliers', run:()=>goto('laminationSuppliers')});
   list.push({label:'Settings', run:()=>goto('settings')});
   return list;
 }
@@ -2632,7 +2649,7 @@ function sidebarMenuValid(config){
   return routes.size===0&&config.entries.every(e=>e.parent===null||groups.has(e.parent));
 }
 function sidebarMenuLoad(){
-  try{const config=JSON.parse(localStorage.getItem('fac_sidebar_menu_ui_v1'));if(sidebarMenuValid(config))return config;}catch(e){}
+  try{const config=JSON.parse(localStorage.getItem('fac_sidebar_menu_ui_v1'));if(config?.version===1&&Array.isArray(config.entries)&&!config.entries.some(e=>e?.id==='laminationSuppliers'))config.entries.push({id:'laminationSuppliers',kind:'item',label:null,parent:null});if(sidebarMenuValid(config))return config;}catch(e){}
   return sidebarMenuDefault();
 }
 function sidebarMenuSave(config){
@@ -2830,6 +2847,7 @@ function render(){
   else if(currentPage==='shoeBoxReceive1') main.innerHTML = pageShoeBoxReceiveDetail(0);
   else if(currentPage==='shoeBoxReceive2') main.innerHTML = pageShoeBoxReceiveDetail(1);
   else if(currentPage==='shoeSoleSuppliers') main.innerHTML = pageShoeSoleSuppliers();
+  else if(currentPage==='laminationSuppliers') main.innerHTML = pageLaminationSuppliers();
   else if(currentPage==='shoeSoleToday') main.innerHTML = pageShoeSoleToday();
   else if(currentPage==='shoeSoleSupplierDetail') main.innerHTML = pageShoeSoleSupplierDetail(shoeSoleSelectedIndex());
   else if(currentPage==='shoeSoleReceiveDetail') main.innerHTML = pageShoeSoleReceiveDetail(shoeSoleSelectedIndex());
@@ -2838,7 +2856,7 @@ function render(){
   else if(currentPage==='shoeSoleReceive1') main.innerHTML = pageShoeSoleReceiveDetail(0);
   else if(currentPage==='shoeSoleReceive2') main.innerHTML = pageShoeSoleReceiveDetail(1);
   if(currentPage!=='dashboard'){
-    if(['batamMansProduction','batamMansProductionArticles','batamMansProductionMaterials','batamMansProductionList','batamMansPending','batamMansDistributeMaterial','finishedMansProduction','finishedMansProductionArticles','finishedMansProductionMaterials','finishedMansProductionList','finishedMansPending','finishedMansDistributeMaterial','finishedMansMaterialAccounts'].includes(currentPage)){
+    if(['laminationSuppliers','batamMansProduction','batamMansProductionArticles','batamMansProductionMaterials','batamMansProductionList','batamMansPending','batamMansDistributeMaterial','finishedMansProduction','finishedMansProductionArticles','finishedMansProductionMaterials','finishedMansProductionList','finishedMansPending','finishedMansDistributeMaterial','finishedMansMaterialAccounts'].includes(currentPage)){
       // Batam workflow pages own their single Back/navigation control.
     } else if(currentPage==='workerSummaryDetail'){
       // The detail page renders its own Back to Workers button.
@@ -6892,6 +6910,218 @@ async function resetShoeSolePlaceholders(){
   }
   window.__soleSelectedId='';render();
 }
+/* Shoes Lamination: isolated settings dataset; reads never initialize saved data. */
+const lmUi={supplierId:'',mode:'main',filter:'all',search:''};
+let lmSaving=false;
+function lmState(){return settings.lamination||{suppliers:[],types:[],vouchers:[],nextVoucherNo:1};}
+function lmActive(v){return !v.deletedAt&&v.deleted!==true;}
+function lmQty(q){return Number(q).toLocaleString('en-US',{maximumFractionDigits:6})+' ROLLS';}
+function lmSupplier(id){return lmState().suppliers.find(s=>String(s.id)===String(id));}
+function lmType(id){return lmState().types.find(t=>String(t.id)===String(id));}
+function lmRows(supplierId,through='9999-12-31',state=lmState()){
+  return state.vouchers.filter(v=>lmActive(v)&&String(v.supplierId)===String(supplierId)&&v.workDate<=through).slice().sort((a,b)=>a.workDate.localeCompare(b.workDate)||a.createdAt.localeCompare(b.createdAt));
+}
+function lmPending(supplierId,through='9999-12-31',state=lmState(),throughId=null){
+  const totals=new Map();for(const v of lmRows(supplierId,through,state)){v.lines.forEach(l=>totals.set(l.typeId,(totals.get(l.typeId)||0)+l.issued-l.received));if(v.id===throughId)break;}return totals;
+}
+function lmPendingTotal(supplierId,through){return [...lmPending(supplierId,through).values()].reduce((a,b)=>a+b,0);}
+function lmValidateLedger(state,supplierId){
+  const totals=new Map();
+  for(const v of lmRows(supplierId,'9999-12-31',state))for(const l of v.lines){
+    if(!Number.isFinite(l.issued)||!Number.isFinite(l.received)||l.issued<0||l.received<0)return 'Enter valid, non-negative roll quantities.';
+    const available=(totals.get(l.typeId)||0)+l.issued;
+    if(l.received>available)return (l.typeName||'Lamination type')+': received exceeds available pending on '+v.workDate+'. Available: '+lmQty(available)+'.';
+    totals.set(l.typeId,available-l.received);
+  }
+  return '';
+}
+async function lmCommit(next){
+  if(lmSaving||criticalCloudSaveActive)return false;
+  if(!cloudReady){toast('Cloud connection is not ready. Nothing was saved.');return false;}
+  const before=settings;
+  lmSaving=true;settings={...settings,lamination:next};
+  try{
+    if(await saveCriticalCloudState())return true;
+    settings=before;
+    await reconcileCloudAfterCriticalRollback();toast('Lamination changes were not saved. Please try again.');return false;
+  }finally{lmSaving=false;}
+}
+function lmOpenProfile(kind,id=''){
+  const list=kind==='supplier'?'suppliers':'types',existing=lmState()[list].find(x=>x.id===id),title=kind==='supplier'?'Supplier':'Lamination Type';
+  modal(`<h3>${existing?'Edit':'Add'} ${title}</h3><label>Name<input id="lmProfileName" maxlength="120" value="${esc(existing?.name||'')}"></label>${kind==='supplier'?`<label>Phone / WhatsApp<input id="lmProfilePhone" maxlength="40" value="${esc(existing?.phone||'')}"></label><label>Address<input id="lmProfileAddress" maxlength="240" value="${esc(existing?.address||'')}"></label>`:''}<div class="modal-actions"><button class="btn brass" id="lmProfileSave">Save</button><button class="btn ghost" id="lmProfileClose">Close</button></div>`);
+  document.getElementById('lmProfileClose').onclick=closeModal;
+  document.getElementById('lmProfileSave').onclick=async()=>{
+    if(lmSaving)return;const name=document.getElementById('lmProfileName').value.trim();if(!name)return toast('Enter a name.');
+    const next=JSON.parse(JSON.stringify(lmState()));if(next[list].some(x=>x.id!==id&&x.name.trim().toLowerCase()===name.toLowerCase()))return toast('That name already exists.');
+    const item=existing?next[list].find(x=>x.id===id):{id:uid()};item.name=name;
+    if(kind==='supplier'){item.phone=document.getElementById('lmProfilePhone').value.trim();item.address=document.getElementById('lmProfileAddress').value.trim();}
+    if(!existing)next[list].push(item);
+    if(await lmCommit(next)){if(kind==='supplier')lmUi.supplierId=item.id;closeModal();render();}
+  };
+}
+function lmOpenTypes(){
+  modal(`<h3>Lamination Types</h3>${lmState().types.map(t=>`<div class="rline"><span>${esc(t.name)}</span><button class="btn ghost small" data-lm-edit-type="${esc(t.id)}">Edit</button></div>`).join('')||'<p>No lamination types yet.</p>'}<div class="modal-actions"><button class="btn brass" id="lmNewType">+ Add Lamination Type</button><button class="btn ghost" id="lmTypesClose">Close</button></div>`);
+  document.querySelectorAll('[data-lm-edit-type]').forEach(b=>b.onclick=()=>lmOpenProfile('type',b.dataset.lmEditType));
+  document.getElementById('lmNewType').onclick=()=>lmOpenProfile('type');document.getElementById('lmTypesClose').onclick=closeModal;
+}
+function lmEntryRow(first=false){const range=bfWeeklyWorkDateRange(),date=document.getElementById('lmWorkDate')?.value||range.today;return `<div class="lm-entry-line"><label>Work Date<input type="date" ${first?`id="lmWorkDate" min="${range.min}" max="${range.today}"`:'data-lm-date readonly'} value="${date}" title="Today or the prior two days within this Saturday–Friday week"></label><label>Lamination Type<select data-lm-type><option value="">Select Type</option>${lmState().types.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label><label>Issued Rolls<input data-lm-issued type="number" min="0" step="any" value="0"></label><label>Received Rolls<input data-lm-received type="number" min="0" step="any" value="0"></label><div><label>Pending</label><output data-lm-pending>Select type</output></div><div class="lm-entry-actions">${first?'<button class="btn brass small" id="lmSaveVoucher">Create Voucher</button><button class="btn ghost small" id="lmAddRow">+ Add Row</button>':'<button class="btn ghost small" type="button" data-lm-remove>Remove</button>'}</div></div>`;}
+function lmReadLines(){return [...document.querySelectorAll('#lmEntryRows .lm-entry-line')].map(row=>({typeId:row.querySelector('[data-lm-type]').value,issued:Number(row.querySelector('[data-lm-issued]').value),received:Number(row.querySelector('[data-lm-received]').value)}));}
+function lmRefreshDraft(){
+  const date=document.getElementById('lmWorkDate')?.value;if(!date)return;
+  const pending=lmPending(lmUi.supplierId,date),running=new Map(pending);
+  document.querySelectorAll('#lmEntryRows .lm-entry-line').forEach(row=>{
+    const id=row.querySelector('[data-lm-type]').value,old=running.get(id)||0,next=old+Number(row.querySelector('[data-lm-issued]').value)-Number(row.querySelector('[data-lm-received]').value);running.set(id,next);
+    row.querySelector('[data-lm-pending]').textContent=id?(Number.isFinite(next)&&next>=0?lmQty(next):'Invalid pending'):'Select type';
+    row.querySelector('[data-lm-pending]').title='Previous pending: '+lmQty(old);
+    const rowDate=row.querySelector('[data-lm-date]');if(rowDate)rowDate.value=date;
+  });
+}
+async function lmSaveVoucher(){
+  if(lmSaving)return;const supplier=lmSupplier(lmUi.supplierId),workDate=document.getElementById('lmWorkDate')?.value,raw=lmReadLines();
+  if(!supplier)return toast('Select a supplier.');
+  if(!bfWeeklyWorkDateValid(workDate))return toast('Work Date must be today or one of the prior two days in this Saturday–Friday week.');
+  if(!raw.length||raw.some(l=>!lmType(l.typeId)||!Number.isFinite(l.issued)||!Number.isFinite(l.received)||l.issued<0||l.received<0||(!l.issued&&!l.received)))return toast('Select a type and enter valid issued or received rolls for every row.');
+  const grouped=new Map();raw.forEach(l=>{const a=grouped.get(l.typeId)||{typeId:l.typeId,typeName:lmType(l.typeId).name,issued:0,received:0};a.issued+=l.issued;a.received+=l.received;grouped.set(l.typeId,a);});
+  const next=JSON.parse(JSON.stringify(lmState())),number=Math.max(1,Number(next.nextVoucherNo)||1,...next.vouchers.map(v=>(Number(String(v.voucherNo).replace(/^LM-/,''))||0)+1));
+  const v={id:uid(),voucherNo:'LM-'+String(number).padStart(4,'0'),supplierId:supplier.id,supplierName:supplier.name,workDate,createdAt:new Date().toISOString(),lines:[...grouped.values()]};
+  next.vouchers.push(v);const error=lmValidateLedger(next,supplier.id);if(error)return toast(error);
+  next.nextVoucherNo=number+1;
+  if(await lmCommit(next)){render();lmShowVoucher(v.id);}
+}
+function lmWeeklyVoucherData(v){
+  const date=new Date(v.workDate+'T00:00:00'),start=new Date(date);start.setDate(start.getDate()-(start.getDay()+1)%7);
+  const rows=lmRows(v.supplierId,v.workDate).filter(r=>r.workDate>=bfWeeklyDateKey(start)),days=[];
+  for(const day=new Date(start);day<=date;day.setDate(day.getDate()+1)){
+    const key=bfWeeklyDateKey(day),records=rows.filter(r=>r.workDate===key),types=new Map();
+    records.forEach(r=>r.lines.forEach(l=>{const a=types.get(l.typeId)||{typeId:l.typeId,name:l.typeName,issued:0,received:0};a.issued+=l.issued;a.received+=l.received;types.set(l.typeId,a);}));
+    if(!records.length)continue;
+    const last=records[records.length-1],time=new Date(last.createdAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    days.push({workDate:key,label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+' • '+time,types:[...types.values()]});
+  }
+  const pending=[...lmPending(v.supplierId,v.workDate)].map(([typeId,qty])=>({typeId,name:lmType(typeId)?.name||typeId,qty}));
+  return {days,issued:rows.reduce((n,r)=>n+r.lines.reduce((s,l)=>s+l.issued,0),0),received:rows.reduce((n,r)=>n+r.lines.reduce((s,l)=>s+l.received,0),0),pending,totalPending:pending.reduce((n,p)=>n+p.qty,0)};
+}
+function lmVoucherText(v){
+  const week=lmWeeklyVoucherData(v),lines=['LEATHER RIGHT SHOES BY ABID','SHOES LAMINATION WEEKLY VOUCHER',v.supplierName+' | #'+v.voucherNo,'Work Date: '+v.workDate,'────────────────────────'];
+  week.days.forEach(d=>{lines.push('[ '+d.label+' ]');d.types.forEach(t=>lines.push(t.name,'Issued: '+lmQty(t.issued)+' | Received: '+lmQty(t.received)));lines.push('────────────────────────');});
+  lines.push('WEEKLY ISSUED: '+lmQty(week.issued),'WEEKLY RECEIVED: '+lmQty(week.received),'CURRENT PENDING: '+lmQty(week.totalPending));
+  const positive=week.pending.filter(p=>p.qty>0);if(positive.length>1)positive.forEach(p=>lines.push(p.name+': '+lmQty(p.qty)));
+  return lines;
+}
+function lmVoucherHtml(v){return '<div class="receipt-paper lm-voucher" style="width:80mm;max-width:100%;box-sizing:border-box;padding:3mm;margin:auto;background:#fff;color:#000;font:11px/1.35 monospace;overflow-wrap:anywhere;">'+lmVoucherText(v).map((text,i)=>'<div style="'+(i<3?'text-align:center;font-weight:bold;':'')+'">'+esc(text)+'</div>').join('')+'</div>';}
+async function lmShareVoucher(v){
+  try{
+    const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),rows=[];ctx.font='20px sans-serif';
+    lmVoucherText(v).forEach(text=>{let line='';for(const char of text){if(line&&ctx.measureText(line+char).width>width-pad*2){rows.push(line);line='';}line+=char;}rows.push(line);});
+    canvas.width=width*2;canvas.height=(rows.length*30+pad*2)*2;ctx.scale(2,2);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,canvas.height/2);ctx.fillStyle='#000';ctx.font='20px sans-serif';ctx.textBaseline='top';rows.forEach((line,i)=>ctx.fillText(line,pad,pad+i*30));
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw new Error('Image unavailable');
+    await shareImageToWhatsApp(blob,v.voucherNo+'.png','Shoes Lamination Weekly Voucher');
+  }catch(e){toast('Could not prepare voucher image.');}
+}
+function lmShowVoucher(id){
+  const v=lmState().vouchers.find(v=>v.id===id&&lmActive(v));if(!v)return;
+  modal(lmVoucherHtml(v)+'<div class="modal-actions"><button class="btn brass" id="lmPrintVoucher">Print</button><button class="btn ghost" id="lmShareVoucher">WhatsApp Image</button><button class="btn ghost" id="lmCloseVoucher">Close</button></div>');
+  document.getElementById('lmPrintVoucher').onclick=()=>printAggregateThermal(lmVoucherHtml(v),'Shoes Lamination Weekly Voucher','element');
+  document.getElementById('lmShareVoucher').onclick=()=>lmShareVoucher(v);document.getElementById('lmCloseVoucher').onclick=closeModal;
+}
+function lmTodayRows(){const today=bfWeeklyDateKey(new Date());return lmState().vouchers.filter(v=>lmActive(v)&&v.workDate===today&&v.lines.some(l=>l.received>0));}
+function lmHistoryHtml(todayOnly=false){
+  const today=bfWeeklyDateKey(new Date()),start=new Date(today+'T00:00:00');start.setDate(start.getDate()-(start.getDay()+1)%7);
+  const rows=(todayOnly?lmTodayRows():lmRows(lmUi.supplierId)).filter(v=>{
+    const dateOk=todayOnly||lmUi.filter==='all'||lmUi.filter==='today'&&v.workDate===today||lmUi.filter==='week'&&v.workDate>=bfWeeklyDateKey(start)&&v.workDate<=today||lmUi.filter==='month'&&v.workDate.slice(0,7)===today.slice(0,7);
+    return dateOk&&[v.voucherNo,v.supplierName,...v.lines.map(l=>l.typeName)].join(' ').toLowerCase().includes(lmUi.search.toLowerCase());
+  }).slice().reverse();
+  return `<div class="lm-history"><table><thead><tr><th>Work Date / Created</th><th>Voucher / Supplier</th><th>Type</th>${todayOnly?'':'<th>Issued</th>'}<th>Received</th>${todayOnly?'':'<th>Resulting Pending</th>'}</tr></thead><tbody>${rows.map(v=>(todayOnly?v.lines.filter(l=>l.received>0):v.lines).map(l=>`<tr><td>${esc(v.workDate)}<small>${esc(new Date(v.createdAt).toLocaleString())}</small></td><td><button class="btn ghost small" data-lm-voucher="${esc(v.id)}">${esc(v.voucherNo)}</button><small>${esc(v.supplierName)}</small></td><td>${esc(l.typeName)}</td>${todayOnly?'':`<td>${lmQty(l.issued)}</td>`}<td>${lmQty(l.received)}</td>${todayOnly?'':`<td>${lmQty(lmPending(v.supplierId,v.workDate,lmState(),v.id).get(l.typeId)||0)}</td>`}</tr>`).join('')).join('')||'<tr><td colspan="6">No matching vouchers.</td></tr>'}</tbody></table></div>`;
+}
+function lmReportData(mode,from,to){
+  if(mode==='pending'){
+    const rows=[];lmState().suppliers.forEach(s=>lmPending(s.id).forEach((qty,typeId)=>{if(qty>0)rows.push({supplierId:s.id,supplierName:s.name,typeName:lmType(typeId)?.name||typeId,qty});}));
+    return {rows,total:rows.reduce((n,r)=>n+r.qty,0)};
+  }
+  if(!shoeSoleReportDay(from)||!shoeSoleReportDay(to)||from>to)return {rows:[],total:0,error:'Choose valid dates with From Date on or before To Date.'};
+  const field=mode==='issued'?'issued':'received',rows=[];
+  lmState().vouchers.filter(v=>lmActive(v)&&v.workDate>=from&&v.workDate<=to).slice().sort((a,b)=>b.workDate.localeCompare(a.workDate)||b.createdAt.localeCompare(a.createdAt)).forEach(v=>v.lines.forEach(l=>{if(l[field]>0)rows.push({supplierId:v.supplierId,supplierName:v.supplierName,typeName:l.typeName,qty:l[field],workDate:v.workDate,voucherNo:v.voucherNo,voucherId:v.id});}));
+  return {rows,total:rows.reduce((n,r)=>n+r.qty,0)};
+}
+function lmReportTable(data,mode,actions=true){
+  const label=mode==='pending'?'Current Pending Rolls':mode==='issued'?'Issued Rolls':'Received Rolls',cell='border:1px solid #999;padding:4px;vertical-align:top;overflow-wrap:anywhere;';
+  return '<table style="width:100%;table-layout:fixed;border-collapse:collapse"><colgroup><col style="width:34%"><col style="width:41%"><col style="width:25%"></colgroup><thead><tr>'+['Supplier Name','Lamination Type',label].map(t=>'<th style="'+cell+'">'+t+'</th>').join('')+'</tr></thead><tbody>'+ (data.rows.length?data.rows.map(r=>'<tr><td style="'+cell+'">'+esc(r.supplierName)+'</td><td style="'+cell+'">'+esc(r.typeName)+(mode==='pending'?'':'<small style="display:block">'+esc(r.workDate)+' · '+esc(r.voucherNo)+'</small>')+(actions?(mode==='pending'?'<div><button class="btn ghost small" data-lm-source="'+esc(r.supplierId)+'">History</button></div>':'<div class="lm-report-actions"><button class="btn ghost small" data-lm-voucher="'+esc(r.voucherId)+'">View</button><button class="btn ghost small" data-lm-edit="'+esc(r.voucherId)+'">Edit</button><button class="btn red small" data-lm-delete="'+esc(r.voucherId)+'">Delete</button></div>'):'')+'</td><td style="'+cell+'text-align:center">'+lmQty(r.qty)+'</td></tr>').join(''):'<tr><td colspan="3" style="'+cell+'">No matching records.</td></tr>')+'</tbody><tfoot><tr><th colspan="2" style="'+cell+'text-align:left">Total</th><th style="'+cell+'">'+lmQty(data.total)+'</th></tr></tfoot></table>';
+}
+function lmReportTitle(mode){return mode==='pending'?'Current Pending Lamination':mode==='issued'?'Lamination Issued Report':'Lamination Received Report';}
+function lmReportPrintHtml(data,mode,range){
+  return '<div class="receipt-paper" style="width:80mm;max-width:100%;box-sizing:border-box;margin:auto;font:12px/1.2 Arial;color:#000;background:#fff"><h3 style="font-size:18px;margin:4px 0">'+lmReportTitle(mode)+'</h3><p style="margin:4px 0;font-weight:bold">'+(mode==='pending'?'Current status · '+bfWeeklyDateKey(new Date()):esc(range.from)+' to '+esc(range.to))+'</p>'+lmReportTable(data,mode,false)+'</div>';
+}
+function pageLaminationReport(mode){
+  const today=bfWeeklyDateKey(new Date()),range=lmUi.reportRange||{from:today,to:today},data=lmReportData(mode,range.from,range.to);
+  return `<div class="lm-page"><div class="card lm-actions lm-report-controls"><button class="btn ghost small" id="lmReportBack">Back to Lamination Suppliers</button><h3>${lmReportTitle(mode)}</h3><button class="btn small" id="lmReportToday">${mode==='pending'?'Today / Current Status':'Today'}</button>${mode==='pending'?'':`<label>From Date<input type="date" id="lmReportFrom" value="${esc(range.from)}"></label><label>To Date<input type="date" id="lmReportTo" value="${esc(range.to)}"></label>`}<button class="btn brass small" id="lmReportPrint" ${data.error?'disabled':''}>Print</button></div>${data.error?`<div class="card">${esc(data.error)}</div>`:''}<div class="card lm-history">${lmReportTable(data,mode)}</div></div>`;
+}
+function lmEditLine(line={}){return `<div class="lm-edit-line"><label>Lamination Type<select data-lme-type>${lmState().types.map(t=>`<option value="${esc(t.id)}" ${t.id===line.typeId?'selected':''}>${esc(t.name)}</option>`).join('')}</select></label><label>Issued Rolls<input type="number" min="0" step="any" data-lme-issued value="${esc(String(line.issued??0))}"></label><label>Received Rolls<input type="number" min="0" step="any" data-lme-received value="${esc(String(line.received??0))}"></label><button class="btn ghost small" data-lme-remove>Remove</button></div>`;}
+function lmEditCandidate(original){
+  const date=document.getElementById('lmEditDate').value;
+  if(date!==original.workDate&&!bfWeeklyWorkDateValid(date))return {error:'A changed Work Date must be today or one of the prior two days in this Saturday–Friday week.'};
+  const rows=[...document.querySelectorAll('#lmEditRows .lm-edit-line')].map(row=>({typeId:row.querySelector('[data-lme-type]').value,issued:Number(row.querySelector('[data-lme-issued]').value),received:Number(row.querySelector('[data-lme-received]').value)}));
+  if(!rows.length||rows.some(l=>!lmType(l.typeId)||!Number.isFinite(l.issued)||!Number.isFinite(l.received)||l.issued<0||l.received<0||(!l.issued&&!l.received)))return {error:'Choose a type and valid issued or received rolls for every row.'};
+  const groups=new Map();rows.forEach(l=>{const a=groups.get(l.typeId)||{typeId:l.typeId,typeName:original.lines.find(x=>x.typeId===l.typeId)?.typeName||lmType(l.typeId).name,issued:0,received:0};a.issued+=l.issued;a.received+=l.received;groups.set(l.typeId,a);});
+  const next=JSON.parse(JSON.stringify(lmState())),index=next.vouchers.findIndex(v=>v.id===original.id&&lmActive(v));if(index<0)return {error:'This voucher is no longer available.'};
+  next.vouchers[index]={...next.vouchers[index],workDate:date,lines:[...groups.values()]};
+  return {next,voucher:next.vouchers[index],error:lmValidateLedger(next,original.supplierId)};
+}
+function lmEditVoucher(id){
+  const original=lmState().vouchers.find(v=>v.id===id&&lmActive(v));if(!original)return;
+  const saved=JSON.stringify(original),range=bfWeeklyWorkDateRange();
+  modal(`<h3>Edit ${esc(original.voucherNo)} — ${esc(original.supplierName)}</h3><label>Work Date<input type="date" id="lmEditDate" value="${esc(original.workDate)}" max="${range.today}"></label><small>Keep the original date, or choose today/prior two days within this week. Created: ${esc(new Date(original.createdAt).toLocaleString())}</small><div id="lmEditRows">${original.lines.map(lmEditLine).join('')}</div><div id="lmEditStatus" role="status"></div><div class="modal-actions"><button class="btn ghost" id="lmEditAdd">+ Add Row</button><button class="btn brass" id="lmEditSave">Save Changes</button><button class="btn ghost" id="lmEditClose">Close</button></div>`);
+  const refresh=()=>{const result=lmEditCandidate(original),status=document.getElementById('lmEditStatus');status.textContent=result.error||'Pending after this voucher: '+[...lmPending(original.supplierId,result.voucher.workDate,result.next,original.id)].map(([typeId,qty])=>(lmType(typeId)?.name||typeId)+': '+lmQty(qty)).join(' · ');document.getElementById('lmEditSave').disabled=!!result.error;};
+  const host=document.getElementById('lmEditRows');host.addEventListener('input',refresh);host.addEventListener('change',refresh);host.addEventListener('click',e=>{if(e.target.closest('[data-lme-remove]')){e.target.closest('.lm-edit-line').remove();refresh();}});
+  document.getElementById('lmEditDate').onchange=refresh;document.getElementById('lmEditAdd').onclick=()=>{host.insertAdjacentHTML('beforeend',lmEditLine());refresh();};document.getElementById('lmEditClose').onclick=closeModal;
+  document.getElementById('lmEditSave').onclick=async()=>{
+    if(lmSaving)return;if(JSON.stringify(lmState().vouchers.find(v=>v.id===id))!==saved)return toast('This voucher changed. Close and reopen it before editing.');
+    const result=lmEditCandidate(original);if(result.error)return toast(result.error);
+    if(await lmCommit(result.next)){closeModal();render();toast('Lamination voucher updated.');}
+  };refresh();
+}
+async function lmDeleteVoucher(id){
+  if(lmSaving)return;const original=lmState().vouchers.find(v=>v.id===id&&lmActive(v));if(!original)return;
+  if(!confirm('Delete '+original.voucherNo+' for '+original.supplierName+'? This removes all '+original.lines.length+' type row(s) on this voucher.'))return;
+  const next=JSON.parse(JSON.stringify(lmState())),voucher=next.vouchers.find(v=>v.id===id);voucher.deletedAt=new Date().toISOString();
+  const error=lmValidateLedger(next,original.supplierId);if(error)return toast('Cannot delete: '+error);
+  if(await lmCommit(next)){render();toast('Lamination voucher deleted.');}
+}
+function pageLaminationSuppliers(){
+  if(['issued','received','pending','today'].includes(lmUi.mode))return pageLaminationReport(lmUi.mode==='today'?'received':lmUi.mode);
+  const state=lmState(),supplier=lmSupplier(lmUi.supplierId),range=bfWeeklyWorkDateRange(),received=lmTodayRows().reduce((n,v)=>n+v.lines.reduce((s,l)=>s+l.received,0),0);
+  const actions=`<div class="card lm-actions"><button class="btn ghost small" id="lmBack">← Back</button><button class="btn ghost small" id="lmDashboard">Dashboard</button><button class="btn brass small" id="lmAddSupplier">+ Add Supplier</button><button class="btn brass small" id="lmTypes">+ Add Lamination Type</button><button class="btn ghost small" id="lmIssued">Today Issued: ${lmQty(lmReportData('issued',range.today,range.today).total)}</button><button class="btn ghost small" id="lmToday">Today Received Lamination: ${lmQty(received)}</button><button class="btn ghost small" id="lmPendingReport">Current Pending: ${lmQty(lmReportData('pending').total)}</button></div>`;
+  if(lmUi.mode==='today'||lmUi.mode==='history'&&supplier)return `<div class="lm-page">${actions}<div class="card"><h3>${lmUi.mode==='today'?'Today Receive Lamination':esc(supplier.name)+' — Supply Details / History'}</h3>${lmUi.mode==='history'?`<p>${esc(supplier.phone||'')} ${esc(supplier.address||'')}</p><p>Current Pending: <strong>${lmQty(lmPendingTotal(supplier.id))}</strong></p><button class="btn ghost small" id="lmEditSupplier">Edit Supplier</button><label>Period<select id="lmHistoryFilter">${[['all','All Time'],['today','Today'],['week','This Week'],['month','This Month']].map(([id,name])=>`<option value="${id}" ${lmUi.filter===id?'selected':''}>${name}</option>`).join('')}</select></label>`:''}<label>Search<input id="lmHistorySearch" value="${esc(lmUi.search)}" placeholder="Voucher, supplier or type"></label><div id="lmHistoryResults">${lmHistoryHtml(lmUi.mode==='today')}</div></div></div>`;
+  return `<div class="lm-page">${actions}<div class="card"><h3>Select Lamination Supplier</h3><div class="lm-suppliers">${state.suppliers.map(s=>{const today=lmRows(s.id,range.today).filter(v=>v.workDate===range.today),issued=today.reduce((n,v)=>n+v.lines.reduce((a,l)=>a+l.issued,0),0),received=today.reduce((n,v)=>n+v.lines.reduce((a,l)=>a+l.received,0),0);return `<button class="lm-supplier ${s.id===supplier?.id?'selected':''}" data-lm-supplier="${esc(s.id)}"><strong>${esc(s.name)}</strong><span>Today Issued: ${lmQty(issued)}</span><span>Today Received: ${lmQty(received)}</span><span>Current Pending: ${lmQty(lmPendingTotal(s.id))}</span></button>`;}).join('')||'<div class="empty">Add a Lamination Supplier to begin.</div>'}</div></div>${supplier?`<div class="card"><div class="lm-actions"><h3>Supply Entry — ${esc(supplier.name)}</h3><button class="btn ghost small" id="lmHistory">Supply Details / History</button></div><div id="lmEntryRows">${lmEntryRow(true)}</div></div>`:'<div class="card empty">Select a supplier to issue or receive rolls.</div>'}</div>`;
+}
+function bindLaminationReport(){
+  const mode=lmUi.mode==='today'?'received':lmUi.mode;if(!['issued','received','pending'].includes(mode))return;
+  document.getElementById('lmReportBack').onclick=()=>{lmUi.mode='main';render();};
+  document.getElementById('lmReportToday').onclick=()=>{lmUi.reportRange=null;render();};
+  const change=()=>{lmUi.reportRange={from:document.getElementById('lmReportFrom').value,to:document.getElementById('lmReportTo').value};render();};
+  document.getElementById('lmReportFrom')?.addEventListener('change',change);document.getElementById('lmReportTo')?.addEventListener('change',change);
+  document.getElementById('lmReportPrint').onclick=()=>{const today=bfWeeklyDateKey(new Date()),range=lmUi.reportRange||{from:today,to:today},data=lmReportData(mode,range.from,range.to);if(!data.error)printAggregateThermal(lmReportPrintHtml(data,mode,range),lmReportTitle(mode),'element');};
+  document.querySelectorAll('[data-lm-edit]').forEach(b=>b.onclick=()=>lmEditVoucher(b.dataset.lmEdit));
+  document.querySelectorAll('[data-lm-delete]').forEach(b=>b.onclick=()=>lmDeleteVoucher(b.dataset.lmDelete));
+  document.querySelectorAll('[data-lm-source]').forEach(b=>b.onclick=()=>{lmUi.supplierId=b.dataset.lmSource;lmUi.mode='history';lmUi.filter='all';lmUi.search='';render();});
+}
+function bindLaminationPage(){
+  if(currentPage!=='laminationSuppliers')return;
+  bindLaminationReport();
+  const on=(id,fn)=>document.getElementById(id)?.addEventListener('click',fn);
+  on('lmBack',()=>{if(lmUi.mode!=='main'){lmUi.mode='main';render();}else goBack();});on('lmDashboard',()=>goto('dashboard'));
+  on('lmAddSupplier',()=>lmOpenProfile('supplier'));on('lmTypes',lmOpenTypes);on('lmEditSupplier',()=>lmOpenProfile('supplier',lmUi.supplierId));
+  const openReport=mode=>{lmUi.mode=mode;lmUi.reportRange=null;render();};
+  on('lmIssued',()=>openReport('issued'));on('lmPendingReport',()=>openReport('pending'));on('lmToday',()=>openReport('received'));on('lmHistory',()=>{lmUi.mode='history';lmUi.search='';render();});
+  document.querySelectorAll('[data-lm-supplier]').forEach(b=>b.onclick=()=>{lmUi.supplierId=b.dataset.lmSupplier;lmUi.mode='main';render();});
+  const bindVouchers=()=>document.querySelectorAll('[data-lm-voucher]').forEach(b=>b.onclick=()=>lmShowVoucher(b.dataset.lmVoucher));bindVouchers();
+  const refreshHistory=()=>{document.getElementById('lmHistoryResults').innerHTML=lmHistoryHtml(lmUi.mode==='today');bindVouchers();};
+  document.getElementById('lmHistorySearch')?.addEventListener('input',e=>{lmUi.search=e.target.value;refreshHistory();});
+  document.getElementById('lmHistoryFilter')?.addEventListener('change',e=>{lmUi.filter=e.target.value;refreshHistory();});
+  on('lmAddRow',()=>{document.getElementById('lmEntryRows').insertAdjacentHTML('beforeend',lmEntryRow());lmRefreshDraft();});on('lmSaveVoucher',lmSaveVoucher);
+  document.getElementById('lmEntryRows')?.addEventListener('input',lmRefreshDraft);document.getElementById('lmEntryRows')?.addEventListener('change',lmRefreshDraft);
+  document.getElementById('lmEntryRows')?.addEventListener('click',e=>{if(e.target.closest('[data-lm-remove]')){e.target.closest('.lm-entry-line').remove();lmRefreshDraft();}});
+  document.getElementById('lmWorkDate')?.addEventListener('change',lmRefreshDraft);lmRefreshDraft();
+}
 function pageShoeSoleSuppliers(){
   const suppliers=getShoeSoleSuppliers(),index=shoeSoleSelectedIndex(),selected=suppliers[index];
   const now=new Date(),supplierCards=suppliers.map((supplier,i)=>({supplier,i,rows:shoeSoleTodayRows(supplier,now)})).sort((a,b)=>Number(b.rows.length>0)-Number(a.rows.length>0)||a.i-b.i),todayTotal=suppliers.reduce((sum,s)=>sum+shoeSoleTodayRows(s,now).reduce((n,p)=>n+Number(p.atoms??p.items??p.boxes),0),0);
@@ -9841,13 +10071,13 @@ function pageBatamMansProduction(){
  <div class="card bm-entry-card" onchange="bfRefreshEntryUnits('batam')" oninput="bfRefreshEntryUnits('batam')">
    <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Created time automatic</span>`:'<span>Select Batam Man above first</span>'}</div>
    ${productionWorkerControls(selected,'batam')}
-   <div class="bm-entry-row">
+   <div class="bm-entry-row bf-worker-entry-row">
      <div class="bm-field"><label>Work Date</label><input id="bmWorkDate" type="date" value="${workDates.today}" min="${workDates.min}" max="${workDates.today}"></div>
      <div class="bm-field bm-article-field"><label>Production Article</label><select id="bmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}" ${String(productionArticleChoice(selected,'batam')?.id||'')===String(a.id)?'selected':''}>${esc(a.name||'')}</option>`).join('')}</select></div>
      <div class="bm-field bm-qty-field"><label>Quantity / ATOMS</label><input id="bmReported" type="number" min="1" step="1" placeholder="ATOMS"><small data-bf-pairs>0 PAIR</small></div>
      <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="bmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
      <div class="bm-field bm-pending-field"><label>Pending</label><input id="bmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
-     <div class="bm-field bm-notes-field"><label>Total Production</label><input id="bmWorkerTotalItems" readonly value="${bfQuantityTotals((settings.batamMansProduction||[]).filter(e=>String(e.workerId)===String(selected?.id)&&!e.deletedAt&&e.deleted!==true),'verifiedQty')}"></div>
+     <div class="bm-field bm-notes-field"><label>Total Items</label><input id="bmWorkerTotalItems" readonly value="${bfQuantityTotals((settings.batamMansProduction||[]).filter(e=>selected&&String(e.workerId)===String(selected.id)&&!e.deletedAt&&e.deleted!==true&&Number.isFinite(Number(e.verifiedQty))&&Number(e.verifiedQty)>0),'verifiedQty')}"></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="bmAddDraft">+ Add Item</button></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn brass" id="bmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
    </div>
@@ -10557,13 +10787,13 @@ function pageFinishedMansProduction(){
  <div class="card bm-entry-card" onchange="bfRefreshEntryUnits('finished')" oninput="bfRefreshEntryUnits('finished')">
    <div class="bm-entry-head"><h3>Enter Production Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong> • Created time automatic</span>`:'<span>Select Finished Man above first</span>'}</div>
    ${productionWorkerControls(selected,'finished')}
-   <div class="bm-entry-row">
+   <div class="bm-entry-row bf-worker-entry-row">
      <div class="bm-field"><label>Work Date</label><input id="fmWorkDate" type="date" value="${workDates.today}" min="${workDates.min}" max="${workDates.today}"></div>
      <div class="bm-field bm-article-field"><label>Production Article</label><select id="fmArticle"><option value="">Select Article</option>${prodArticles.map(a=>`<option value="${esc(a.id)}" ${String(productionArticleChoice(selected,'finished')?.id||'')===String(a.id)?'selected':''}>${esc(a.name||'')}</option>`).join('')}</select></div>
      <div class="bm-field bm-qty-field"><label>Quantity / ATOMS</label><input id="fmReported" type="number" min="1" step="1" placeholder="ATOMS"><small data-bf-pairs>0 PAIR</small></div>
      <div class="bm-field bm-expense-field"><label>Kharcha / Expense</label><input id="fmExpenseAmount" type="number" min="0" step="0.01" placeholder="Rs. 0"></div>
      <div class="bm-field bm-pending-field"><label>Pending</label><input id="fmPendingQtyEntry" type="number" min="0" step="1" placeholder="0 Atoms"></div>
-     <div class="bm-field bm-notes-field"><label>Total Production</label><input id="fmWorkerTotalItems" readonly value="${bfQuantityTotals((settings.finishedMansProduction||[]).filter(e=>String(e.workerId)===String(selected?.id)&&!e.deletedAt&&e.deleted!==true),'verifiedQty')}"></div>
+     <div class="bm-field bm-notes-field"><label>Total Items</label><input id="fmWorkerTotalItems" readonly value="${bfQuantityTotals((settings.finishedMansProduction||[]).filter(e=>selected&&String(e.workerId)===String(selected.id)&&!e.deletedAt&&e.deleted!==true&&Number.isFinite(Number(e.verifiedQty))&&Number(e.verifiedQty)>0),'verifiedQty')}"></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn ghost" id="fmAddDraft">+ Add Item</button></div>
      <div class="bm-entry-action"><label>&nbsp;</label><button class="btn brass" id="fmCreateVoucher" ${selected?'':'disabled'}>🧾 Create Voucher</button></div>
    </div>
@@ -10670,6 +10900,7 @@ function bindProductionWorkerSearch(module){
   });
 }
 function attachPageHandlers(){
+  bindLaminationPage();
   bindProductionWorkerFeatures();
   document.getElementById('btnBackDashboard')?.addEventListener('click', ()=>goto('dashboard'));
   document.getElementById('btnBackPage')?.addEventListener('click', goBack);
@@ -10881,13 +11112,11 @@ function attachPageHandlers(){
   document.getElementById('bmPendingSearch')?.addEventListener('input',e=>{batamPendingSearch=e.target.value||'';renderBatamPendingPageList();});
   if(currentPage==='batamMansPending')renderBatamPendingPageList();
   document.querySelectorAll('[data-batam-pickworker]').forEach(card=>card.addEventListener('click',e=>{
-    if(e.target.closest('[data-batam-photo]'))return;
+    const photo=e.target.closest('[data-batam-photo]'),worker=(workers||[]).find(w=>String(w.id)===String(card.dataset.batamPickworker));
     batamMansSelectedWorker=card.dataset.batamPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));productionDefaultSelections.delete(productionArticleChoiceKey({id:batamMansSelectedWorker},'batam'));render();
+    if(photo&&worker?.photo)openImageLightbox(worker.photo);
   }));
   bindProductionWorkerSearch('batam');
-  document.querySelectorAll('[data-batam-photo]').forEach(photo=>photo.addEventListener('click',e=>{
-    e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.batamPhoto));if(w?.photo)openImageLightbox(w.photo);
-  }));
   document.getElementById('bmArticle')?.addEventListener('change',e=>rememberProductionArticleChoice(batamMansSelectedWorker,'batam',e.target.value));
   document.getElementById('bmAddDraft')?.addEventListener('click',addBatamDraftItem);
   document.getElementById('bmAddMaterialDraft')?.addEventListener('click',addBatamDraftMaterial);
@@ -10948,13 +11177,11 @@ function attachPageHandlers(){
   document.getElementById('fmPendingSearch')?.addEventListener('input',e=>{finishedPendingSearch=e.target.value||'';renderFinishedPendingPageList();});
   if(currentPage==='finishedMansPending')renderFinishedPendingPageList();
   document.querySelectorAll('[data-finished-pickworker]').forEach(card=>card.addEventListener('click',e=>{
-    if(e.target.closest('[data-finished-photo]'))return;
+    const photo=e.target.closest('[data-finished-photo]'),worker=(workers||[]).find(w=>String(w.id)===String(card.dataset.finishedPickworker));
     finishedMansSelectedWorker=card.dataset.finishedPickworker;productionArticleChoices.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));productionDefaultSelections.delete(productionArticleChoiceKey({id:finishedMansSelectedWorker},'finished'));render();
+    if(photo&&worker?.photo)openImageLightbox(worker.photo);
   }));
   bindProductionWorkerSearch('finished');
-  document.querySelectorAll('[data-finished-photo]').forEach(photo=>photo.addEventListener('click',e=>{
-    e.stopPropagation();const w=(workers||[]).find(x=>String(x.id)===String(photo.dataset.finishedPhoto));if(w?.photo)openImageLightbox(w.photo);
-  }));
   document.getElementById('fmArticle')?.addEventListener('change',e=>rememberProductionArticleChoice(finishedMansSelectedWorker,'finished',e.target.value));
   document.getElementById('fmAddDraft')?.addEventListener('click',addFinishedDraftItem);
   document.getElementById('fmAddMaterialDraft')?.addEventListener('click',addFinishedDraftMaterial);
