@@ -4627,11 +4627,7 @@ function printUpperWeeklyVoucherDirect(v){
   win.print();
 }
 function showUpperVoucher(v,saved=true){
-  if(v.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)))){
-    closeModal();
-    printUpperWeeklyVoucherDirect(v);
-    return;
-  }
+  const directWeekly=v.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)));
   const rows=(v.lines||[]).map(l=>`<tr><td>${esc(l.articleName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr><tr><td>${esc(l.materialName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr>`).join('');
   modal(`<h3 style="margin-top:0;">${esc(upperVoucherCategoryTitle(v))} Receive Voucher #${v.voucherNo}</h3>
     <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
@@ -4644,7 +4640,7 @@ function showUpperVoucher(v,saved=true){
         <button type="button" class="btn ghost" id="upperVoucherClose">Close</button>
       </div>
     </div>`);
-  document.getElementById('upperVoucherPrint').onclick=()=>v.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Weekly Voucher','element',{settledSizing:/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)))}):printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(v));
+  document.getElementById('upperVoucherPrint').onclick=()=>directWeekly?printUpperWeeklyVoucherDirect(v):v.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Weekly Voucher','element',{settledSizing:/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)))}):printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(v));
   document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(v.id));
   document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(v.id));
   document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
