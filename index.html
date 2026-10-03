@@ -4616,7 +4616,22 @@ function deleteUpperDistribution(id){
 function openUpperVoucherCustomize(v){const fields=[['factoryName','Factory Name'],['title','Voucher Title'],['voucherNo','Voucher Number'],['date','Date'],['time','Time'],['worker','Worker'],['workerType','Worker Type'],['articleMaterial','Article / Material'],['quantity','Quantity'],['labourWeeklyKharcha','Labour Weekly Kharcha'],['receivingSummary','Receiving Summary'],['totalItems','Total Items']];const current=settings.upperVoucherCustomization||{};modal(`<h3 style="margin-top:0;">Customize Voucher</h3><div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Choose which fields are shown and which are bold.</div><div>${fields.map(([id,label])=>{const f=current[id]||{show:true,bold:false};return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);"><strong>${label}</strong><label style="font-size:12px;"><input type="checkbox" data-uv-show="${id}" ${f.show?'checked':''}> Show</label><label style="font-size:12px;"><input type="checkbox" data-uv-bold="${id}" ${f.bold?'checked':''}> Bold</label></div>`;}).join('')}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperVoucherCustomization">Save</button><button type="button" class="btn ghost" id="cancelUpperVoucherCustomization">Cancel</button></div>`);document.getElementById('cancelUpperVoucherCustomization').onclick=()=>showUpperVoucher(v);document.getElementById('saveUpperVoucherCustomization').onclick=async()=>{const before=JSON.stringify(settings);settings.upperVoucherCustomization=settings.upperVoucherCustomization||{};fields.forEach(([id])=>{settings.upperVoucherCustomization[id]={show:!!document.querySelector(`[data-uv-show="${id}"]`)?.checked,bold:!!document.querySelector(`[data-uv-bold="${id}"]`)?.checked};});if(await saveCriticalCloudState()){showUpperVoucher(v);toast('Voucher customization saved');}else{settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Voucher customization was NOT saved to D1. Please try again.');}};}
 function upperVoucherFieldStyle(id){const f=(settings.upperVoucherCustomization||{})[id]||{show:true,bold:false};return {show:f.show!==false,bold:f.bold?'font-weight:800;':''};}
 
+function printUpperWeeklyVoucherDirect(v){
+  const win=window.open('','_blank','width=420,height=720');
+  if(!win){toast('Print window was blocked. Please allow pop-ups for this site and try again.');return;}
+  const css='*{box-sizing:border-box;}html,body{width:80mm!important;margin:0!important;padding:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;background:#fff;color:#000;}body{font-family:"Courier New",monospace;font-size:12px;line-height:1.25;}#aggregateThermalReceipt{display:flow-root;width:80mm;padding:3mm 4mm;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;}#aggregateThermalReceipt .receipt-paper{width:100%!important;max-width:100%!important;margin:0 auto!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;overflow-wrap:anywhere;}#aggregateThermalReceipt img{max-width:100%;height:auto;}#aggregateThermalReceipt .rline{display:flex;justify-content:space-between;gap:4mm;margin:3px 0;}@page{margin:0;}';
+  win.document.open();
+  win.document.write('<!doctype html><html><head><meta charset="UTF-8"><title>'+esc(upperVoucherCategoryTitle(v)+' Weekly Voucher')+'</title><style>'+css+'</style></head><body><div id="aggregateThermalReceipt"><div id="upperVoucherPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">'+upperVoucherHtml(v)+'</div></div></body></html>');
+  win.document.close();
+  win.focus();
+  win.print();
+}
 function showUpperVoucher(v,saved=true){
+  if(v.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)))){
+    closeModal();
+    printUpperWeeklyVoucherDirect(v);
+    return;
+  }
   const rows=(v.lines||[]).map(l=>`<tr><td>${esc(l.articleName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr><tr><td>${esc(l.materialName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr>`).join('');
   modal(`<h3 style="margin-top:0;">${esc(upperVoucherCategoryTitle(v))} Receive Voucher #${v.voucherNo}</h3>
     <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
@@ -4629,7 +4644,7 @@ function showUpperVoucher(v,saved=true){
         <button type="button" class="btn ghost" id="upperVoucherClose">Close</button>
       </div>
     </div>`);
-  document.getElementById('upperVoucherPrint').onclick=()=>v.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Weekly Voucher','element'):printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(v));
+  document.getElementById('upperVoucherPrint').onclick=()=>v.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Weekly Voucher','element',{settledSizing:/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)))}):printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(v));
   document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(v.id));
   document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(v.id));
   document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
@@ -5341,6 +5356,37 @@ function createBill(lines){
   const bill={id:uid(),billNo:settings.nextBillNo||1001,date:new Date().toISOString(),shopkeeperId:s.id,shopkeeperName:s.name,lines:clean,total,paid,note:window.__billNote||''};settings.nextBillNo=(bill.billNo||1001)+1;bills.push(bill);persistAll();audit('Sales Bill Created',`Bill #${bill.billNo} — ${s.name} — ${total}`);delete window.__billSk;delete window.__billPaid;delete window.__billNote;closeModal();render();showBill(bill);toast('Bill created');
 }
 function showBill(b){const s=shopkeepers.find(x=>x.id===b.shopkeeperId);modal(`<h3>Bill #${b.billNo}</h3><div id="billPrintArea" class="receipt-paper" style="width:80mm;margin:auto;"><h3>${esc(settings.factoryName)}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub">Sales Bill</div><hr><div class="rline"><span>Bill #:</span><span>${b.billNo}</span></div><div class="rline"><span>Date:</span><span>${fmtDate(b.date)}</span></div><div class="rline"><span>Shopkeeper:</span><span>${esc(s?s.name:b.shopkeeperName)}</span></div><hr>${b.lines.map(l=>`<div style="margin:4px 0;"><div>${esc(l.articleName)}</div><div class="rline"><span>${l.qty} × ${money(l.rate)}</span><span>${money(l.qty*l.rate)}</span></div></div>`).join('')}<hr><div class="rline"><b>Total</b><b>${money(b.total)}</b></div><div class="rline"><span>Paid</span><span>${money(b.paid)}</span></div><div class="rline"><span>Balance</span><span>${money(b.total-b.paid)}</span></div>${b.note?`<hr><div class="footer">${esc(b.note)}</div>`:''}</div><div class="modal-actions"><button class="btn brass" id="printBill">🖨️ Print Bill</button><button class="btn ghost" id="closeBill">Close</button></div>`);document.getElementById('printBill').onclick=()=>printElement('billPrintArea');document.getElementById('closeBill').onclick=closeModal;}
+async function prepareSettledThermalPage(win,receipt,pageStyle){
+  if(win.document.readyState!=='complete')await new Promise(resolve=>win.addEventListener('load',resolve,{once:true}));
+  if(win.document.fonts?.ready)await win.document.fonts.ready;
+  await Promise.all(Array.from(win.document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
+  if(win.closed)return false;
+  // Measure the popup with its final print rules before Chrome fixes the page size.
+  for(const sheet of Array.from(win.document.styleSheets)){
+    for(const rule of Array.from(sheet.cssRules)){
+      if(rule.type===win.CSSRule.MEDIA_RULE&&rule.conditionText==='print')rule.media.mediaText='all';
+    }
+  }
+  const sizePage=()=>{
+    const heightPx=Math.max(receipt.getBoundingClientRect().height,receipt.scrollHeight);
+    if(!Number.isFinite(heightPx)||heightPx<=0)throw new Error('Receipt measurement failed');
+    const heightMm=Math.ceil(heightPx*25.4/96*100)/100;
+    const css='@page{size:80mm '+heightMm+'mm;margin:0;}';
+    if(pageStyle.textContent!==css)pageStyle.textContent=css;
+  };
+  const settle=()=>new Promise(resolve=>{const timer=win.setTimeout(resolve,100);win.requestAnimationFrame(()=>win.requestAnimationFrame(()=>{win.clearTimeout(timer);resolve();}));});
+  await settle();
+  if(win.closed)return false;
+  sizePage();
+  await settle();
+  if(win.closed)return false;
+  sizePage();
+  await settle();
+  if(win.closed)return false;
+  sizePage();
+  win.addEventListener('beforeprint',()=>{sizePage();sizePage();});
+  return true;
+}
 async function printAggregateThermal(html,title='Aggregate Report',profile='production',options={}){
   if(!html){toast('Print content not found');return;}
   const win=window.open('','_blank','width=500,height=800');
@@ -5351,6 +5397,10 @@ async function printAggregateThermal(html,title='Aggregate Report',profile='prod
     win.document.open();
     win.document.write('<!doctype html><html><head><meta charset="UTF-8"><title>'+esc(title)+'</title><style>'+css+'</style><style id="aggregateThermalPageSize"></style></head><body><div id="aggregateThermalReceipt">'+html+'</div></body></html>');
     win.document.close();
+    if(options.settledSizing){
+      if(await prepareSettledThermalPage(win,win.document.getElementById('aggregateThermalReceipt'),win.document.getElementById('aggregateThermalPageSize'))){win.focus();win.print();}
+      return;
+    }
     if(win.document.readyState!=='complete')await new Promise(resolve=>win.addEventListener('load',resolve,{once:true}));
     if(win.document.fonts?.ready)await win.document.fonts.ready;
     await Promise.all(Array.from(win.document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
@@ -5365,7 +5415,7 @@ async function printAggregateThermal(html,title='Aggregate Report',profile='prod
     if(!win.closed){win.focus();win.print();}
   }catch(error){console.error('Aggregate thermal print failed',error);toast('Could not prepare receipt printing. The report window remains available.');}
 }
-function printElement(id){
+function printElement(id,options={}){
   const el=document.getElementById(id);
   if(!el){toast('Print content not found');return;}
   const win=window.open('','_blank','width=500,height=800');
@@ -5374,6 +5424,12 @@ function printElement(id){
   win.document.open();
   win.document.write('<!doctype html><html><head><meta charset="UTF-8"><title>Thermal Receipt</title><style>'+printCss+'</style></head><body>'+el.outerHTML+'</body></html>');
   win.document.close();
+  if(options.settledSizing){
+    const pageStyle=win.document.createElement('style');
+    win.document.head.appendChild(pageStyle);
+    prepareSettledThermalPage(win,win.document.getElementById(id),pageStyle).then(ready=>{if(ready){win.focus();win.print();}}).catch(error=>{console.error('Thermal print sizing failed',error);toast('Could not prepare receipt printing. The report window remains available.');});
+    return;
+  }
   win.focus();
   setTimeout(()=>{
     try{
