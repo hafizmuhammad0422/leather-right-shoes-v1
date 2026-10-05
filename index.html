@@ -8925,7 +8925,7 @@ function pageDistributeUpper(pageContext=workerProductionPageContext()){
         <div class="upper-search-wrap"><label>${supplierProduction?'Shoes, Magzi, Dori &amp; Batawa Article':esc(categoryLabel)+' Article'}</label><input type="text" class="upper-article-search" data-selected-id="${esc(upperProductionArticleChoice(selectedWorker)?.id||'')}" value="${esc(upperProductionArticleChoice(selectedWorker)?.name||'')}" placeholder="Select article..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>
         ${articleOnly||shoeLamination?'':`<input type="hidden" class="upper-material-search" data-selected-id="${esc(upperDefaultMaterial(selectedWorker)?.id||'')}" value="${esc(upperDefaultMaterial(selectedWorker)?.name||'')}">`}
         <div><label>Issued Quantity</label><input class="upper-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Received Quantity</label><input class="upper-received-qty" type="number" min="0" step="1" placeholder="Atoms"></div>
-        ${articleOnly||supplierProduction?'':`<div><label>Worker Pending</label><input id="upperWorkerPending" type="${shoeLamination?'text':'number'}" min="0" step="1" value="${shoeLamination?esc(upperShoeQuantityText(selectedWorker?upperShoePendingState(selectedWorker.id).groups:[])):selectedWorker?Number(getUpperPendingForWorker(selectedWorker.id)?.qty)||0:0}" ${!selectedWorker?'disabled':shoeLamination||getUpperPendingForWorker(selectedWorker.id)?'readonly':''} placeholder="Opening (once)"></div>`}
+        ${articleOnly||supplierProduction?'':`<div><label>Worker Pending</label><input id="upperWorkerPending" type="${shoeLamination?'text':'number'}" min="0" step="1" value="${shoeLamination?esc(upperShoeQuantityText(selectedWorker?upperShoePendingState(selectedWorker.id).groups:[])):selectedWorker?Number(getUpperPendingForWorker(selectedWorker.id)?.qty)||0:0}" ${!selectedWorker?'disabled':shoeLamination||getUpperPendingForWorker(selectedWorker.id)?'readonly':''} placeholder="Opening (once)">${workerCategoryCompareKey(pageContext.category)==='upper mans'&&selectedWorker&&workerCategoryCompareKey(selectedWorker.category)==='upper mans'?'<button type="button" class="btn ghost small" id="btnUpperManualPending">Edit/Set</button>':''}</div>`}
         <div><label>Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div>
         <div><label>Total Items</label><input id="upperWorkerTotalItems" readonly value="${shoeLamination?esc(upperShoeQuantityText(upperShoeQuantityGroups((settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(selectedWorker?.id)),'received'))):productionWorkerCompletedItems('upper',selectedWorker?.id)+' ATOMS'}"></div>
         <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn ghost small" id="btnAddUpperArticleRow">+ Article</button></div>
@@ -9270,6 +9270,27 @@ function upperShoePendingState(workerId,records=settings.upperDistributions||[],
 function upperShoeQuantityGroups(records,kind='issued'){const groups=new Map();records.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleId&&!l.articleName)return;const d=upperLineDisplay(l),key=upperShoeUnitKey(l),g=groups.get(key)||{key,unit:d.unit,qty:0};g.qty+=kind==='received'?(r.workflowVersion===1?d.received:0):d.issued;groups.set(key,g);}));return [...groups.values()];}
 function upperShoeQuantityText(groups){return groups.filter(g=>g.qty!==0).map(g=>g.qty+' '+g.unit).join(' / ')||'0';}
 function upperShoeFilterPending(){const groups=new Map();workers.filter(worker=>upperProductionWorkerMatches(worker)&&(!supplierProductionContextScope()||String(worker.id)===String(supplierProductionActiveWorker()?.id||''))).forEach(w=>upperShoePendingState(w.id).groups.forEach(g=>{const total=groups.get(g.key)||{...g,qty:0};total.qty+=g.qty;groups.set(g.key,total);}));return [...groups.values()];}
+function openUpperManualPendingModal(){
+  if(workerCategoryCompareKey(upperProductionCategory)!=='upper mans')return;
+  const worker=workers.find(item=>String(item.id)===String(getUpperSelectedWorkerId())&&!item.archived&&workerCategoryCompareKey(item.category)==='upper mans');if(!worker)return;
+  const current=upperPendingState(worker.id).qty;
+  modal('<h3>Set Worker Pending</h3><div>'+esc(worker.name)+'</div><label>Worker Pending (ATOMS)</label><input id="upperManualPendingQty" type="number" min="0" step="1" value="'+esc(current)+'"><div class="modal-actions"><button type="button" class="btn brass" id="upperManualPendingSave">Save</button><button type="button" class="btn ghost" id="upperManualPendingCancel">Cancel</button></div>');
+  document.getElementById('upperManualPendingSave').onclick=()=>saveUpperManualPending(worker.id);document.getElementById('upperManualPendingCancel').onclick=closeModal;
+}
+async function saveUpperManualPending(workerId){
+  const button=document.getElementById('upperManualPendingSave');if(!button||button.disabled)return;
+  const worker=workers.find(item=>String(item.id)===String(workerId)&&!item.archived&&workerCategoryCompareKey(item.category)==='upper mans');
+  if(workerCategoryCompareKey(upperProductionCategory)!=='upper mans'||String(getUpperSelectedWorkerId())!==String(workerId)||!worker){toast('Select an Upper Man worker first.');return;}
+  const raw=String(document.getElementById('upperManualPendingQty')?.value||'').trim(),qty=Number(raw),current=upperPendingState(workerId).qty,delta=qty-current;
+  if(!raw||!Number.isSafeInteger(qty)||qty<0||!Number.isSafeInteger(delta)){toast('Enter a non-negative whole Pending ATOMS quantity.');return;}
+  if(delta===0){closeModal();updateUpperWorkflowSummary();toast('Worker Pending is already '+qty+' ATOMS.');return;}
+  const previous=settings.upperPendingRecords,existed=Object.prototype.hasOwnProperty.call(settings,'upperPendingRecords');button.disabled=true;
+  settings.upperPendingRecords=[...(previous||[]),{id:uid(),date:new Date().toISOString(),workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:'manual-set'}];
+  try{if(!await saveCriticalCloudState())throw new Error('Pending save failed');}
+  catch(error){if(existed)settings.upperPendingRecords=previous;else delete settings.upperPendingRecords;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}button.disabled=false;toast('Worker Pending was not saved. Please try again.');return;}
+  closeModal();updateUpperWorkflowSummary();toast('Worker Pending saved: '+qty+' ATOMS.');
+}
+
 function upperPendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
   if(upperShoeWorker(workerId,records))return upperShoePendingState(workerId,records,throughId,throughDate,openingRecords);
   const events=openingRecords.filter(p=>String(p.workerId)===String(workerId)).map(p=>({date:p.date,delta:Number.isFinite(Number(p.delta))?Number(p.delta):Number(p.qty)||0}));
@@ -16450,6 +16471,7 @@ function attachPageHandlers(){
   document.getElementById('backToWorkers')?.addEventListener('click', ()=>goto('workers'));
 
   // Distribute Upper
+  document.getElementById('btnUpperManualPending')?.addEventListener('click',openUpperManualPendingModal);
   document.getElementById('btnAddUpperArticles')?.addEventListener('click', ()=>goto('upperArticles'));
   document.getElementById('btnUpperArticleList')?.addEventListener('click', ()=>goto('upperArticles'));
   document.getElementById('btnAddUpperMaterial')?.addEventListener('click', ()=>openUpperMaterialModal());
