@@ -1571,10 +1571,8 @@ const NAV_KEYS = [
   ['bills','🧾','Sales Bills'],
   ['shopkeepers','👤','Shopkeepers / Khata'],
   ['gas','🔥','Gas Supplier'],
-  ['magziBatavaSupplier','🧵','Magzi & Batava Supplier'],
   ['shoeBoxSuppliers','📦','Shoe Box Suppliers'],
   ['shoeSoleSuppliers','👞','Shoe Sole Suppliers'],
-  ['laminationSuppliers','&#128230;','Shoes Lamination Suppliers'],
   ['shoesMagziDoriBatawaProduction','&#128230;','Shoes, Magzi Dori & Batawa Suppliers Production'],
   ['shoesLaminationShops','&#128230;','Shoes Lamination Shops'],
   ['history','📜','Transaction History'],
@@ -2456,7 +2454,6 @@ function getSearchableBoxes(){
   list.push({label:'New Bill', run:()=>goto('bills')});
   list.push({label:'Shoe Box Suppliers', run:()=>goto('shoeBoxSuppliers')});
   list.push({label:'Shoe Sole Suppliers', run:()=>goto('shoeSoleSuppliers')});
-  list.push({label:'Shoes Lamination Suppliers', run:()=>goto('laminationSuppliers')});
   list.push({label:'Settings', run:()=>goto('settings')});
   return list;
 }
@@ -2666,7 +2663,7 @@ function sidebarMenuValid(config){
   return routes.size===0&&config.entries.every(e=>e.parent===null||groups.has(e.parent));
 }
 function sidebarMenuLoad(){
-  try{const config=JSON.parse(localStorage.getItem('fac_sidebar_menu_ui_v1'));if(config?.version===1&&Array.isArray(config.entries)&&!config.entries.some(e=>e?.id==='laminationSuppliers'))config.entries.push({id:'laminationSuppliers',kind:'item',label:null,parent:null});if(config?.version===1&&Array.isArray(config.entries)&&!config.entries.some(e=>e?.id==='shoesMagziDoriBatawaProduction'))config.entries.push({id:'shoesMagziDoriBatawaProduction',kind:'item',label:null,parent:null});if(config?.version===1&&Array.isArray(config.entries)&&!config.entries.some(e=>e?.id==='shoesLaminationShops'))config.entries.push({id:'shoesLaminationShops',kind:'item',label:null,parent:null});if(sidebarMenuValid(config))return config;}catch(e){}
+  try{const config=JSON.parse(localStorage.getItem('fac_sidebar_menu_ui_v1'));if(config?.version===1&&Array.isArray(config.entries))config.entries=config.entries.filter(e=>!['magziBatavaSupplier','laminationSuppliers'].includes(e?.id));if(config?.version===1&&Array.isArray(config.entries)&&!config.entries.some(e=>e?.id==='shoesMagziDoriBatawaProduction'))config.entries.push({id:'shoesMagziDoriBatawaProduction',kind:'item',label:null,parent:null});if(config?.version===1&&Array.isArray(config.entries)&&!config.entries.some(e=>e?.id==='shoesLaminationShops'))config.entries.push({id:'shoesLaminationShops',kind:'item',label:null,parent:null});if(sidebarMenuValid(config))return config;}catch(e){}
   return sidebarMenuDefault();
 }
 function sidebarMenuSave(config){
@@ -2700,7 +2697,7 @@ function renderNav(){
     return '<div class="sidebar-menu-group"><button type="button" class="sidebar-menu-group-toggle'+(active?' has-active':'')+'" data-menu-group="'+e.id+'" aria-expanded="'+!e.collapsed+'" aria-controls="'+e.id+'">'+esc(e.label)+' <span aria-hidden="true">'+(e.collapsed?'&#9656;':'&#9662;')+'</span></button><div class="sidebar-menu-children" id="'+e.id+'"'+(e.collapsed?' hidden':'')+'>'+children.map(itemHtml).join('')+'</div></div>';
   }).join('')+'<button type="button" class="sidebar-menu-settings" id="sidebarMenuSettings">&#9881; Menu Settings</button><button type="button" class="sidebar-menu-settings" id="dashboardCardsSettings">Dashboard Settings</button>';
   container.querySelectorAll('.nav-item').forEach(btn=>{
-    btn.addEventListener('click',()=>{goto(btn.dataset.page);});
+    btn.addEventListener('click',()=>{goto(btn.dataset.page==='distributeUpper'?workerProductionPageRoute('UPPER MANS','distributeUpper'):btn.dataset.page);});
     btn.classList.toggle('active',btn.dataset.page===activePage);
   });
   container.querySelectorAll('[data-menu-group]').forEach(btn=>btn.addEventListener('click',()=>{
@@ -2738,6 +2735,7 @@ function openSidebarMenuSettings(){
 }
 
 function goto(page,skipSecurity=false,keepFilters=false,fromBack=false){
+  if(['magziBatavaSupplier','magziBatavaProducts','magziBatavaHistory','magziBatavaVoucher','laminationSuppliers'].includes(page))page='dashboard';
   if(WORKER_PRODUCTION_VIEWS.includes(page))page=workerProductionPageRoute(upperProductionCategory,page);
   const productionRoute=workerProductionRoute(page);
   if(!skipSecurity && !ensureOwnerUnlocked(productionRoute?.view||page)) return;
@@ -2810,7 +2808,7 @@ const shoesLaminationShopsModule=(()=>{
   let upperSelWorker=null,upperProductionCategory='Shoes Lamination Shops',workerProductionActivePageKey=null,supplierProductionActiveWorkerId='',currentPage='shoesLaminationShops',writeDepth=0;
   let supplierProductionProfileSaving=false,supplierProductionBillSaving=false,supplierProductionCustomUnitsSaving=false,productionKharchaSaving=false;
   const productionArticleChoices=new Map(),productionDefaultSelections=new Map(),upperMaterialChoices=new Map();
-  const supplierProductionReportFilters={issued:{mode:'today'},received:{mode:'today'},pending:{mode:'today'}};
+  const supplierProductionReportFilters={issued:{mode:'all'},received:{mode:'all'},pending:{mode:'all'}};
   function getCurrentState(){return {settings,workers,materials,transactions,bills,auditLog,articles,stockMoves,gasVouchers};}
   function captureCloudState(){return JSON.parse(JSON.stringify(getCurrentState()));}
   function applyCloudState(state){settings=state.settings||{};workers=state.workers||[];materials=state.materials||[];transactions=state.transactions||[];bills=state.bills||[];auditLog=state.auditLog||[];articles=state.articles||[];stockMoves=state.stockMoves||[];gasVouchers=state.gasVouchers||[];}
@@ -3349,7 +3347,7 @@ async function createUpperDistribution(){if(window.__shoesLaminationShopsUpperVo
 function setUpperWorkerSelection(workerId){
   const worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w));
   upperSelWorker=worker?String(worker.id):null;
-  if(supplierProductionContextScope())supplierProductionActiveWorkerId=upperSelWorker||'';
+  if(supplierProductionContextScope()){supplierProductionActiveWorkerId=upperSelWorker||'';if(worker){settings.supplierProductionLastSelectedSupplierId=supplierProductionActiveWorkerId;const saved=shoesLaminationShopsServices.read()||{};shoesLaminationShopsServices.publish({...saved,settings:{...(saved.settings||{}),supplierProductionLastSelectedSupplierId:supplierProductionActiveWorkerId}});shoesLaminationShopsServices.persist();}}
   if(worker)productionArticleChoices.delete(productionArticleChoiceKey(worker,'upper'));
   if(worker)productionDefaultSelections.delete(productionArticleChoiceKey(worker,'upper'));
   if(worker)upperMaterialChoices.delete(productionArticleChoiceKey(worker,'upper-material'));
@@ -3684,7 +3682,7 @@ function upperPendingVoucherTable(rows,print=false){
   return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+['Date','Worker','Upper Article','Pending','Voucher #'].map(label=>'<th style="'+cell+'">'+label+'</th>').join('')+'</tr></thead><tbody>'+(rows.length?rows.map(row=>'<tr data-upper-pending-voucher-row="'+esc(String(row.id))+'">'+[esc(row.date),esc(row.workerName),row.articles.map(esc).join('<br>')||'?',esc(row.pendingText),print?'#'+esc(String(row.voucherNo)):'<button type="button" class="btn ghost small" data-upper-pending-voucher="'+esc(String(row.id))+'">#'+esc(String(row.voucherNo))+'</button>'].map(value=>'<td style="'+cell+'">'+value+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="5" class="empty">No matching pending vouchers.</td></tr>')+'</tbody></table>';
 }
 function supplierProductionContextScope(){const route=workerProductionRoute(currentPage);return !!route&&workerCategoryCompareKey(route.category)==='shoes lamination shops';}
-function supplierProductionActiveWorker(){return workers.find(worker=>!worker.archived&&String(worker.id)===supplierProductionActiveWorkerId&&workerCategoryCompareKey(worker.category)==='shoes lamination shops')||null;}
+function supplierProductionActiveWorker(){const id=supplierProductionActiveWorkerId||String(settings.supplierProductionLastSelectedSupplierId||'');const worker=workers.find(worker=>!worker.archived&&String(worker.id)===id&&workerCategoryCompareKey(worker.category)==='shoes lamination shops')||null;if(worker)supplierProductionActiveWorkerId=String(worker.id);return worker;}
 function supplierProductionReportNavigation(title='',report=false){
   if(report)return '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;margin-bottom:10px;"><div style="display:flex;flex-wrap:wrap;gap:8px;"><button class="btn ghost small" id="btnBackPage">Back</button><button class="btn ghost small" id="btnBackDashboard">Back to Dashboard</button></div><h2 class="page-title" style="margin:0;text-align:center;overflow-wrap:anywhere;">'+esc(title)+'</h2><div></div></div>';
   return '<div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:10px;"><button class="btn ghost small" id="btnBackPage">Back</button><h2 class="page-title" style="margin:0;text-align:center;overflow-wrap:anywhere;">'+esc(title)+'</h2><button class="btn ghost small" id="btnBackDashboard">Back to Dashboard</button></div>';
@@ -3692,6 +3690,29 @@ function supplierProductionReportNavigation(title='',report=false){
 function supplierProductionReportData(kind,now=new Date()){
   const filter=supplierProductionReportFilters[kind],mode=filter.mode;let start=null,end=new Date(now);end.setHours(24,0,0,0);
   if(mode==='today'){start=new Date(now);start.setHours(0,0,0,0);}else if(mode==='week')start=getUpperWorkWeekRange(now).start;else if(mode==='month')start=new Date(now.getFullYear(),now.getMonth(),1);else if(mode==='all')end=null;else if(mode==='custom'){start=filter.from?new Date(filter.from+'T00:00:00'):null;end=filter.to?new Date(filter.to+'T00:00:00'):null;if(end)end.setDate(end.getDate()+1);}
+  if(kind==='pending'){
+    const workerId=String(supplierProductionActiveWorker()?.id||''),suppliers=workers.filter(upperProductionWorkerMatches),records=upperProductionRecords().filter(record=>String(record.workerId)===workerId),opening=supplierProductionReportOpening(workerId),columns=new Map(),days=new Map(),articleTotals=new Map(),weeklyTotals=new Map();
+    const identity=line=>line.articleId?'id:'+line.articleId:'name:'+(line.articleName||line.name||'(Material only)');
+    const columnFor=line=>{const display=upperLineDisplay(line),base=identity(line),unitKey=upperShoeUnitKey(line),id=display.unit==='ATOMS'?base:base+'|'+unitKey;columns.set(id,{id,name:line.articleName||columns.get(id)?.name||String(line.articleId||''),unit:display.unit,unitKey,openingId:base});return id;};
+    records.filter(record=>record.workflowVersion===1).forEach(record=>(record.lines||[]).forEach(line=>{if(line.articleId||line.articleName)columnFor(line);}));
+    upperCategoryArticles().forEach(article=>{const base='id:'+article.id;if(![...columns.values()].some(column=>column.openingId===base))columns.set(base,{id:base,name:article.name,unit:upperArticleUnit(article),openingId:base});});
+    opening.forEach((item,id)=>{if(item.qty||!columns.has(id))columns.set(id,{id,name:item.name||columns.get(id)?.name||id,unit:'ATOMS',openingId:id});});
+    const pendingAt=through=>{
+      const quantities=new Map(),totals=new Map();let unattributable=false;
+      records.filter(record=>record.workflowVersion===1&&(!through||upperWorkTimestamp(record)<through)).forEach(record=>(record.lines||[]).forEach(line=>{const display=upperLineDisplay(line),qty=display.issued-display.received;if(!line.articleId&&!line.articleName){if(qty)unattributable=true;return;}const id=columnFor(line),key=upperShoeUnitKey(line);quantities.set(id,(quantities.get(id)||0)+qty);totals.set(key,(totals.get(key)||0)+qty);}));
+      const groups=workerId?upperShoePendingState(workerId,settings.upperDistributions||[],null,through).groups:[];
+      if(groups.some(group=>(totals.get(group.key)||0)!==group.qty))unattributable=true;
+      if(unattributable)quantities.clear();else opening.forEach((item,id)=>{if(item.qty)quantities.set(id,(quantities.get(id)||0)+item.qty);});
+      return quantities;
+    };
+    records.forEach(record=>{const date=supplierProductionReportDate(record);if(!Number.isFinite(+date)||(start&&date<start)||(end&&date>=end))return;const key=upperLocalDateKey(date);let row=days.get(key);if(!row){row={date:key,time:date,names:new Set(),workers:new Set(),vouchers:[],quantities:new Map()};days.set(key,row);}if(date>row.time)row.time=date;row.names.add(record.workerName||suppliers.find(worker=>String(worker.id)===workerId)?.name||'');row.workers.add(workerId);});
+    days.forEach(row=>{const through=new Date(row.date+'T00:00:00');through.setDate(through.getDate()+1);row.quantities=pendingAt(through);});pendingAt(end).forEach((qty,id)=>articleTotals.set(id,qty));
+    const groups=workerId?upperShoePendingState(workerId,settings.upperDistributions||[],null,end).groups.map(group=>({...group})):[],openingTotal=[...opening.values()].reduce((sum,item)=>sum+item.qty,0);if(openingTotal){const atoms=groups.find(group=>group.unit==='ATOMS');if(atoms)atoms.qty+=openingTotal;else groups.push({key:'supplier-report-opening',unit:'ATOMS',qty:openingTotal});}
+    const weekStart=getUpperWorkWeekRange(now).start,weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+7);
+    records.filter(record=>record.workflowVersion===1&&supplierProductionReportDate(record)>=weekStart&&supplierProductionReportDate(record)<weekEnd).forEach(record=>(record.lines||[]).forEach(line=>{if(!line.articleId&&!line.articleName)return;const display=upperLineDisplay(line),id=columnFor(line);weeklyTotals.set(id,(weeklyTotals.get(id)||0)+display.issued-display.received);}));
+    const activeSupplier=supplierProductionActiveWorker(),allowedArticleIds=new Set([...(Array.isArray(activeSupplier?.supplierArticleIds)?activeSupplier.supplierArticleIds:[]),...workerDefaultArticleIds(activeSupplier,'upper')].map(String));
+    return {kind,mode,suppliers,workerId,weeklyTotals,columns:[...columns.values()].filter(column=>allowedArticleIds.has(String(column.openingId||column.id).slice(3))&&String(column.openingId||column.id).startsWith('id:')),rows:[...days.values()].sort((a,b)=>a.date.localeCompare(b.date)),total:upperShoeQuantityText(groups)==='0'?'0 ATOMS':upperShoeQuantityText(groups),articleTotals,opening};
+  }
   const suppliers=workers.filter(upperProductionWorkerMatches),workerId=String(supplierProductionActiveWorker()?.id||'');
   const columns=new Map(),days=new Map(),records=upperProductionRecords().filter(r=>String(r.workerId)===workerId),articleTotals=new Map(),opening=kind==='received'?supplierProductionReportOpeningReceived(workerId):supplierProductionReportOpening(workerId);let total=0;
   const identity=line=>line.articleId?'id:'+line.articleId:'name:'+(line.articleName||line.name||'(Material only)');
@@ -3726,11 +3747,13 @@ function supplierProductionReportData(kind,now=new Date()){
     const weekStart=getUpperWorkWeekRange(now).start,weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+7);
     records.filter(record=>record.workflowVersion===1&&supplierProductionReportDate(record)>=weekStart&&supplierProductionReportDate(record)<weekEnd).forEach(record=>(record.lines||[]).forEach(line=>{if(!line.articleId&&!line.articleName)return;const display=upperLineDisplay(line);if(display.unit!=='ATOMS'||display.issued*display.factor!==(Number(line.qty)||0)||display.received*display.factor!==(Number(line.receivedQty)||0))return;const id=identity(line),quantity=kind==='received'?display.received:display.issued-display.received;weeklyTotals.set(id,(weeklyTotals.get(id)||0)+quantity);}));
   }
-  return {kind,mode,suppliers,workerId,weeklyTotals,columns:[...columns].map(([id,name])=>({id,name})),rows:[...days.values()].sort((a,b)=>a.date.localeCompare(b.date)),total,articleTotals,opening};
+  const activeSupplier=supplierProductionActiveWorker(),allowedArticleIds=new Set([...(Array.isArray(activeSupplier?.supplierArticleIds)?activeSupplier.supplierArticleIds:[]),...workerDefaultArticleIds(activeSupplier,'upper')].map(String));
+  return {kind,mode,suppliers,workerId,weeklyTotals,columns:[...columns].map(([id,name])=>({id,name})).filter(column=>allowedArticleIds.has(column.id.slice(3))&&column.id.startsWith('id:')),rows:[...days.values()].sort((a,b)=>a.date.localeCompare(b.date)),total,articleTotals,opening};
 }
 function supplierProductionReportPrintHtml(data){
   const label=data.kind==='received'?'Received':'Pending',rows=supplierProductionReportSummaryRows(data),supplier=(data.suppliers||[]).find(worker=>String(worker.id)===data.workerId),rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  const box=(title,key)=>'<div style="box-sizing:border-box;border:2px solid #000;margin-top:3px;padding:5px 2px;line-height:1.1;"><div style="display:flex;justify-content:space-between;gap:3px;font-size:11px;font-weight:900;white-space:nowrap;"><span>'+esc(title)+'</span><span>'+rows.reduce((n,row)=>n+row[key],0)+' ATOMS</span></div><div style="border-top:1px solid #000;">'+rows.map(row=>'<div style="display:flex;justify-content:space-between;gap:5px;padding:2px 0;"><span style="min-width:0;overflow-wrap:anywhere;">'+esc(row.name)+'</span><span style="white-space:nowrap;">'+row[key]+' ATOMS</span></div>').join('')+'</div></div>';
+  const pendingTotal=key=>{const groups=new Map();rows.forEach(row=>{const unit=row.unit||'ATOMS',group=groups.get(unit)||{unit,qty:0};group.qty+=row[key];groups.set(unit,group);});return upperShoeQuantityText([...groups.values()]);};
+  const box=(title,key)=>'<div style="box-sizing:border-box;border:2px solid #000;margin-top:3px;padding:5px 2px;line-height:1.1;"><div style="display:flex;justify-content:space-between;gap:3px;font-size:11px;font-weight:900;white-space:nowrap;"><span>'+esc(title)+'</span><span>'+(data.kind==='pending'?pendingTotal(key):rows.reduce((n,row)=>n+row[key],0)+' ATOMS')+'</span></div><div style="border-top:1px solid #000;">'+rows.filter(row=>key==='opening'||row[key]>0).map(row=>'<div style="display:flex;justify-content:space-between;gap:5px;padding:2px 0;"><span style="min-width:0;overflow-wrap:anywhere;">'+esc(row.name)+'</span><span style="white-space:nowrap;">'+row[key]+' '+(row.unit||'ATOMS')+'</span></div>').join('')+'</div></div>';
   return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin-top:3px;">'+esc(supplier?.name||'')+'</div>'+rule+box('Opening '+label,'opening')+box('Weekly '+label+' Quantity','weekly')+box('Total '+label+' Quantity','total')+(data.kind==='pending'&&String(data.total).includes('Legacy / unknown')?'<div style="margin-top:7px;">Current Pending (existing source): '+esc(data.total)+'</div>':'')+rule+'<div style="text-align:center;">For Contact Dial 03226574565</div></div>';
 }
 function supplierProductionReportTable(data,printing=false){
@@ -3738,9 +3761,9 @@ function supplierProductionReportTable(data,printing=false){
   const headings=[printing?'Date':'Date & Time',...(!printing?['Worker Name']:[]),...data.columns.map(c=>c.name),...(voucher?['Voucher']:[]),...(data.kind==='pending'&&!printing?['']:[])];
   const hasOpening=data.kind==='pending'||data.kind==='received',openingLabel=data.kind==='received'?'Opening Received':'Opening Pending',openingAttribute=data.kind==='received'?'data-supplier-report-opening-received':'data-supplier-report-opening',openingSave=data.kind==='received'?'supplierReportSaveOpeningReceived':'supplierReportSaveOpening',openingAction=hasOpening&&!printing&&!voucher;
   const openingWorker=hasOpening?esc((data.suppliers||[]).find(worker=>String(worker.id)===data.workerId)?.name||''):'';
-  const openingRow=hasOpening?'<tr><td style="'+cell+'text-align:left;">'+openingLabel+'</td>'+(!printing?'<td style="'+cell+'">'+openingWorker+'</td>':'')+data.columns.map(column=>{const value=data.opening.get(column.id)?.qty;return '<td style="'+cell+'text-align:center;">'+(printing?(value?esc(value+' ATOMS'):''):'<input type="number" min="0" step="1" aria-label="'+openingLabel+' '+esc(column.name)+'" '+openingAttribute+'="'+esc(column.id)+'" data-article-name="'+esc(column.name)+'" value="'+(value===undefined?'':esc(value))+'" style="width:90px;max-width:100%;text-align:center;"><span> ATOMS</span>')+'</td>';}).join('')+(!printing?'<td style="'+cell+'text-align:center;"><button type="button" class="btn brass small" id="'+openingSave+'">Save</button></td>':'')+'</tr>':'';
+  const openingRow=hasOpening?'<tr><td style="'+cell+'text-align:left;">'+openingLabel+'</td>'+(!printing?'<td style="'+cell+'">'+openingWorker+'</td>':'')+data.columns.map(column=>{const openingId=data.kind==='pending'?column.openingId||column.id:column.id,value=data.opening.get(openingId)?.qty;if(data.kind==='pending'&&column.unit!=='ATOMS'&&data.columns.some(other=>other.id!==column.id&&other.unit==='ATOMS'&&other.openingId===openingId))return '<td style="'+cell+'text-align:center;"></td>';return '<td style="'+cell+'text-align:center;">'+(printing?(value?esc(value+' ATOMS'):''):'<input type="number" min="0" step="1" aria-label="'+openingLabel+' '+esc(column.name)+'" '+openingAttribute+'="'+esc(openingId)+'" data-article-name="'+esc(column.name)+'" value="'+(value===undefined?'':esc(value))+'" style="width:90px;max-width:100%;text-align:center;'+(data.kind==='pending'?'box-sizing:border-box;min-width:0;max-width:calc(100% - 44px);':'')+'"><span> ATOMS</span>')+'</td>';}).join('')+(!printing?'<td style="'+cell+'text-align:center;"><button type="button" class="btn brass small" id="'+openingSave+'">Save</button></td>':'')+'</tr>':'';
   const totals=data.columns.map(column=>'<div>'+esc(column.name)+' &#8212; '+(data.articleTotals.has(column.id)?'<strong>'+esc(data.articleTotals.get(column.id)+' ATOMS')+'</strong>':'')+'</div>').join('');
-  return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+headings.map((name,index)=>'<th style="'+cell+'text-align:'+(index<(printing?1:2)?'left':'center')+';">'+esc(name)+'</th>').join('')+'</tr></thead><tbody>'+openingRow+data.rows.map(row=>'<tr><td style="'+cell+'text-align:left;">'+esc(new Date(row.date+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+(!printing?', '+row.time.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):''))+'</td>'+(!printing?'<td style="'+cell+'text-align:left;">'+esc([...row.names].filter(Boolean).join(', '))+'</td>':'')+data.columns.map(column=>'<td style="'+cell+'text-align:center;">'+(row.quantities.get(column.id)?esc(row.quantities.get(column.id)+' ATOMS'):'')+'</td>').join('')+(voucher?'<td style="'+cell+'text-align:center;">'+(row.vouchers||[]).map(v=>'<button type="button" class="btn ghost small" data-supplier-report-voucher="'+esc(v.id)+'" style="margin:2px;">#'+esc(v.number)+'</button>').join('')+'</td>':'')+(openingAction?'<td style="'+cell+'"></td>':'')+'</tr>').join('')+'</tbody></table>'+(data.kind==='issued'?'<div style="font-weight:900;margin-top:7px;">Total '+label+' Quantity &#8212; '+esc(data.total)+'</div>'+totals:supplierProductionReportWeeklySummary(data));
+  return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+headings.map((name,index)=>'<th style="'+cell+'text-align:'+(index<(printing?1:2)?'left':'center')+';">'+esc(name)+'</th>').join('')+'</tr></thead><tbody>'+openingRow+data.rows.map(row=>'<tr><td style="'+cell+'text-align:left;">'+esc(new Date(row.date+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})+(!printing?', '+row.time.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):''))+'</td>'+(!printing?'<td style="'+cell+'text-align:left;">'+esc([...row.names].filter(Boolean).join(', '))+'</td>':'')+data.columns.map(column=>'<td style="'+cell+'text-align:center;">'+(row.quantities.get(column.id)?esc(row.quantities.get(column.id)+' '+(data.kind==='pending'?column.unit||'ATOMS':'ATOMS')):'')+'</td>').join('')+(voucher?'<td style="'+cell+'text-align:center;">'+(row.vouchers||[]).map(v=>'<button type="button" class="btn ghost small" data-supplier-report-voucher="'+esc(v.id)+'" style="margin:2px;">#'+esc(v.number)+'</button>').join('')+'</td>':'')+(openingAction?'<td style="'+cell+'"></td>':'')+'</tr>').join('')+'</tbody></table>'+(data.kind==='issued'?'<div style="font-weight:900;margin-top:7px;">Total '+label+' Quantity &#8212; '+esc(data.total)+'</div>'+totals:supplierProductionReportWeeklySummary(data));
 }
 function upperKharchaReportRecords(){return [...upperWeeklyRecords(),...upperProductionKharchaRows().map(r=>({id:r.id,workerName:workers.find(w=>String(w.id)===String(r.workerId))?.name||'Worker',date:r.date,totalAmount:Number(r.delta)||0,kharchaAdjustment:true}))];}
 function supplierProductionSelectableArticle(article,worker){
@@ -4101,13 +4124,14 @@ function supplierProductionReportOpeningReceived(workerId){
   const values=new Map();if(!workerId)return values;Object.entries(settings.supplierProductionReportOpeningReceived?.suppliers?.[String(workerId)]?.articles||{}).forEach(([id,item])=>{const qty=Number(item.qty);if(Number.isSafeInteger(qty)&&qty>=0)values.set(id,{name:String(item.name||id),qty});});return values;
 }
 function supplierProductionReportSummaryRows(data){
-  return data.columns.map(column=>{const opening=data.opening.get(column.id)?.qty||0,weekly=data.weeklyTotals.get(column.id)||0;return {name:column.name,opening,weekly,total:opening+weekly};});
+  return data.columns.map(column=>{const opening=data.opening.get(column.id)?.qty||0,weekly=data.weeklyTotals.get(column.id)||0;return {name:column.name,...(data.kind==='pending'?{unit:column.unit||'ATOMS'}:{}),opening,weekly,total:opening+weekly};});
 }
 function supplierProductionReportWeeklySummary(data){
   const label=data.kind==='received'?'Received':'Pending';
   const summary=supplierProductionReportSummaryRows(data),sum=(combined)=>summary.reduce((total,row)=>total+(combined?row.total:row.weekly),0);
-  const articles=(combined)=>summary.map(row=>'<div>'+esc(row.name)+' &#8212; <strong>'+esc((combined?row.total:row.weekly)+' ATOMS')+'</strong></div>').join('');
-  return '<div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:7px;"><div><div style="font-weight:900;">Weekly '+label+' Quantity &#8212; '+esc(sum(false)+' ATOMS')+'</div>'+articles(false)+'</div><div><div style="font-weight:900;">Total '+label+' Quantity &#8212; '+esc(sum(true)+' ATOMS')+'</div>'+articles(true)+'</div></div>'+(data.kind==='pending'&&String(data.total).includes('Legacy / unknown')?'<div style="margin-top:7px;">Current Pending (existing source): '+esc(data.total)+'</div>':'');
+  const pendingTotal=(combined)=>{const groups=new Map();summary.forEach(row=>{const unit=row.unit||'ATOMS',group=groups.get(unit)||{unit,qty:0};group.qty+=combined?row.total:row.weekly;groups.set(unit,group);});return upperShoeQuantityText([...groups.values()]);};
+  const articles=(combined)=>summary.filter(row=>(combined?row.total:row.weekly)>0).map(row=>'<div>'+esc(row.name)+' &#8212; <strong>'+esc((combined?row.total:row.weekly)+' '+(row.unit||'ATOMS'))+'</strong></div>').join('');
+  return '<div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:7px;"><div><div style="font-weight:900;">Weekly '+label+' Quantity &#8212; '+esc(data.kind==='pending'?pendingTotal(false):sum(false)+' ATOMS')+'</div>'+articles(false)+'</div><div><div style="font-weight:900;">Total '+label+' Quantity &#8212; '+esc(data.kind==='pending'?pendingTotal(true):sum(true)+' ATOMS')+'</div>'+articles(true)+'</div></div>'+(data.kind==='pending'&&String(data.total).includes('Legacy / unknown')?'<div style="margin-top:7px;">Current Pending (existing source): '+esc(data.total)+'</div>':'');
 }
 function supplierProductionHasLinkedData(workerId){
   const id=String(workerId),linked=value=>{if(!value||typeof value!=='object')return false;if(['workerId','supplierId'].some(key=>value[key]!==undefined&&String(value[key])===id))return true;return Object.values(value).some(linked);};
@@ -4270,13 +4294,13 @@ function upperVoucherFieldStyle(id){const f=(settings.upperVoucherCustomization|
   if(document.getElementById('upperDistributionRows')) bindUpperDistributionRows();
   document.getElementById('btnCreateUpperVoucher')?.addEventListener('click',createUpperDistribution);   document.getElementById('btnSaveUpperPending')?.addEventListener('click',saveUpperPending);
   document.getElementById('upperTodayIssuedCard')?.addEventListener('click',()=>{window.__shoesLaminationShopsUpperMovementMode='today';goto('upperIssuedReport');});
-  document.getElementById('upperTodayReceivedCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.received.mode='today';window.__shoesLaminationShopsUpperMovementMode='today';goto('upperReceivedReport');});
+  document.getElementById('upperTodayReceivedCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.received.mode='all';window.__shoesLaminationShopsUpperMovementMode='today';goto('upperReceivedReport');});
   document.getElementById('upperMovementBack')?.addEventListener('click',()=>goto('distributeUpper'));
   document.querySelectorAll('[data-upper-movement-period]').forEach(b=>b.addEventListener('click',()=>{window.__shoesLaminationShopsUpperMovementMode=b.dataset.upperMovementPeriod;render();}));
   document.getElementById('upperMovementPrint')?.addEventListener('click',()=>printElement('upperMovementPrintArea'));
-  document.getElementById('upperPendingCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.pending.mode='today';window.__shoesLaminationShopsUpperPendingReportMode='today';goto('upperPending');});
+  document.getElementById('upperPendingCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.pending.mode='all';window.__shoesLaminationShopsUpperPendingReportMode='today';goto('upperPending');});
   bindSupplierProductionReport();
-  document.getElementById('upperTodayArticlesCard')?.addEventListener('click',()=>{if(supplierProductionReportScope()){supplierProductionReportFilters.issued.mode='today';goto('upperIssuedReport');return;}window.__shoesLaminationShopsUpperSummaryFilterMode='today';goto('upperArticleSummary');});
+  document.getElementById('upperTodayArticlesCard')?.addEventListener('click',()=>{if(supplierProductionReportScope()){supplierProductionReportFilters.issued.mode='all';goto('upperIssuedReport');return;}window.__shoesLaminationShopsUpperSummaryFilterMode='today';goto('upperArticleSummary');});
   document.getElementById('upperTodayMaterialsCard')?.addEventListener('click',()=>{window.__shoesLaminationShopsUpperSummaryFilterMode='today';goto('upperMaterialSummary');});
   document.getElementById('upperWeeklyKharchaCard')?.addEventListener('click',()=>goto('upperWeeklyKharcha'));
   document.getElementById('upperWeeklyBack')?.addEventListener('click',()=>goto('distributeUpper',false,false,true));
@@ -4325,6 +4349,7 @@ function shoesLaminationShopsRender(){const route=shoesLaminationShopsRoute(curr
 function shoesLaminationShopsBind(){shoesLaminationShopsModule.bind();}
 /* End Shoes Lamination Shops isolated copy. */
 function render(){
+  if(['magziBatavaSupplier','magziBatavaProducts','magziBatavaHistory','magziBatavaVoucher','laminationSuppliers'].includes(currentPage))currentPage='dashboard';
   if(shoesLaminationShopsRoute(currentPage)){shoesLaminationShopsRender();return;}
   if(WORKER_PRODUCTION_VIEWS.includes(currentPage))currentPage=workerProductionPageRoute(upperProductionCategory,currentPage);
   const productionRoute=workerProductionRoute(currentPage),productionView=productionRoute?.view;
@@ -5567,7 +5592,7 @@ function workerProductionRenamedRoute(route,oldName,newName){
 function upperCategoryLabel(category=upperProductionCategory){return workerCategoryCompareKey(category)==='upper mans'?'Upper Man':String(category||'').trim().replace(/\s+/g,' ');}
 let supplierProductionActiveWorkerId='';
 function supplierProductionContextScope(){const route=workerProductionRoute(currentPage);return !!route&&workerCategoryCompareKey(route.category)==='shoes, magzi dori & batawa suppliers';}
-function supplierProductionActiveWorker(){return workers.find(worker=>!worker.archived&&String(worker.id)===supplierProductionActiveWorkerId&&workerCategoryCompareKey(worker.category)==='shoes, magzi dori & batawa suppliers')||null;}
+function supplierProductionActiveWorker(){const id=supplierProductionActiveWorkerId||String(settings.supplierProductionLastSelectedSupplierId||'');const worker=workers.find(worker=>!worker.archived&&String(worker.id)===id&&workerCategoryCompareKey(worker.category)==='shoes, magzi dori & batawa suppliers')||null;if(worker)supplierProductionActiveWorkerId=String(worker.id);return worker;}
 function supplierProductionArticleForWorker(article,worker){
   if(!worker)return false;const owner=settings.supplierProductionArticleSuppliers?.[String(article.id)]||article.supplierId;if(owner)return String(owner)===String(worker.id);
   const ids=new Set([...(Array.isArray(worker.supplierArticleIds)?worker.supplierArticleIds:[]),...workerDefaultArticleIds(worker,'upper')].map(String));
@@ -5982,7 +6007,7 @@ function addUpperDistributionRow(kind='both'){if(workerProductionShoeLamination(
 function setUpperWorkerSelection(workerId){
   const worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w));
   upperSelWorker=worker?String(worker.id):null;
-  if(supplierProductionContextScope())supplierProductionActiveWorkerId=upperSelWorker||'';
+  if(supplierProductionContextScope()){supplierProductionActiveWorkerId=upperSelWorker||'';if(worker){settings.supplierProductionLastSelectedSupplierId=supplierProductionActiveWorkerId;persistAll();}}
   if(worker)productionArticleChoices.delete(productionArticleChoiceKey(worker,'upper'));
   if(worker)productionDefaultSelections.delete(productionArticleChoiceKey(worker,'upper'));
   if(worker)upperMaterialChoices.delete(productionArticleChoiceKey(worker,'upper-material'));
@@ -6271,7 +6296,7 @@ function upperMovementReportHtml(kind,mode,rows){
   return upperReportBoldPrintStyle('upperMovementPrintArea')+'<h3 style="margin:0 0 5px;">Upper '+label+' Report</h3><div style="font-size:11px;margin-bottom:6px;">'+period+' | ATOMS</div><table style="width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;"><thead><tr>'+['#','Worker Name','Article',label+' Quantity'].map((title,i)=>'<th style="'+cell+'text-align:'+(i<2?'left':'center')+';'+(i===0?'width:7%;':'')+'">'+title+'</th>').join('')+'</tr></thead><tbody>'+rows.map((r,i)=>'<tr><td style="'+cell+'text-align:left;">'+(i+1)+'</td><td style="'+cell+'text-align:left;overflow-wrap:anywhere;">'+esc(r.workerName)+'</td><td style="'+cell+'text-align:center;overflow-wrap:anywhere;">'+esc(r.article)+'</td><td style="'+cell+'text-align:center;">'+r.quantity+'</td></tr>').join('')+'</tbody></table><div style="font-weight:900;margin-top:7px;">Total '+label+' Quantity: '+rows.reduce((n,r)=>n+r.quantity,0)+' ATOMS</div>';
 }
 function supplierProductionReportScope(){return workerCategoryCompareKey(upperProductionCategory)==='shoes, magzi dori & batawa suppliers';}
-const supplierProductionReportFilters={issued:{mode:'today'},received:{mode:'today'},pending:{mode:'today'}};
+const supplierProductionReportFilters={issued:{mode:'all'},received:{mode:'all'},pending:{mode:'all'}};
 function supplierProductionReportNavigation(title='',report=false){
   if(report)return '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;margin-bottom:10px;"><div style="display:flex;flex-wrap:wrap;gap:8px;"><button class="btn ghost small" id="btnBackPage">Back</button><button class="btn ghost small" id="btnBackDashboard">Back to Dashboard</button></div><h2 class="page-title" style="margin:0;text-align:center;overflow-wrap:anywhere;">'+esc(title)+'</h2><div></div></div>';
   return '<div style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;margin-bottom:10px;"><button class="btn ghost small" id="btnBackPage">Back</button><h2 class="page-title" style="margin:0;text-align:center;overflow-wrap:anywhere;">'+esc(title)+'</h2><button class="btn ghost small" id="btnBackDashboard">Back to Dashboard</button></div>';
@@ -6337,19 +6362,20 @@ function supplierProductionReportData(kind,now=new Date()){
     const weekStart=getUpperWorkWeekRange(now).start,weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+7);
     records.filter(record=>record.workflowVersion===1&&supplierProductionReportDate(record)>=weekStart&&supplierProductionReportDate(record)<weekEnd).forEach(record=>(record.lines||[]).forEach(line=>{if(!line.articleId&&!line.articleName)return;const display=upperLineDisplay(line);if(display.unit!=='ATOMS'||display.issued*display.factor!==(Number(line.qty)||0)||display.received*display.factor!==(Number(line.receivedQty)||0))return;const id=identity(line),quantity=kind==='received'?display.received:display.issued-display.received;weeklyTotals.set(id,(weeklyTotals.get(id)||0)+quantity);}));
   }
-  return {kind,mode,suppliers,workerId,weeklyTotals,columns:[...columns].map(([id,name])=>({id,name})),rows:[...days.values()].sort((a,b)=>a.date.localeCompare(b.date)),total,articleTotals,opening};
+  const activeSupplier=supplierProductionActiveWorker(),allowedArticleIds=new Set([...(Array.isArray(activeSupplier?.supplierArticleIds)?activeSupplier.supplierArticleIds:[]),...workerDefaultArticleIds(activeSupplier,'upper')].map(String));
+  return {kind,mode,suppliers,workerId,weeklyTotals,columns:[...columns].map(([id,name])=>({id,name})).filter(column=>allowedArticleIds.has(column.id.slice(3))&&column.id.startsWith('id:')),rows:[...days.values()].sort((a,b)=>a.date.localeCompare(b.date)),total,articleTotals,opening};
 }
 function supplierProductionReportSummaryRows(data){
   return data.columns.map(column=>{const opening=data.opening.get(column.id)?.qty||0,weekly=data.weeklyTotals.get(column.id)||0;return {name:column.name,opening,weekly,total:opening+weekly};});
 }
 function supplierProductionReportPrintHtml(data){
   const label=data.kind==='received'?'Received':'Pending',rows=supplierProductionReportSummaryRows(data),supplier=(data.suppliers||[]).find(worker=>String(worker.id)===data.workerId),rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  const box=(title,key)=>'<div style="box-sizing:border-box;border:2px solid #000;margin-top:3px;padding:5px 2px;line-height:1.1;"><div style="display:flex;justify-content:space-between;gap:3px;font-size:11px;font-weight:900;white-space:nowrap;"><span>'+esc(title)+'</span><span>'+rows.reduce((n,row)=>n+row[key],0)+' ATOMS</span></div><div style="border-top:1px solid #000;">'+rows.map(row=>'<div style="display:flex;justify-content:space-between;gap:5px;padding:2px 0;"><span style="min-width:0;overflow-wrap:anywhere;">'+esc(row.name)+'</span><span style="white-space:nowrap;">'+row[key]+' ATOMS</span></div>').join('')+'</div></div>';
+  const box=(title,key)=>'<div style="box-sizing:border-box;border:2px solid #000;margin-top:3px;padding:5px 2px;line-height:1.1;"><div style="display:flex;justify-content:space-between;gap:3px;font-size:11px;font-weight:900;white-space:nowrap;"><span>'+esc(title)+'</span><span>'+rows.reduce((n,row)=>n+row[key],0)+' ATOMS</span></div><div style="border-top:1px solid #000;">'+rows.filter(row=>key==='opening'||row[key]>0).map(row=>'<div style="display:flex;justify-content:space-between;gap:5px;padding:2px 0;"><span style="min-width:0;overflow-wrap:anywhere;">'+esc(row.name)+'</span><span style="white-space:nowrap;">'+row[key]+' ATOMS</span></div>').join('')+'</div></div>';
   return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin-top:3px;">'+esc(supplier?.name||'')+'</div>'+rule+box('Opening '+label,'opening')+box('Weekly '+label+' Quantity','weekly')+box('Total '+label+' Quantity','total')+(data.kind==='pending'&&String(data.total).includes('Legacy / unknown')?'<div style="margin-top:7px;">Current Pending (existing source): '+esc(data.total)+'</div>':'')+rule+'<div style="text-align:center;">For Contact Dial 03226574565</div></div>';
 }
 function supplierProductionReportWeeklySummary(data){
   const label=data.kind==='received'?'Received':'Pending';
-  const articles=(combined)=>supplierProductionReportSummaryRows(data).map(row=>'<div>'+esc(row.name)+': '+esc((combined?row.total:row.weekly)+' ATOMS')+'</div>').join('');
+  const articles=(combined)=>supplierProductionReportSummaryRows(data).filter(row=>(combined?row.total:row.weekly)>0).map(row=>'<div>'+esc(row.name)+' &#8212; <strong>'+esc((combined?row.total:row.weekly)+' ATOMS')+'</strong>'+'</div>').join('');
   return '<div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:7px;"><div><div style="font-weight:900;">Weekly '+label+' Quantity</div>'+articles(false)+'</div><div><div style="font-weight:900;">Total '+label+' Quantity</div>'+articles(true)+'</div></div>'+(data.kind==='pending'&&String(data.total).includes('Legacy / unknown')?'<div style="margin-top:7px;">Current Pending (existing source): '+esc(data.total)+'</div>':'');
 }
 function supplierProductionReportTable(data,printing=false){
@@ -13242,13 +13268,13 @@ function attachPageHandlers(){
   if(document.getElementById('upperDistributionRows')) bindUpperDistributionRows();
   document.getElementById('btnCreateUpperVoucher')?.addEventListener('click',createUpperDistribution);   document.getElementById('btnSaveUpperPending')?.addEventListener('click',saveUpperPending);
   document.getElementById('upperTodayIssuedCard')?.addEventListener('click',()=>{window.__upperMovementMode='today';goto('upperIssuedReport');});
-  document.getElementById('upperTodayReceivedCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.received.mode='today';window.__upperMovementMode='today';goto('upperReceivedReport');});
+  document.getElementById('upperTodayReceivedCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.received.mode='all';window.__upperMovementMode='today';goto('upperReceivedReport');});
   document.getElementById('upperMovementBack')?.addEventListener('click',()=>goto('distributeUpper'));
   document.querySelectorAll('[data-upper-movement-period]').forEach(b=>b.addEventListener('click',()=>{window.__upperMovementMode=b.dataset.upperMovementPeriod;render();}));
   document.getElementById('upperMovementPrint')?.addEventListener('click',()=>printElement('upperMovementPrintArea'));
-  document.getElementById('upperPendingCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.pending.mode='today';window.__upperPendingReportMode='today';goto('upperPending');});
+  document.getElementById('upperPendingCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.pending.mode='all';window.__upperPendingReportMode='today';goto('upperPending');});
   bindSupplierProductionReport();
-  document.getElementById('upperTodayArticlesCard')?.addEventListener('click',()=>{if(supplierProductionReportScope()){supplierProductionReportFilters.issued.mode='today';goto('upperIssuedReport');return;}window.__upperSummaryFilterMode='today';goto('upperArticleSummary');});
+  document.getElementById('upperTodayArticlesCard')?.addEventListener('click',()=>{if(supplierProductionReportScope()){supplierProductionReportFilters.issued.mode='all';goto('upperIssuedReport');return;}window.__upperSummaryFilterMode='today';goto('upperArticleSummary');});
   document.getElementById('upperTodayMaterialsCard')?.addEventListener('click',()=>{window.__upperSummaryFilterMode='today';goto('upperMaterialSummary');});
   document.getElementById('upperWeeklyKharchaCard')?.addEventListener('click',()=>goto('upperWeeklyKharcha'));
   document.getElementById('upperWeeklyBack')?.addEventListener('click',()=>goto('distributeUpper',false,false,true));
