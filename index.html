@@ -9281,17 +9281,24 @@ async function saveUpperManualPending(workerId){
   const button=document.getElementById('upperManualPendingSave');if(!button||button.disabled)return;
   const worker=workers.find(item=>String(item.id)===String(workerId)&&!item.archived&&workerCategoryCompareKey(item.category)==='upper mans');
   if(workerCategoryCompareKey(upperProductionCategory)!=='upper mans'||String(getUpperSelectedWorkerId())!==String(workerId)||!worker){toast('Select an Upper Man worker first.');return;}
-  const raw=String(document.getElementById('upperManualPendingQty')?.value||'').trim(),qty=Number(raw),current=upperPendingState(workerId).qty,delta=qty-current;
-  if(!raw||!Number.isSafeInteger(qty)||qty<0||!Number.isSafeInteger(delta)){toast('Enter a non-negative whole Pending ATOMS quantity.');return;}
-  if(delta===0){closeModal();updateUpperWorkflowSummary();toast('Worker Pending is already '+qty+' ATOMS.');return;}
-  const previous=settings.upperPendingRecords,existed=Object.prototype.hasOwnProperty.call(settings,'upperPendingRecords');button.disabled=true;
-  settings.upperPendingRecords=[...(previous||[]),{id:uid(),date:new Date().toISOString(),workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:'manual-set'}];
+  const raw=String(document.getElementById('upperManualPendingQty')?.value||'').trim(),qty=Number(raw);
+  if(!raw||!Number.isSafeInteger(qty)||qty<0){toast('Enter a non-negative whole Pending ATOMS quantity.');return;}
+  const previous=settings.upperManualPendingResets,existed=Object.prototype.hasOwnProperty.call(settings,'upperManualPendingResets');button.disabled=true;
+  settings.upperManualPendingResets=[...(previous||[]),{id:uid(),date:new Date().toISOString(),workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty,recordIds:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(workerId)).map(record=>String(record.id))}];
   try{if(!await saveCriticalCloudState())throw new Error('Pending save failed');}
-  catch(error){if(existed)settings.upperPendingRecords=previous;else delete settings.upperPendingRecords;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}button.disabled=false;toast('Worker Pending was not saved. Please try again.');return;}
+  catch(error){if(existed)settings.upperManualPendingResets=previous;else delete settings.upperManualPendingResets;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}button.disabled=false;toast('Worker Pending was not saved. Please try again.');return;}
   closeModal();updateUpperWorkflowSummary();toast('Worker Pending saved: '+qty+' ATOMS.');
 }
 
 function upperPendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
+  if(workers.some(worker=>String(worker.id)===String(workerId)&&workerCategoryCompareKey(worker.category)==='upper mans')){
+    const reset=(settings.upperManualPendingResets||[]).slice().reverse().filter(item=>String(item.workerId)===String(workerId)&&Number.isSafeInteger(item.qty)&&item.qty>=0&&Number.isFinite(+new Date(item.date))&&Array.isArray(item.recordIds)&&(!throughDate||new Date(item.date)<throughDate)&&(!throughId||!item.recordIds.includes(String(throughId)))).sort((a,b)=>new Date(b.date)-new Date(a.date))[0];
+    if(reset){
+      const previousIds=new Set(reset.recordIds),movements=records.filter(record=>record.workflowVersion===1&&String(record.workerId)===String(workerId)&&!previousIds.has(String(record.id))).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));let qty=reset.qty,valid=true;
+      for(const record of movements){if(throughDate&&upperWorkTimestamp(record)>=throughDate)break;qty+=(record.lines||[]).reduce((total,line)=>total+(Number(line.qty)||0)-(Number(line.receivedQty)||0),0);if(qty<0)valid=false;if(throughId&&String(record.id)===String(throughId))break;}
+      return {qty,valid:valid&&qty>=0};
+    }
+  }
   if(upperShoeWorker(workerId,records))return upperShoePendingState(workerId,records,throughId,throughDate,openingRecords);
   const events=openingRecords.filter(p=>String(p.workerId)===String(workerId)).map(p=>({date:p.date,delta:Number.isFinite(Number(p.delta))?Number(p.delta):Number(p.qty)||0}));
   records.filter(r=>r.workflowVersion===1&&String(r.workerId)===String(workerId)).forEach(r=>events.push({date:upperWorkTimestamp(r),createdAt:r.createdAt||r.date,id:r.id,delta:(r.lines||[]).reduce((n,l)=>n+(Number(l.qty)||0)-(Number(l.receivedQty)||0),0)}));
@@ -9355,7 +9362,8 @@ async function createUpperDistribution(){if(window.__upperVoucherCreating){toast
 }
 function getUpperPendingForWorker(workerId){
   const records=(settings.upperDistributions||[]).filter(r=>r.workflowVersion===1&&String(r.workerId)===String(workerId)),opening=(settings.upperPendingRecords||[]).filter(p=>String(p.workerId)===String(workerId));
-  if(!records.length&&!opening.length)return null;const last=records[records.length-1]||opening[opening.length-1];
+  const reset=workers.some(worker=>String(worker.id)===String(workerId)&&workerCategoryCompareKey(worker.category)==='upper mans')?(settings.upperManualPendingResets||[]).slice().reverse().filter(item=>String(item.workerId)===String(workerId)&&Number.isSafeInteger(item.qty)&&item.qty>=0&&Number.isFinite(+new Date(item.date))&&Array.isArray(item.recordIds)).sort((a,b)=>new Date(b.date)-new Date(a.date))[0]:null;
+  if(!records.length&&!opening.length&&!reset)return null;const last=reset||records[records.length-1]||opening[opening.length-1];
   return {workerId:String(workerId),workerName:last.workerName||'',workerCategory:last.workerCategory||'',qty:Math.max(0,upperPendingState(workerId).qty)};
 }
 
