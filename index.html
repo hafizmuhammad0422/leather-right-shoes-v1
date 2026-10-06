@@ -2251,6 +2251,7 @@ function normalizeShoeBoxSuppliers(){
       extraBalances:Array.isArray(src.extraBalances)?src.extraBalances:[],
       receiveVouchers: receiveVouchers.filter(v=>v&&typeof v==='object').map(v=>({
         id:String(v.id||uid()),
+        ...(Number.isSafeInteger(v.rickshawPheraNo)&&v.rickshawPheraNo>0?{rickshawPheraNo:v.rickshawPheraNo}:{}),
         voucherNo:String(v.voucherNo||''),
         date:String(v.date||new Date().toISOString()),
         purchaseIds:Array.isArray(v.purchaseIds)?v.purchaseIds.map(String):[],
@@ -11140,7 +11141,7 @@ function pageUpperMovementReport(kind){
 }
 function pageUpperPending(){
   if(supplierProductionReportScope())return pageSupplierProductionReport('pending');
-  const mode=window.__upperPendingReportMode||'today',labels={today:'Today',week:'This Week',month:'This Month',all:'All Time'};
+  const mode=window.__upperPendingReportMode||'today',labels={today:'Today',week:'This Week',month:'This Month',all:'All Time',...(workerCategoryCompareKey(upperProductionCategory)==='upper mans'?{custom:'Custom Date'}:{})};
   return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><button class="btn ghost small" id="btnBackUpperPending">Back</button><h2 class="page-title" style="margin:0;">Pending Report</h2></div><div class="card" style="padding:10px;"><div style="display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;margin-bottom:7px;">'+Object.entries(labels).map(([key,label])=>'<button type="button" class="btn '+(mode===key?'brass':'ghost')+' small" data-upper-pending-period="'+key+'" style="white-space:nowrap;">'+label+'</button>').join('')+'<button class="btn brass small" id="btnPrintUpperPending">Print</button></div><div style="font-size:11px;margin-bottom:5px;">Period: '+labels[mode]+'</div><div id="upperPendingPageList" style="overflow-x:auto;"></div></div><div id="upperPendingPrintArea" class="receipt-paper" style="width:80mm;display:none;"></div>';
 }
 
@@ -11172,9 +11173,18 @@ function upperPendingVoucherTable(rows,print=false){
   const cell='padding:4px 5px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;';
   return '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>'+['Date','Worker','Upper Article','Pending','Voucher #'].map(label=>'<th style="'+cell+'">'+label+'</th>').join('')+'</tr></thead><tbody>'+(rows.length?rows.map(row=>'<tr data-upper-pending-voucher-row="'+esc(String(row.id))+'">'+[esc(row.date),esc(row.workerName),row.articles.map(esc).join('<br>')||'?',esc(row.pendingText),print?'#'+esc(String(row.voucherNo)):'<button type="button" class="btn ghost small" data-upper-pending-voucher="'+esc(String(row.id))+'">#'+esc(String(row.voucherNo))+'</button>'].map(value=>'<td style="'+cell+'">'+value+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="5" class="empty">No matching pending vouchers.</td></tr>')+'</tbody></table>';
 }
+function upperManPendingFilteredRows(mode=window.__upperPendingReportMode||'today'){const query=String(window.__upperManPendingWorkerQ||'').trim().toLowerCase(),from=String(window.__upperManPendingFrom||''),to=String(window.__upperManPendingTo||'');return upperPendingVoucherRows(mode==='custom'?'all':mode).filter(row=>String(row.workerName||'').toLowerCase().includes(query)&&(mode!=='custom'||(from&&to&&from<=to&&row.date>=from&&row.date<=to)));}
 function renderUpperPendingPageList(){
   const host=document.getElementById('upperPendingPageList');if(!host)return;
-  host.innerHTML=upperPendingVoucherTable(upperPendingVoucherRows(window.__upperPendingReportMode||'today'));
+  const upperMan=workerCategoryCompareKey(upperProductionCategory)==='upper mans',mode=window.__upperPendingReportMode||'today';
+  const rows=upperMan?upperManPendingFilteredRows(mode):upperPendingVoucherRows(mode);
+  if(upperMan){
+    let bar=document.getElementById('upperManPendingWorkerBar');if(!bar){bar=document.createElement('div');bar.id='upperManPendingWorkerBar';bar.style.cssText='display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:7px;';bar.innerHTML='<input type="search" id="upperManPendingWorkerSearch" placeholder="Search worker name" aria-label="Search pending worker" style="flex:1 1 180px;min-width:0;padding:5px 7px;"><div id="upperManPendingCustomDates" style="gap:6px;flex-wrap:wrap;"><label style="margin:0;">From Date<input type="date" id="upperManPendingFrom" style="padding:5px 7px;"></label><label style="margin:0;">To Date<input type="date" id="upperManPendingTo" style="padding:5px 7px;"></label></div>';host.before(bar);}
+    const input=bar.querySelector('input[type="search"]');input.value=String(window.__upperManPendingWorkerQ||'');input.oninput=()=>{window.__upperManPendingWorkerQ=input.value;renderUpperPendingPageList();};
+    bar.querySelector('#upperManPendingCustomDates').style.display=mode==='custom'?'flex':'none';
+    for(const part of ['From','To']){const field=bar.querySelector('#upperManPending'+part),key='__upperManPending'+part;field.value=String(window[key]||'');field.onchange=()=>{window[key]=field.value;renderUpperPendingPageList();};}
+  }
+  host.innerHTML=upperPendingVoucherTable(rows);
   host.onclick=event=>{
     const button=event.target.closest('[data-upper-pending-voucher]');if(!button||!host.contains(button))return;
     const record=(settings.upperDistributions||[]).find(v=>String(v.id)===String(button.dataset.upperPendingVoucher));
@@ -11210,8 +11220,8 @@ async function deleteUpperPendingEntry(id){
   closeModal();render();toast('Pending entry deleted');
 }
 function buildUpperPendingPrintHtml(){
-  const mode=window.__upperPendingReportMode||'today',label={today:'Today',week:'This Week',month:'This Month',all:'All Time'}[mode];
-  return upperReportBoldPrintStyle('upperPendingPrintArea')+'<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Period: '+label+'</div>'+upperPendingVoucherTable(upperPendingVoucherRows(mode),true);
+  const mode=window.__upperPendingReportMode||'today',label={today:'Today',week:'This Week',month:'This Month',all:'All Time',...(workerCategoryCompareKey(upperProductionCategory)==='upper mans'?{custom:'Custom Date'}:{})}[mode];
+  return upperReportBoldPrintStyle('upperPendingPrintArea')+'<div style="text-align:center;font-weight:900;">LEATHER RIGHT SHOES BY ABID<br>Pending Report</div><div style="font-size:11px;margin:5px 0;">Period: '+label+'</div>'+upperPendingVoucherTable(workerCategoryCompareKey(upperProductionCategory)==='upper mans'?upperManPendingFilteredRows(mode):upperPendingVoucherRows(mode),true);
 }
 
 function openUpperTodayItemsDetail(){
@@ -12554,6 +12564,25 @@ function openManageColumnsModal(){
 
 
 /* Shoe Box Supplier audit safety helpers */
+
+function sbBillDateKey(value){const date=new Date(value);if(!Number.isFinite(+date))return '';return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
+function sbAssignRickshawPheraNo(supplier,date){const key=sbBillDateKey(date);if(!key)throw new Error('Invalid voucher date');const records=(supplier.receiveVouchers||[]).filter(v=>sbBillDateKey(v.date)===key),last=Math.max(Number(supplier.rickshawPheraDailyCounters?.[key])||0,...records.map(v=>Number(v.rickshawPheraNo)||0)),next=last+1;supplier.rickshawPheraDailyCounters={...(supplier.rickshawPheraDailyCounters||{}),[key]:next};return next;}
+function sbRickshawPheraHtml(voucher){return '<div class="rline"><span>Rickshaw Phera No.:</span><span>'+esc(Number.isSafeInteger(voucher?.rickshawPheraNo)?voucher.rickshawPheraNo:'Not saved')+'</span></div>';}
+function sbSupplierBillWeek(base=new Date()){const start=new Date(base);start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+1)%7);const end=new Date(start);end.setDate(end.getDate()+5);return {from:sbBillDateKey(start),to:sbBillDateKey(end)};}
+function sbSupplierBillItems(supplier,from,to){return (supplier.purchases||[]).filter(p=>{const key=sbBillDateKey(p.date);return key&&key>=from&&key<=to;}).reduce((sum,p)=>sum+shoeBoxPurchaseItems(p),0);}
+function sbSupplierBillGrandTotal(bill){return Math.round((Math.round((Number(bill.openingAmount)||0)*100)+Math.round((Number(bill.billTotal)||0)*100)))/100;}
+function sbSupplierBillHtml(bill){const line=(label,value)=>'<div class="rline"><strong>'+label+'</strong><strong>'+value+'</strong></div>';return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOE BOX SUPPLIERS BILL</div><div style="text-align:center;">'+esc(bill.supplierName)+' | #'+esc(bill.voucherNo||bill.id)+'</div>'+line('Date',esc(String(bill.date||'').slice(0,10)))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Period',esc(bill.from)+' to '+esc(bill.to))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Opening Amount',formatMoney(bill.openingAmount))+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px;"><thead><tr><th style="width:30%;text-align:left;overflow-wrap:anywhere;">Description</th><th style="width:20%;text-align:right;overflow-wrap:anywhere;">ATOMS Quantity</th><th style="width:24%;text-align:right;overflow-wrap:anywhere;">Rate Per ATOM</th><th style="width:26%;text-align:right;overflow-wrap:anywhere;">Amount</th></tr></thead><tbody><tr><td style="padding:4px 2px;">Shoe Box Supply</td><td style="text-align:right;padding:4px 2px;">'+esc(bill.totalItems)+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+formatMoney(bill.rate)+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+formatMoney(bill.billTotal)+'</td></tr></tbody></table>'+line('Bill Amount',formatMoney(bill.billTotal))+'<div class="rline" style="border:2px solid #000;padding:7px 6px;margin-top:6px;font-weight:1000;font-size:16px;line-height:1.3;gap:6px;"><strong>Grand Total</strong><strong>'+formatMoney(sbSupplierBillGrandTotal(bill))+'</strong></div>'+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;"><div style="text-align:center;">For Contact Dial 03226574565</div></div>';}
+function showShoeBoxSupplierBill(index,id,autoPrint=false){const bill=(getShoeBoxSuppliers()[index]?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;modal('<h3>Bill Voucher #'+esc(bill.voucherNo||bill.id)+'</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="sbBillPrintArea" class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;">'+sbSupplierBillHtml(bill)+'</div><div class="modal-actions"><button type="button" class="btn brass" id="sbBillPrint">Print</button><button type="button" class="btn ghost" id="sbBillClose">Close</button></div></div>');document.getElementById('sbBillPrint').onclick=()=>printAggregateThermal(document.getElementById('sbBillPrintArea').outerHTML,'SHOE BOX SUPPLIERS BILL','element');document.getElementById('sbBillClose').onclick=()=>openShoeBoxSupplierBillModal(index);if(autoPrint)document.getElementById('sbBillPrint').onclick();}
+function openShoeBoxSupplierBillModal(index){sbSupplierBillForm(index);}
+function sbSupplierBillHistoryHtml(index){const history=getShoeBoxSuppliers()[index]?.supplierBills||[],groups=new Map();history.forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=b.from||week.from,label=(b.from||week.from)+' to '+(b.to||week.to);if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Amount</th><th>Grand Total</th><th>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+formatMoney(b.billTotal)+'</td><td>'+formatMoney(sbSupplierBillGrandTotal(b))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-sb-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
+function sbBindSupplierBillHistory(index){document.querySelectorAll('[data-sb-bill-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.billId,action=button.getAttribute('data-sb-bill-action');if(action==='View'||action==='Print')showShoeBoxSupplierBill(index,id,action==='Print');else if(action==='Edit')sbSupplierBillEditor(index,id);else sbDeleteSupplierBill(index,id);});}
+async function sbSupplierBillCommit(snapshot){try{return await sbCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.');}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
+function sbDeleteSupplierBill(index,id){const bill=(getShoeBoxSuppliers()[index]?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;openConfirmModal('Delete Bill #'+(bill.voucherNo||bill.id)+'?',async()=>{const snapshot=sbSnapshot();const supplier=getShoeBoxSuppliers()[index];supplier.supplierBills=supplier.supplierBills.filter(b=>String(b.id)!==String(id));if(await sbSupplierBillCommit(snapshot))openShoeBoxSupplierBillModal(index);});}
+function sbSupplierBillEditor(index,id){const supplier=getShoeBoxSuppliers()[index],bill=(supplier?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;sbSupplierBillForm(index,bill);}
+function sbSupplierBillForm(index,bill=null){const supplier=getShoeBoxSuppliers()[index];if(!supplier||supplier.deletedAt)return;const week=sbSupplierBillWeek(),opening=bill?.openingAmount??supplier.supplierBills?.at(-1)?.openingAmount??0;modal('<h3>'+ (bill?'Edit Bill':'Create Bill')+'</h3><label>Opening Amount</label><input id="sbBillOpening" type="number" min="0" step="0.01" value="'+esc(opening)+'">'+'<div class="row"><div style="min-width:0;"><label>From Date (Saturday)</label><input id="sbBillFrom" type="date" value="'+esc(bill?.from||week.from)+'"></div><div style="min-width:0;"><label>To Date (Thursday)</label><input id="sbBillTo" type="date" value="'+esc(bill?.to||week.to)+'"></div></div><label>Total Items</label><input id="sbBillItems" readonly><label>Rate Per Item</label><input id="sbBillRate" type="number" min="0" step="0.01" value="'+esc(bill?.rate??0)+'">'+'<div class="rline"><strong>Bill Amount</strong><strong id="sbBillTotal"></strong></div><div class="rline"><strong>Grand Total</strong><strong id="sbBillGrandTotal"></strong></div>'+''+'<div class="modal-actions"><button type="button" class="btn brass" id="sbBillSave">'+(bill?'Save Changes':'Create / Save Bill')+'</button><button type="button" class="btn ghost" id="sbBillCancel">Cancel</button></div>'+sbSupplierBillHistoryHtml(index));
+const refresh=()=>{const from=document.getElementById('sbBillFrom').value,to=document.getElementById('sbBillTo').value,quantity=bill&&from===bill.from&&to===bill.to?bill.totalItems:sbSupplierBillItems(supplier,from,to);document.getElementById('sbBillItems').value=quantity;const rate=Number(document.getElementById('sbBillRate').value)||0;const amount=Math.round((quantity*rate+Number.EPSILON)*100)/100;document.getElementById('sbBillTotal').textContent=formatMoney(amount);document.getElementById('sbBillGrandTotal').textContent=formatMoney(sbSupplierBillGrandTotal({openingAmount:Number(document.getElementById('sbBillOpening').value)||0,billTotal:amount}));};['sbBillFrom','sbBillTo','sbBillRate','sbBillOpening'].forEach(id=>document.getElementById(id).addEventListener('input',refresh));refresh();sbBindSupplierBillHistory(index);document.getElementById('sbBillCancel').onclick=()=>bill?openShoeBoxSupplierBillModal(index):closeModal();
+document.getElementById('sbBillSave').onclick=async()=>{const button=document.getElementById('sbBillSave');if(button.disabled)return;const openingAmount=Number(document.getElementById('sbBillOpening').value),rate=Number(document.getElementById('sbBillRate').value);const from=document.getElementById('sbBillFrom').value,to=document.getElementById('sbBillTo').value,totalItems=Number(document.getElementById('sbBillItems').value);if(!from||!to||from>to){toast('Enter a valid date range');return;}const amount=Math.round((totalItems*rate+Number.EPSILON)*100)/100;if(![openingAmount,rate,amount].every(n=>Number.isFinite(n)&&n>=0)){toast('Enter valid Opening Amount and Rate');return;}const snapshot=sbSnapshot(),owner=getShoeBoxSuppliers()[index],history=owner.supplierBills||[],next=Math.max(Number(owner.supplierBillNextVoucherNo)||1,...history.map(b=>(Number(b.voucherNo)||0)+1)),saved={...(bill||{}),id:bill?.id||uid(),date:bill?.date||new Date().toISOString(),voucherNo:bill?.voucherNo||next,supplierName:bill?.supplierName||shoeBoxSupplierDisplayName(supplier,index),openingAmount,from,to,totalItems,rate,billTotal:amount,...(bill?{updatedAt:new Date().toISOString()}:{})};button.disabled=true;try{owner.supplierBills=bill?history.map(b=>String(b.id)===String(bill.id)?saved:b):[...history,saved];if(!bill)owner.supplierBillNextVoucherNo=next+1;if(await sbSupplierBillCommit(snapshot))showShoeBoxSupplierBill(index,saved.id);}finally{const live=document.getElementById('sbBillSave');if(live===button)live.disabled=false;}};}
+
 function sbWholeAtoms(value){const n=Number(value);return Number.isInteger(n)&&n>0?n:null;}
 function sbSnapshot(){return {settings:JSON.stringify(settings),auditLog:JSON.stringify(auditLog)};}
 async function sbCriticalCommit(snapshot,message){
@@ -12768,7 +12797,7 @@ function pageShoeBoxSuppliers(){
             <div style="min-width:0;flex:1;">
               <div style="font-size:18px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(displayName)}</div>
               <div style="font-size:12px;color:var(--muted);margin-top:5px;">${esc(supplier.ownerName||'Owner / Contact not added')}</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:3px;">${products.length} Product${products.length===1?'':'s'}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:3px;">${products.length} Product${products.length===1?'':'s'}</div><button type="button" class="btn brass small" style="margin-top:6px;" onclick="event.stopPropagation();openShoeBoxSupplierBillModal(${index})">Create Bill</button>
             </div>
           </div>
         </div>`;
@@ -12810,7 +12839,7 @@ function pageShoeBoxSupplierDetail(index){
       </div>
       <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
         <div style="font-size:12px;color:var(--muted);">${Array.isArray(supplier.customFields)?supplier.customFields.length:0} Custom Field${(Array.isArray(supplier.customFields)?supplier.customFields.length:0)===1?'':'s'}</div>
-        <button class="btn ghost small" type="button" data-customsbs="${index}">⚙️ Custom Fields</button>
+        <button class="btn brass small" type="button" onclick="openShoeBoxSupplierBillModal(${index})">Create Bill</button><button class="btn ghost small" type="button" data-customsbs="${index}">⚙️ Custom Fields</button>
       </div>
     </div>
 
@@ -12901,7 +12930,7 @@ function printShoeBoxReceiveSummary(supplierIndex,filter,customStart='',customEn
   if(!win){toast('Please allow popups to print');return;}
   const voucherBlocks=vouchers.map(v=>{
     const rs=(supplier.purchases||[]).filter(p=>v.purchaseIds.includes(String(p.id)));
-    return `<div class="voucher"><div class="center bold">${esc(v.voucherNo)}</div><div class="meta">Supplier: ${esc(shoeBoxSupplierDisplayName(supplier,supplierIndex))}</div><div class="meta">Date: ${esc(fmtDate(v.date))}</div><div class="meta">Time: ${v.date?new Date(v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):''}</div><hr>${rs.map(p=>`<div class="row"><span>${esc(p.productName)}</span><span>${shoeBoxQuantityDisplay(p.atoms ?? p.items)} Atoms</span></div>`).join('')}<hr><div class="row bold"><span>Total Atoms</span><span>${shoeBoxQuantityDisplay(v.totalAtoms)} Atoms</span></div></div>`;
+    return `<div class="voucher"><div class="center bold">${esc(v.voucherNo)}</div>${sbRickshawPheraHtml(v)}<div class="meta">Supplier: ${esc(shoeBoxSupplierDisplayName(supplier,supplierIndex))}</div><div class="meta">Date: ${esc(fmtDate(v.date))}</div><div class="meta">Time: ${v.date?new Date(v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):''}</div><hr>${rs.map(p=>`<div class="row"><span>${esc(p.productName)}</span><span>${shoeBoxQuantityDisplay(p.atoms ?? p.items)} Atoms</span></div>`).join('')}<hr><div class="row bold"><span>Total Atoms</span><span>${shoeBoxQuantityDisplay(v.totalAtoms)} Atoms</span></div></div>`;
   }).join('<div class="cut"></div>');
   win.document.write(`<!doctype html><html><head><title>Receive Summary</title><style>@page{size:80mm auto;margin:0}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0;padding:4mm;color:#111;width:80mm;box-sizing:border-box;font-size:11px}.head{text-align:center;margin-bottom:8px}.head h2{font-size:15px;margin:0 0 3px}.meta{font-size:10px;margin:2px 0}.row{display:flex;justify-content:space-between;gap:8px;margin:3px 0}.small{font-size:10px}.bold{font-weight:700}.center{text-align:center}.voucher{margin-bottom:8px}.cut{border-top:1px dashed #777;margin:8px 0}@media print{body{width:80mm;padding:5px}}</style></head><body><div class="head"><h2>${esc(settings.factoryName||'Leather Right Shoes')}</h2><div class="meta">SHOE BOX RECEIVE SUMMARY</div><div class="meta">${esc(range)}</div></div>${voucherBlocks||'<div>No receiving found.</div>'}<div class="cut"></div><div class="row bold"><span>Period Total Atoms</span><span>${shoeBoxQuantityDisplay(totals.totalAtoms)} Atoms</span></div><script>window.onload=function(){window.print();};<\/script></body></html>`);
   win.document.close();
@@ -12918,7 +12947,7 @@ function shoeBoxReceiveVoucherGroups(supplier,rows){
     const groupRows=ids.map(id=>purchasesById.get(id)).filter(Boolean).filter(p=>rows.some(r=>String(r.id)===String(p.id)));
     if(!groupRows.length) return;
     groupRows.forEach(p=>used.add(String(p.id)));
-    groups.push({id:String(v.id||uid()),voucherNo:String(v.voucherNo||groupRows[0].voucherNo||'—'),date:String(v.date||groupRows[0].date||''),purchaseIds:groupRows.map(p=>String(p.id)),notes:String(v.notes||''),totalAtoms:groupRows.reduce((sum,p)=>sum+shoeBoxPurchaseItems(p),0)});
+    groups.push({rickshawPheraNo:v.rickshawPheraNo,id:String(v.id||uid()),voucherNo:String(v.voucherNo||groupRows[0].voucherNo||'—'),date:String(v.date||groupRows[0].date||''),purchaseIds:groupRows.map(p=>String(p.id)),notes:String(v.notes||''),totalAtoms:groupRows.reduce((sum,p)=>sum+shoeBoxPurchaseItems(p),0)});
   });
   rows.forEach(p=>{
     if(used.has(String(p.id))) return;
@@ -13056,14 +13085,14 @@ function shoeBoxCurrentProductTotalAtoms(supplier,product){
   const b=shoeBoxProductAtomBalanceForSupplier(supplier,product);
   return Math.max(0,Number(b.opening)||0)+Math.max(0,Number(b.newAtom)||0);
 }
-function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes=''){
+function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes='',voucherId=''){
   const supplier=getShoeBoxSuppliers()[supplierIndex]; const ids=purchaseIds.map(String); const rows=(supplier?.purchases||[]).filter(p=>ids.includes(String(p.id))); if(!supplier||!rows.length)return '';
-  const voucher=Array.isArray(supplier.receiveVouchers)?supplier.receiveVouchers.find(v=>(v.purchaseIds||[]).some(id=>ids.includes(String(id)))):null;
+  const voucher=Array.isArray(supplier.receiveVouchers)?supplier.receiveVouchers.find(v=>voucherId?String(v.id)===String(voucherId):(v.purchaseIds||[]).some(id=>ids.includes(String(id)))):null;
   const voucherNo=String(voucher?.voucherNo||rows[0].voucherNo||'—');
   const totalAtoms=rows.reduce((sum,p)=>sum+(Number(p.atoms ?? p.items)||0),0);
   const row0={...rows[0],supplierIndex,totalAtoms};
   const cfg=shoeBoxVoucherFieldConfig();
-  const lines=Object.keys(cfg).filter(f=>!['productName','atoms','totalAtoms','receivingSummary'].includes(f)).map(f=>shoeBoxVoucherLine(f,row0,supplier,voucherNo)).join('');
+  const lines=Object.keys(cfg).filter(f=>!['productName','atoms','totalAtoms','receivingSummary'].includes(f)).map(f=>shoeBoxVoucherLine(f,row0,supplier,voucherNo)+(f==='voucherNo'?sbRickshawPheraHtml(voucher):'')).join('');
   const showProduct=cfg.productName?.show!==false;
   const showReceived=cfg.atoms?.show!==false;
   const productHeader=cfg.productName?.label||'Product Name';
@@ -13079,7 +13108,7 @@ function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes=''){
     summaryByProduct.set(pid,{name:product?.name||'Product',total});
   });
   const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;${cfg.receivingSummary?.bold===true?'font-weight:900;':''}">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline" style="${cfg.receivingSummary?.bold===true?'font-weight:900;':''}"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeBoxQuantityDisplay(x.total)} Atoms</span></div>`).join('')}${(()=>{const totalReceivingItems=Array.from(summaryByProduct.values()).reduce((sum,x)=>sum+(Number(x.total)||0),0);return `<div class="rline" style="margin-top:6px;padding-top:6px;border-top:1px dashed #777;font-weight:900;"><span>TOTAL RECEIVING ITEMS:</span><span>${shoeBoxQuantityDisplay(totalReceivingItems)} ITEMS</span></div>`;})()}</div>`:'';
-  return `<div id="sbsReceiveVoucherPrint" class="receipt-paper" style="width:80mm;margin:auto;"><h3 style="text-align:center;margin:0;">${esc(settings.factoryName||'Leather Right Shoes')}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub" style="font-weight:700;margin-top:3px;">SHOE BOX RECEIVE VOUCHER</div><hr>${lines}<hr>${header}${totalLine}${summary}</div>`;
+  return `<div id="sbsReceiveVoucherPrint" class="receipt-paper" style="width:80mm;margin:auto;"><h3 style="text-align:center;margin:0;">${esc(settings.factoryName||'Leather Right Shoes')}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub" style="font-weight:700;margin-top:3px;">SHOE BOX RECEIVE VOUCHER</div><hr>${lines}${Object.prototype.hasOwnProperty.call(cfg,'voucherNo')?'':sbRickshawPheraHtml(voucher)}<hr>${header}${totalLine}${summary}</div>`;
 }
 function shoeBoxVoucherLine(field,row,supplier,voucherNo){
   const cfg=shoeBoxVoucherFieldConfig()[field]; if(!cfg?.show)return '';
@@ -13125,10 +13154,10 @@ function openShoeBoxReceiveVoucherBuilder(supplierIndex,initialPurchaseIds){
       const voucherNo=String(settings.nextShoeBoxReceiveVoucherNo||1001);
       settings.nextShoeBoxReceiveVoucherNo=(Number(settings.nextShoeBoxReceiveVoucherNo)||1001)+1;
       supplier.receiveVouchers=supplier.receiveVouchers||[];
-      supplier.receiveVouchers.push({id:uid(),voucherNo,date:now,purchaseIds:ids,notes});
+      supplier.receiveVouchers.push({id:uid(),voucherNo,date:now,purchaseIds:ids,notes,rickshawPheraNo:sbAssignRickshawPheraNo(supplier,now)});
       persistAll();
       closeModal();
-      openShoeBoxReceiveVoucherModal(supplierIndex,ids);
+      openShoeBoxReceiveVoucherModal(supplierIndex,ids,false,supplier.receiveVouchers[supplier.receiveVouchers.length-1].id);
     };
   };
   renderBuilder();
@@ -13154,17 +13183,17 @@ function printShoeBoxVoucherHtml(html,voucherNo){
   w.print();
 }
 
-function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=false){
+function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=false,voucherId=''){
   const supplier=getShoeBoxSuppliers()[supplierIndex];
   if(!supplier) return;
   const ids=(purchaseIds||[]).map(String);
-  const voucher=(Array.isArray(supplier.receiveVouchers)?supplier.receiveVouchers:[]).find(v=>(v.purchaseIds||[]).some(id=>ids.includes(String(id))));
+  const voucher=(Array.isArray(supplier.receiveVouchers)?supplier.receiveVouchers:[]).find(v=>voucherId?String(v.id)===String(voucherId):(v.purchaseIds||[]).some(id=>ids.includes(String(id))));
   const rows=(supplier.purchases||[]).filter(p=>ids.includes(String(p.id)));
   if(!rows.length){toast('Receiving entry not found');return;}
   const voucherNo=String(voucher?.voucherNo || rows[0].voucherNo || settings.nextShoeBoxReceiveVoucherNo || '—');
   const voucherDate=String(voucher?.date || rows[0].date || new Date().toISOString());
   const rowData={...rows[0],supplierIndex,date:voucherDate,totalAtoms:rows.reduce((sum,p)=>sum+(Number(p.atoms ?? p.items)||0),0),notes:voucher?.notes||rows[0].notes||''};
-  const html=renderShoeBoxVoucherPreview(supplierIndex,rows.map(p=>String(p.id)),rowData.notes);
+  const html=renderShoeBoxVoucherPreview(supplierIndex,rows.map(p=>String(p.id)),rowData.notes,voucher?.id||'');
   modal(`<h3>${esc(shoeBoxSupplierDisplayName(supplier,supplierIndex))} — Receive Voucher</h3>
     <div style="max-height:520px;overflow:auto;background:#f5f5f5;padding:10px;border-radius:8px;">${html}</div>
     <div class="modal-actions"><button type="button" class="btn blue" id="sbsVoucherPrint">🖨️ Print</button><button type="button" class="btn ghost" id="sbsVoucherClose">Close</button></div>`);
@@ -13541,12 +13570,12 @@ function openShoeBoxReceiveSession(supplierIndex){
       supplier.receiveVouchers=supplier.receiveVouchers||[];
       const workerTotalBoxesSnapshot=purchaseIds.reduce((sum,id)=>{const q=supplier.purchases.find(x=>String(x.id)===String(id));return sum+(Number(q?.atoms??q?.items)||0);},0);
       const totalAmount=purchaseIds.reduce((sum,id)=>{const q=supplier.purchases.find(x=>String(x.id)===String(id));return sum+(Number(q?.amount)||0);},0);
-      supplier.receiveVouchers.push({id:uid(),voucherNo,date:iso,purchaseIds,notes:document.getElementById('rsNotes').value.trim(),createdAt:iso,workerTotalBoxesSnapshot,balanceSnapshot:{capturedAt:iso},amountSnapshot:totalAmount});
+      supplier.receiveVouchers.push({id:uid(),voucherNo,date:iso,rickshawPheraNo:sbAssignRickshawPheraNo(supplier,iso),purchaseIds,notes:document.getElementById('rsNotes').value.trim(),createdAt:iso,workerTotalBoxesSnapshot,balanceSnapshot:{capturedAt:iso},amountSnapshot:totalAmount});
       audit('Shoe Box Receive Voucher Created',`${voucherNo} — ${workerTotalBoxesSnapshot} Atoms`);
       if(!await sbCriticalCommit(__snap,'Shoe Box voucher was not saved to D1. Voucher, stock and voucher number were rolled back.'))return;
       closeModal();
       render();
-      openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds);
+      openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,false,supplier.receiveVouchers[supplier.receiveVouchers.length-1].id);
       toast(`${voucherNo} saved — ${chosenNow.length} products received`);
     };
   };
@@ -13612,6 +13641,7 @@ function openShoeBoxPurchaseModal(supplierIndex,productId){
       id:uid(),
       voucherNo,
       date,
+      rickshawPheraNo:sbAssignRickshawPheraNo(supplier,date),
       purchaseIds:[String(purchase.id)],
       notes,
       createdAt:time
@@ -13622,7 +13652,7 @@ function openShoeBoxPurchaseModal(supplierIndex,productId){
     audit('Shoe Box Receiving Created',`${voucherNo} — ${atoms} Atoms`);if(!await sbCriticalCommit(__snap,'Shoe Box receiving was not saved to D1. Stock and account were rolled back.'))return;
     closeModal();
     render();
-    openShoeBoxReceiveVoucherModal(supplierIndex,[String(purchase.id)]);
+    openShoeBoxReceiveVoucherModal(supplierIndex,[String(purchase.id)],false,supplier.receiveVouchers[supplier.receiveVouchers.length-1].id);
     toast(`${voucherNo} saved — ${shoeBoxQuantityDisplay(atoms)} Atoms received`);
   };
 }
@@ -15426,8 +15456,24 @@ function openTodayGasHistoryModal(){
   mount();
 }
 
+
+function gasWorkerCalendarDays(voucher,previewMode=false,allAtCreation=false){if(!previewMode&&Number.isSafeInteger(voucher?.workerTotalGasDaysSnapshot))return voucher.workerTotalGasDaysSnapshot;const worker=workers.find(w=>String(w.id)===String(voucher?.workerRecordId||''))||workers.find(w=>String(w.name||'').trim().toLowerCase()===String(voucher?.workerName||'').trim().toLowerCase()),name=String(worker?.name||voucher?.workerName||'').trim().toLowerCase(),id=String(voucher?.workerRecordId||''),cutoff=new Date(voucher?.date||0).getTime(),included=(gasVouchers||[]).filter(v=>!v.voided&&!v.deletedAt&&(allAtCreation||new Date(v.date||0).getTime()<=cutoff)&&((id&&String(v.workerRecordId||'')===id)||String(v.workerName||'').trim().toLowerCase()===name));if(previewMode&&Number(voucher?.qtyKg)>0)included.push(voucher);const days=included.map(v=>new Date(v.date)).filter(d=>Number.isFinite(+d)).map(d=>Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000);return days.length?Math.max(...days)-Math.min(...days)+1:0;}
+function gasSupplierBillGrandTotal(bill){if(bill.gasAmount==null)return null;return (Math.round((Number(bill.openingAmount)||0)*100)+Math.round((Number(bill.gasAmount)||0)*100)+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100;}
+function gasSupplierBillHtml(bill){const line=(label,value)=>'<div class="rline"><strong>'+label+'</strong><strong>'+value+'</strong></div>';return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">GAS SUPPLIER BILL</div><div style="text-align:center;">'+esc(bill.supplierName)+' | #'+esc(bill.voucherNo||bill.id)+'</div>'+line('Date',esc(String(bill.date||'').slice(0,10)))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Opening Amount',formatMoney(bill.openingAmount))+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px;"><thead><tr><th style="width:30%;text-align:left;overflow-wrap:anywhere;">Description</th><th style="width:20%;text-align:right;overflow-wrap:anywhere;">KG Quantity</th><th style="width:24%;text-align:right;overflow-wrap:anywhere;">Rate Per KG</th><th style="width:26%;text-align:right;overflow-wrap:anywhere;">Amount</th></tr></thead><tbody><tr><td style="padding:4px 2px;">Total Gas</td><td style="text-align:right;padding:4px 2px;">'+esc(bill.totalGasKg)+' KG</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+(bill.pricePerKg==null?'Not saved':formatMoney(bill.pricePerKg))+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+(bill.gasAmount==null?'Not saved':formatMoney(bill.gasAmount))+'</td></tr></tbody></table>'+line('Extra Balance',formatMoney(bill.extraBalanceAmount))+'<div class="rline" style="border:2px solid #000;padding:7px 6px;margin-top:6px;font-weight:1000;font-size:16px;line-height:1.3;gap:6px;"><strong>Grand Total</strong><strong>'+(gasSupplierBillGrandTotal(bill)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(bill)))+'</strong></div>'+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;"><div style="text-align:center;">For Contact Dial 03226574565</div></div>';}
+function showGasSupplierBill(id,autoPrint=false){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;modal('<h3>Bill Voucher #'+esc(bill.voucherNo||bill.id)+'</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="gasBillPrintArea" class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;">'+gasSupplierBillHtml(bill)+'</div><div class="modal-actions"><button type="button" class="btn brass" id="gasBillPrint">Print</button><button type="button" class="btn ghost" id="gasBillClose">Close</button></div></div>');document.getElementById('gasBillPrint').onclick=()=>printAggregateThermal(document.getElementById('gasBillPrintArea').outerHTML,'GAS SUPPLIER BILL','element');document.getElementById('gasBillClose').onclick=()=>openGasSupplierBillModal();if(autoPrint)document.getElementById('gasBillPrint').onclick();}
+function openGasSupplierBillModal(){gasSupplierBillForm();}
+function gasSupplierBillHistoryHtml(){const history=settings.gasSupplierBills||[],groups=new Map();history.forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=week.from,label=week.from+' to '+week.to;if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Amount</th><th>Grand Total</th><th>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+(b.gasAmount==null?'Not saved':formatMoney(b.gasAmount))+'</td><td>'+(gasSupplierBillGrandTotal(b)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(b)))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-gas-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
+function gasBindSupplierBillHistory(){document.querySelectorAll('[data-gas-bill-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.billId,action=button.getAttribute('data-gas-bill-action');if(action==='View'||action==='Print')showGasSupplierBill(id,action==='Print');else if(action==='Edit')gasSupplierBillEditor(id);else gasDeleteSupplierBill(id);});}
+async function gasSupplierBillCommit(snapshot){try{return await gasCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.');}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);gasVouchers=JSON.parse(snapshot.gasVouchers);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
+function gasDeleteSupplierBill(id){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;openConfirmModal('Delete Bill #'+(bill.voucherNo||bill.id)+'?',async()=>{const snapshot=gasDeepSnapshot();settings.gasSupplierBills=settings.gasSupplierBills.filter(b=>String(b.id)!==String(id));if(await gasSupplierBillCommit(snapshot))openGasSupplierBillModal();});}
+function gasSupplierBillEditor(id){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;gasSupplierBillForm(bill);}
+function gasSupplierBillForm(bill=null){const week=ensureCurrentGasWeek(),opening=bill?.openingAmount??0,kg=bill?.totalGasKg??gasWeekKg(week,'remainingKg'),extra=bill?.extraBalanceAmount??gasExtraBalanceTotal();modal('<h3>'+ (bill?'Edit Bill':'Create Bill')+'</h3><label>Opening Amount</label><input id="gasBillOpening" type="number" min="0" step="0.01" value="'+esc(opening)+'">'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label>Total Gas (KG)</label><input id="gasBillKg" readonly value="'+esc(kg)+'"></div><div><label>Price Per KG</label><input id="gasBillRate" type="number" min="0" step="0.01" value="'+esc(bill?.pricePerKg??0)+'"></div></div>'+'<div class="rline"><strong>Gas Amount</strong><strong id="gasBillTotal"></strong></div>'+'<label>Extra Balance</label><input id="gasBillExtra" readonly value="'+esc(extra)+'"><div class="rline"><strong>Grand Total</strong><strong id="gasBillGrandTotal"></strong></div>'+'<div class="modal-actions"><button type="button" class="btn brass" id="gasBillSave">'+(bill?'Save Changes':'Create / Save Bill')+'</button><button type="button" class="btn ghost" id="gasBillCancel">Cancel</button></div>'+gasSupplierBillHistoryHtml());
+const refresh=()=>{const quantity=kg;const rate=Number(document.getElementById('gasBillRate').value)||0;const amount=Math.round((quantity*rate+Number.EPSILON)*100)/100;document.getElementById('gasBillTotal').textContent=formatMoney(amount);document.getElementById('gasBillGrandTotal').textContent=formatMoney(gasSupplierBillGrandTotal({openingAmount:Number(document.getElementById('gasBillOpening').value)||0,gasAmount:amount,extraBalanceAmount:extra}));};['gasBillRate','gasBillOpening'].forEach(id=>document.getElementById(id).addEventListener('input',refresh));refresh();gasBindSupplierBillHistory();document.getElementById('gasBillCancel').onclick=()=>bill?openGasSupplierBillModal():closeModal();
+document.getElementById('gasBillSave').onclick=async()=>{const button=document.getElementById('gasBillSave');if(button.disabled)return;const openingAmount=Number(document.getElementById('gasBillOpening').value),rate=Number(document.getElementById('gasBillRate').value);const amount=Math.round((kg*rate+Number.EPSILON)*100)/100;if(![openingAmount,rate,amount].every(n=>Number.isFinite(n)&&n>=0)){toast('Enter valid Opening Amount and Rate');return;}const snapshot=gasDeepSnapshot(),owner=settings,history=owner.gasSupplierBills||[],next=Math.max(Number(owner.gasSupplierBillNextVoucherNo)||1,...history.map(b=>(Number(b.voucherNo)||0)+1)),saved={...(bill||{}),id:bill?.id||uid(),date:bill?.date||new Date().toISOString(),voucherNo:bill?.voucherNo||next,supplierName:bill?.supplierName||settings.gasSupplier?.name||'Gas Supplier',openingAmount,totalGasKg:kg,pricePerKg:rate,gasAmount:amount,extraBalanceAmount:extra,...(bill?{updatedAt:new Date().toISOString()}:{})};button.disabled=true;try{owner.gasSupplierBills=bill?history.map(b=>String(b.id)===String(bill.id)?saved:b):[...history,saved];if(!bill){owner.gasSupplierBillNextVoucherNo=next+1;const currentWeek=ensureCurrentGasWeek();currentWeek.openingKg=0;currentWeek.newGasKg=0;currentWeek.remainingKg=0;owner.gasSupplierBilledExtraBalanceIds=[...new Set([...(owner.gasSupplierBilledExtraBalanceIds||[]).map(String),...(owner.gasExtraBalances||[]).map(entry=>String(entry.id))])];}if(await gasSupplierBillCommit(snapshot)){if(!bill)render();showGasSupplierBill(saved.id);}}finally{const live=document.getElementById('gasBillSave');if(live===button)live.disabled=false;}};}
+
 function gasExtraBalanceTotal(){
-  return Math.max(0, Math.round((settings.gasExtraBalances||[]).reduce((sum,x)=>sum+(Number(x.amount)||0),0)*100)/100);
+  const billedIds=new Set((settings.gasSupplierBilledExtraBalanceIds||[]).map(String));
+  return Math.max(0, Math.round((settings.gasExtraBalances||[]).filter(entry=>!billedIds.has(String(entry.id))).reduce((sum,x)=>sum+(Number(x.amount)||0),0)*100)/100);
 }
 
 function openGasExtraBalanceModal(){
@@ -15528,11 +15574,7 @@ function pageGasSupplier(){
           </button>
           <div class="gas-balance-item"><div class="gas-balance-label">Remaining Balance</div><div class="gas-balance-value" style="color:${gasWeekKg(gasWeek,'remainingKg')>0?'#a63d3d':'#2f6d4f'};">${gasWeekKg(gasWeek,'remainingKg')} KG</div></div>
           <div class="gas-balance-item" id="gasAdvanceKgItem"><div class="gas-balance-label">Advance KG</div><div class="gas-balance-value">${gasWeekKg(gasWeek,'advanceKg')} KG</div></div>
-          <button type="button" class="gas-balance-item" id="btnGasRemainingValue" title="Set Per KG Price" style="width:100%;border:1px solid var(--line);text-align:left;font:inherit;cursor:pointer;">
-            <div class="gas-balance-label">Remaining Value</div>
-            <div class="gas-balance-value">${formatMoney(gasWeekKg(gasWeek,'remainingKg')*Number(gs.perKgPrice||0))}</div>
-            <div style="font-size:10px;color:var(--muted);margin-top:2px;">${Number(gs.perKgPrice||0)>0?`Rs. ${Number(gs.perKgPrice).toLocaleString('en-PK')} / KG`:'Click to set Per KG Price'}</div>
-          </button>
+          <button type="button" class="gas-balance-item" id="btnGasCreateBill" onclick="openGasSupplierBillModal()" style="width:100%;border:1px solid var(--line);text-align:left;font:inherit;cursor:pointer;"><div class="gas-balance-label">Create Bill</div><div class="gas-balance-value">Create Bill</div></button>
         </div>
         <div style="margin-top:7px;"><button type="button" class="btn ghost small" id="btnGasWeekHistory">📜 Weekly Balance History</button></div>
       </div>
@@ -15956,6 +15998,8 @@ function openCreateGasVoucherModal(){
         .reduce((sum,v)=>sum+(Number(v.qtyKg)||0),0) + Number.EPSILON
     )*100)/100;
 
+    voucher.workerTotalGasDaysSnapshot=gasWorkerCalendarDays(voucher,false,true);
+
     // Link every newly created gas voucher to the active supplier balance.
     // First consume any KG that was paid in advance. Only the portion not
     // covered by advance is added to New Gas Amount.
@@ -16041,7 +16085,7 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
         <div style="font-weight:900;text-align:left;">Worker Type</div>
         <div style="font-weight:900;text-align:right;overflow-wrap:anywhere;">${esc(printWorkerType)}</div>
         <div style="font-weight:900;text-align:left;overflow-wrap:anywhere;">${esc(printWorkerTotalLabel)}</div>
-        <div style="font-weight:900;text-align:right;white-space:nowrap;">${esc(String(Math.round((totalGas + Number.EPSILON) * 100) / 100))} KG</div>
+        <div style="font-weight:900;text-align:right;white-space:nowrap;">${esc(String(Math.round((totalGas + Number.EPSILON) * 100) / 100))} KG (${gasWorkerCalendarDays(voucher,previewMode)} Days)</div>
       </div>
     </div>` : '';
 
@@ -18256,13 +18300,13 @@ function attachPageHandlers(){
     e.stopPropagation();
     const idx=currentPage==='shoeBoxReceive2'?1:0;
     const ids=String(b.dataset.purchaseids||'').split(',').filter(Boolean);
-    openShoeBoxReceiveVoucherModal(idx,ids);
+    openShoeBoxReceiveVoucherModal(idx,ids,false,b.dataset.sbsreceivevoucherGroup);
   }));
   document.querySelectorAll('[data-sbsprintvoucher]').forEach(b=>b.addEventListener('click',(e)=>{
     e.stopPropagation();
     const idx=currentPage==='shoeBoxReceive2'?1:0;
     const ids=String(b.dataset.purchaseids||'').split(',').filter(Boolean);
-    openShoeBoxReceiveVoucherModal(idx,ids,true);
+    openShoeBoxReceiveVoucherModal(idx,ids,true,b.dataset.sbsprintvoucher);
   }));
   document.querySelectorAll('[data-sbseditvoucher]').forEach(btn=>btn.addEventListener('click',()=>editShoeBoxReceiveVoucher(currentPage==='shoeBoxReceive2'?1:0,btn.dataset.sbseditvoucher,String(btn.dataset.purchaseids||'').split(',').filter(Boolean))));
   document.querySelectorAll('[data-sbsdeletevoucher]').forEach(b=>b.addEventListener('click',(e)=>{
