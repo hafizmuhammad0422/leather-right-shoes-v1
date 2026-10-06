@@ -10935,7 +10935,9 @@ function getUpperPendingForWorker(workerId){
 function upperManVoucherPendingData(v,through=null){
   const groups=upperManPendingState(v.workerId,settings.upperDistributions||[],null,through).groups,byKey=new Map(groups.filter(g=>!g.legacy).map(g=>[g.key,g])),articles=new Map();
   for(const line of v.lines||[]){if(!line.articleId)continue;const display=upperLineDisplay(line),key=upperManPendingKey(line.articleId,display.unit);if(!articles.has(key))articles.set(key,{key,articleId:String(line.articleId),name:line.articleName||String(line.articleId),unit:display.unit,qty:byKey.get(key)?.qty||0});}
-  return {pendingGroups:[...articles.values()],legacyPendingGroups:groups.filter(g=>g.legacy&&g.qty!==0)};
+  const created=+new Date(v.createdAt||v.date),legacyThrough=Number.isFinite(created)?new Date(created+1):through;
+  const legacyGroups=upperManPendingState(v.workerId,settings.upperDistributions||[],null,legacyThrough).groups;
+  return {pendingGroups:[...articles.values()],legacyPendingGroups:legacyGroups.filter(g=>g.legacy&&g.qty!==0)};
 }
 function upperManVoucherPendingHtml(data){
   const row=(label,qty,unit)=>'<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:3px 8px;min-width:0;overflow-wrap:anywhere;"><span style="min-width:0;">'+esc(label)+'</span><span>'+esc(qty+' '+unit)+'</span></div>';
