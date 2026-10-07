@@ -1522,7 +1522,7 @@ body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard
         <h1>MENU</h1>
         <button type="button" id="mobileMenuToggle" aria-label="Open menu" aria-expanded="false">☰</button>
       </div>
-      <div id="navItems"><button class="nav-item" data-page="dashboard">📊 Dashboard</button><button class="nav-item" data-page="materials">📦 Materials / Stock</button><button class="nav-item" data-page="workers">👷 Workers</button><button class="nav-item" data-page="issue">📤 Material Distribution</button><button class="nav-item" data-page="articles">👞 Shoe Articles</button><button class="nav-item" data-page="bills">🧾 Sales Bills</button><button class="nav-item" data-page="shopkeepers">👤 Shopkeepers / Khata</button><button class="nav-item" data-page="history">📜 Transaction History</button><button class="nav-item" data-page="audit">🛡️ Audit Log</button><button class="nav-item" data-page="settings">⚙️ Settings</button><button class="nav-item active" data-page="backup">💾 Backup</button><button class="nav-item" data-page="archive">🗄️ Archive</button></div>
+      <div id="navItems"><button class="nav-item" data-page="dashboard">📊 Dashboard</button><button hidden style="display:none" class="nav-item" data-page="materials">📦 Materials / Stock</button><button class="nav-item" data-page="workers">👷 Workers</button><button class="nav-item" data-page="issue">📤 Material Distribution</button><button hidden style="display:none" class="nav-item" data-page="articles">👞 Shoe Articles</button><button class="nav-item" data-page="bills">🧾 Sales Bills</button><button class="nav-item" data-page="shopkeepers">👤 Shopkeepers / Khata</button><button class="nav-item" data-page="history">📜 Transaction History</button><button class="nav-item" data-page="audit">🛡️ Audit Log</button><button class="nav-item" data-page="settings">⚙️ Settings</button><button class="nav-item active" data-page="backup">💾 Backup</button><button class="nav-item" data-page="archive">🗄️ Archive</button></div>
     </nav>
     <main id="mainArea">
     <h2 class="page-title">Backup</h2>
@@ -2697,7 +2697,7 @@ function sidebarMenuChange(config,action,id,value){
 }
 function renderNav(){
   const container=document.getElementById('navItems'),config=sidebarMenuLoad(),activePage=wholeFactoryMaterialsRoute(currentPage)?'wholeFactoryMaterials':shoesPressManRoute(currentPage)?'shoesPressMan':homeLaserAndStitchManRoute(currentPage)?'homeLaserAndStitchMan':shoesLabelManRoute(currentPage)?'shoesLabelMan':shoesLaserManRoute(currentPage)?'shoesLaserMan':shoesLaminationShopsRoute(currentPage)?'shoesLaminationShops':workerProductionRoute(currentPage)?(workerCategoryCompareKey(workerProductionRoute(currentPage).category)==='shoes, magzi dori & batawa suppliers'?'shoesMagziDoriBatawaProduction':'distributeUpper'):currentPage;
-  const itemHtml=e=>{const route=NAV_KEYS.find(([id])=>id===e.id);return '<button class="nav-item" data-page="'+e.id+'">'+route[1]+' '+esc(e.label===null?navLabel(e.id):e.label)+'</button>';};
+  const itemHtml=e=>{if(['materials','articles'].includes(e.id))return '';const route=NAV_KEYS.find(([id])=>id===e.id);return '<button class="nav-item" data-page="'+e.id+'">'+route[1]+' '+esc(e.label===null?navLabel(e.id):e.label)+'</button>';};
   container.innerHTML=config.entries.filter(e=>e.parent===null).map(e=>{
     if(e.kind==='item')return itemHtml(e);
     const children=config.entries.filter(child=>child.parent===e.id),active=children.some(child=>child.id===activePage);
@@ -12288,6 +12288,7 @@ function dashboardCardsLabel(route){
 function dashboardCardsRowHtml(row,original){
   const config=dashboardCardsLoad();
   const outsideCaption=html=>{
+    if(/data-(?:page|statclick)="(?:materials|articles)"/.test(html))return '';
     const caption=html.match(/<span class="dashboard-card-caption">[\s\S]*?<\/span>/)?.[0]||'';
     const card=html.replace(caption,'');
     return '<div class="dashboard-card-tile">'+card+'<div class="dashboard-card-footer">'+caption+'</div></div>';
@@ -15384,6 +15385,20 @@ function pageSettings(){
 }
 
 /* ============ ARCHIVE ============ */
+let archivePermanentDeleteSaving=false;
+function confirmArchivePermanentDelete(kind,id){
+  if(currentPage!=='archive'||archivePermanentDeleteSaving||!['worker','material'].includes(kind))return;
+  const record=(kind==='worker'?workers:materials).find(item=>String(item.id)===String(id)&&item.archived);if(!record)return;
+  openConfirmModal('Permanently delete archived '+kind+' "'+record.name+'"? This cannot be undone. Related history will be retained.',async()=>{
+    if(currentPage!=='archive'||archivePermanentDeleteSaving)return;
+    const list=kind==='worker'?workers:materials,index=list.indexOf(record);if(index<0||!record.archived)return;
+    archivePermanentDeleteSaving=true;
+    if(kind==='worker')workers=workers.filter(item=>item!==record);else materials=materials.filter(item=>item!==record);
+    try{if(!await saveCriticalCloudState())throw new Error('Delete was not saved');render();toast('Archived '+kind+' permanently deleted');}
+    catch(error){const current=kind==='worker'?workers:materials;if(!current.some(item=>String(item.id)===String(id)))current.splice(Math.min(index,current.length),0,record);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}render();toast('Permanent delete was not saved. Record restored.');}
+    finally{archivePermanentDeleteSaving=false;}
+  });
+}
 function pageArchive(){
   const archivedMaterials = materials.filter(m=>m.archived);
   const archivedWorkers = workers.filter(w=>w.archived);
@@ -15392,13 +15407,13 @@ function pageArchive(){
     <div class="card">
       <h3 style="margin-top:0;">Archived Materials</h3>
       ${archivedMaterials.length? `<table><thead><tr><th>Material</th><th>Stock</th><th>Unit</th><th>Actions</th></tr></thead><tbody>
-        ${archivedMaterials.map(m=>`<tr><td>${esc(m.name)}</td><td>${m.stock}</td><td>${esc(m.unit)}</td><td class="actions-cell"><button class="btn green small" data-restoremat="${m.id}">Restore</button></td></tr>`).join('')}
+        ${archivedMaterials.map(m=>`<tr><td>${esc(m.name)}</td><td>${m.stock}</td><td>${esc(m.unit)}</td><td class="actions-cell"><button class="btn green small" data-restoremat="${m.id}">Restore</button><button type="button" class="btn red small" data-archive-delete="material" data-archive-id="${esc(String(m.id))}">Permanent Delete</button></td></tr>`).join('')}
       </tbody></table>` : `<div class="empty">No archived materials.</div>`}
     </div>
     <div class="card">
       <h3 style="margin-top:0;">Archived Workers</h3>
       ${archivedWorkers.length? `<table><thead><tr><th>Name</th><th>Phone</th><th>Actions</th></tr></thead><tbody>
-        ${archivedWorkers.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.phone||'')}</td><td class="actions-cell"><button class="btn green small" data-restorewk="${w.id}">Restore</button></td></tr>`).join('')}
+        ${archivedWorkers.map(w=>`<tr><td>${esc(w.name)}</td><td>${esc(w.phone||'')}</td><td class="actions-cell"><button class="btn green small" data-restorewk="${w.id}">Restore</button><button type="button" class="btn red small" data-archive-delete="worker" data-archive-id="${esc(String(w.id))}">Permanent Delete</button></td></tr>`).join('')}
       </tbody></table>` : `<div class="empty">No archived workers.</div>`}
     </div>
     <div class="card">
@@ -21646,6 +21661,7 @@ function attachPageHandlers(){
   document.querySelectorAll('[data-restoreversion]').forEach(b=>b.addEventListener('click', ()=>restoreBackupVersion(b.dataset.restoreversion)));
 
   // Archive
+  document.querySelectorAll('[data-archive-delete]').forEach(button=>button.addEventListener('click',()=>confirmArchivePermanentDelete(button.dataset.archiveDelete,button.dataset.archiveId)));
   document.querySelectorAll('[data-restoremat]').forEach(b=>b.addEventListener('click', ()=>{
     const mat = materials.find(m=>m.id===b.dataset.restoremat);
     if(mat){ mat.archived=false; persistAll(); render(); toast('Material restored'); }
