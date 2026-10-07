@@ -6030,6 +6030,179 @@ function homeLaserManRoute(page){return homeLaserManModule.route(page);}
 function homeLaserManRender(page){document.body.classList.remove('upper-mans-production-active');updateTopbar();applyWallpaper();renderNav();document.getElementById('mainArea').innerHTML=homeLaserManModule.renderPage(page);attachPageHandlers();wireDashboardSearch();}
 function homeLaserManBind(){homeLaserManModule.bind();}
 /* End Home Laser Man isolated workflows. */
+/* Shoe Sole Suppliers: isolated billing copied from Whole Factory Materials. */
+const shoeSoleBillingModule=(()=>{
+let supplierProductionBillSaving=false;
+function supplierProductionActiveWorker(){return getShoeSoleSuppliers().find(s=>String(s.id)===String(window.__soleSelectedId))||null;}
+function supplierProductionBillWorker(id){return getShoeSoleSuppliers().find(s=>String(s.id)===String(id))||null;}
+function supplierProductionAssignedArticles(supplier){return supplier?.products||[];}
+function shoeSoleProductDisplayUnit(product){return product?.unit==='Custom'?String(product.customUnit||'Unit unavailable'):String(product?.unit||'Unit unavailable');}
+function upperMoney(n){ return 'Rs. '+Number(n||0).toLocaleString('en-PK'); }
+function supplierProductionBillHistoryHtml(workerId){
+  const groups=new Map();
+  (settings.shoeSoleSupplierBilling?.bills||[]).filter(bill=>String(bill.supplierId)===String(workerId)).forEach(bill=>{
+    const date=new Date(bill.date);let key='unknown',label='Week unavailable';
+    if(Number.isFinite(date.getTime())){const week=getUpperWorkWeekRange(date),thursday=new Date(week.end);thursday.setDate(thursday.getDate()-1);key=upperLocalDateKey(week.start);label='Week: '+upperLocalDateKey(week.start)+' — Jumeraat: '+upperLocalDateKey(thursday);}
+    if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(bill);
+  });
+  return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-solebill-supplier-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-solebill-supplier-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-solebill-supplier-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this supplier.</p>'}`;
+}
+function supplierProductionBillAmounts(lines){
+  let totalCents=0;
+  const calculated=lines.map(line=>{
+    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
+    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole article quantities and article rates.');
+    totalCents+=cents;
+    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
+    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:String(line.unit),qty,rate,amount:cents/100};
+  });
+  return {lines:calculated,totalAmount:totalCents/100};
+}
+function openSupplierProductionBill(workerId){
+  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+  const worker=supplierProductionBillWorker(workerId);if(!worker)return;
+  const articles=supplierProductionAssignedArticles(worker);if(articles.some(a=>a.ratePerUnit==null)){toast('Save Rate Per Unit in each article before creating a bill.');return;}
+  const lines=articles.map(a=>({articleId:a.id,articleName:a.name,unit:shoeSoleProductDisplayUnit(a),rate:Number(a.ratePerUnit),qty:0}));
+  try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
+  const account=(settings.shoeSoleSupplierBilling?.accounts||{})[String(worker.id)];
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="soleBill_supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="soleBill_supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-solebill-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-solebill-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="soleBill_supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="soleBill_supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="soleBill_supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  const billModal=document.querySelector('#modalRoot .modal');
+  if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
+  document.querySelectorAll('[data-solebill-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.shoeSoleSupplierBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.solebillSupplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
+  document.querySelectorAll('[data-solebill-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.solebillSupplierBillEdit)));
+  document.querySelectorAll('[data-solebill-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.solebillSupplierBillDelete)));
+  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-solebill-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const update=()=>{
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-solebill-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('soleBill_supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
+    catch(error){document.getElementById('soleBill_supplierBillTotal').textContent='Invalid quantity';}
+  };
+  document.querySelectorAll('[data-solebill-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
+  document.getElementById('soleBill_supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('soleBill_supplierBillOpening').value);
+  document.getElementById('soleBill_supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('soleBill_supplierBillOpening').value);
+  document.getElementById('soleBill_supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+}
+async function saveSupplierProductionBill(workerId,lines,openingValue){
+  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+  const openingAmount=Math.round(Number(openingValue)*100)/100;
+  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
+  let calculated=null;
+  if(lines){
+    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
+    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter a quantity for at least one article.');return false;}
+  }
+  const existed=Object.prototype.hasOwnProperty.call(settings,'shoeSoleSupplierBilling'),previous=settings.shoeSoleSupplierBilling;
+  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
+  let bill=null,next={...state,accounts};
+  if(calculated){
+    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
+    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
+    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
+  }
+  supplierProductionBillSaving=true;
+  for(const id of ['soleBill_supplierBillSaveOpening','soleBill_supplierBillCreate','soleBill_supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
+  settings={...settings,shoeSoleSupplierBilling:next};
+  try{
+    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
+  }catch(error){
+    if(existed)settings={...settings,shoeSoleSupplierBilling:previous};else delete settings.shoeSoleSupplierBilling;
+    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
+    toast('Supplier bill changes were not saved. Please try again.');return false;
+  }finally{
+    supplierProductionBillSaving=false;
+    for(const id of ['soleBill_supplierBillSaveOpening','soleBill_supplierBillCreate','soleBill_supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='soleBill_supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
+  }
+  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
+  return true;
+}
+function openSupplierProductionBillEditor(workerId,billId){
+  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+  const worker=supplierProductionBillWorker(workerId),bill=(settings.shoeSoleSupplierBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
+  if(!worker||!bill||supplierProductionBillSaving)return;
+  const lines=bill.lines.map(line=>({...line}));
+  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-solebill-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-solebill-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="soleBill_supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="soleBill_supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="soleBill_supplierBillEditCancel">Cancel</button></div>`);
+  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-solebill-supplier-bill-edit-qty="${index}"]`)?.value||0));
+  document.querySelectorAll('[data-solebill-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
+    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-solebill-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('soleBill_supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
+    catch(error){document.getElementById('soleBill_supplierBillEditTotal').textContent='Invalid quantity';}
+  }));
+  document.getElementById('soleBill_supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
+  document.getElementById('soleBill_supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+}
+function deleteSupplierProductionBill(workerId,billId){
+  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+  const worker=supplierProductionBillWorker(workerId),bill=(settings.shoeSoleSupplierBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
+  if(!worker||!bill||supplierProductionBillSaving)return;
+  openConfirmModal(`Delete Weekly Bill #${bill.voucherNo}?`,()=>saveSupplierProductionBillHistory(worker.id,bill.id,null));
+}
+function showSupplierProductionBill(bill){
+  if(String(supplierProductionActiveWorker()?.id||'')!==String(bill?.supplierId)){toast('Select this Supplier Card first.');return;}
+  if(!supplierProductionBillWorker(bill.supplierId))return;
+  modal(`<h3 style="margin-top:0;">Weekly Voucher #${esc(String(bill.voucherNo))}</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="soleBill_soleBill_supplierBillPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">${supplierProductionBillHtml(bill)}</div><div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;"><button type="button" class="btn brass" id="soleBill_supplierBillPrint">Print</button><button type="button" class="btn ghost" id="soleBill_supplierBillShare">Share</button><button type="button" class="btn ghost" id="soleBill_supplierBillClose">Close</button></div></div>`);
+  document.getElementById('soleBill_supplierBillPrint').onclick=()=>printAggregateThermal(document.getElementById('soleBill_soleBill_supplierBillPrintArea').outerHTML,'Shoe Sole Suppliers Weekly Voucher','element');
+  document.getElementById('soleBill_supplierBillShare').onclick=async()=>{
+    try{const canvas=buildSupplierProductionBillCanvas(bill);canvas.toBlob(async blob=>{try{if(!blob){toast('Could not generate voucher image');return;}await shareImageToWhatsApp(blob,`supplier-weekly-voucher-${bill.voucherNo}.png`,`Weekly Voucher #${bill.voucherNo}`);}catch(error){toast('Could not share voucher image');}},'image/png');}
+    catch(error){toast('Could not generate voucher image');}
+  };
+  document.getElementById('soleBill_supplierBillClose').onclick=()=>{closeModal();render();};
+}
+async function saveSupplierProductionBillHistory(workerId,billId,quantities){
+  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+  const worker=supplierProductionBillWorker(workerId),previous=settings.shoeSoleSupplierBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
+  if(!worker||!bill||supplierProductionBillSaving)return false;
+  let updated=null;
+  if(quantities!==null){
+    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
+    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter a quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
+    catch(error){toast(error.message);return false;}
+  }
+  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
+  supplierProductionBillSaving=true;
+  for(const id of ['soleBill_supplierBillEditSave','soleBill_supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
+  settings={...settings,shoeSoleSupplierBilling:{...previous,bills}};
+  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
+  catch(error){
+    settings={...settings,shoeSoleSupplierBilling:previous};
+    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
+    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
+  }finally{
+    supplierProductionBillSaving=false;
+    for(const id of ['soleBill_supplierBillEditSave','soleBill_supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
+  }
+  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
+  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+}
+function supplierProductionBillTotals(bill){
+  const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
+  const opening=settings.shoeSoleSupplierBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
+  const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+}
+function supplierProductionBillHtml(bill){
+  const totals=supplierProductionBillTotals(bill);
+  const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOE SOLE SUPPLIERS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+}
+function buildSupplierProductionBillCanvas(bill){
+  const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
+  const add=(text,size=21,align='left',right='')=>{
+    ctx.font='900 '+size+'px monospace';const limit=width-pad*2-(right?ctx.measureText(right).width+20:0);let line='';
+    for(const char of String(text)){if(ctx.measureText(line+char).width>limit&&line){items.push({text:line,size,align,right,y:height});height+=size+5;line='';right='';}line+=char;}
+    items.push({text:line,size,align,right,y:height});height+=size+5;
+  };
+  const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
+  add('LEATHER RIGHT SHOES BY ABID',31,'center');add('SHOE SOLE SUPPLIERS WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
+  bill.lines.forEach(line=>{add(line.articleName);add('Quantity '+line.unit,21,'left',String(line.qty));add('Rate Per Unit',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
+  items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
+  return canvas;
+}
+
+return {open:openSupplierProductionBill};
+})();
+/* End Shoe Sole Suppliers isolated billing. */
+
 /* Whole Factory Materials: isolated Sole receiving and Lamination billing copy. */
 const wholeFactoryMaterialsServices={read:()=>settings.wholeFactoryMaterials,exists:()=>Object.prototype.hasOwnProperty.call(settings,'wholeFactoryMaterials'),common:()=>({factoryName:settings.factoryName,address:settings.address}),publish:value=>{settings={...settings,wholeFactoryMaterials:value};},restore:(value,exists)=>{const next={...settings};if(exists)next.wholeFactoryMaterials=value;else delete next.wholeFactoryMaterials;settings=next;},critical:()=>saveCriticalCloudState(),persist:()=>persistAll(),reconcile:()=>reconcileCloudAfterCriticalRollback(),navigate:(...args)=>goto(...args),render:()=>render()};
 const wholeFactoryMaterialsModule=(()=>{
@@ -6039,7 +6212,7 @@ function persistAll(){wholeFactoryMaterialsServices.publish(JSON.parse(JSON.stri
 async function saveCriticalCloudState(){const previous=wholeFactoryMaterialsServices.read(),existed=wholeFactoryMaterialsServices.exists();writeDepth++;wholeFactoryMaterialsServices.publish(JSON.parse(JSON.stringify(settings)));try{const ok=await wholeFactoryMaterialsServices.critical();if(!ok)wholeFactoryMaterialsServices.restore(previous,existed);return ok;}catch(error){wholeFactoryMaterialsServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
 function reconcileCloudAfterCriticalRollback(){return wholeFactoryMaterialsServices.reconcile();}
 function goto(...args){return wholeFactoryMaterialsServices.navigate(...args);}function render(){return wholeFactoryMaterialsServices.render();}
-const WFM_CSS="<style id=\"wfm-supplier-dynamic-layout\">\n@media screen{\n  body:has(.wfm-supplier-page) #topFactoryName{color:var(--ink);}\n  .wfm-supplier-page{min-width:0;}\n  .wfm-supplier-page .card{padding:10px!important;margin:0 0 8px!important;}\n  .wfm-supplier-page h3{font-size:15px;margin:0 0 8px;}\n  .wfm-supplier-page .wfm-supplier-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}\n  .wfm-supplier-page .wfm-supplier-actions h3{margin:0;}\n  .wfm-supplier-page .btn{min-height:32px;padding:5px 9px;font-size:11px;}\n  .wfm-supplier-page .wfm-supplier-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;}\n  .wfm-supplier-page .wfm-supplier-grid>.empty{grid-column:1/-1;}\n  .wfm-supplier-page .wfm-supplier-card{min-width:0;min-height:88px;padding:7px 4px;border:2px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;font-family:inherit;}\n  .wfm-supplier-page .wfm-supplier-card.selected{border-color:var(--brass);background:#edf7ef;}\n  .wfm-supplier-page .wfm-supplier-card strong{font-size:11px;max-width:100%;overflow-wrap:anywhere;}\n  .wfm-supplier-page .wfm-supplier-card span{font-size:10px;}\n  .wfm-supplier-page .wfm-supplier-completed{color:#23785c;font-weight:800;}\n  .wfm-supplier-page .wfm-entry-heading{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:7px;}\n  .wfm-supplier-page .wfm-entry-heading h3{margin:0;}\n  .wfm-supplier-page .wfm-receive-entry{display:grid;grid-template-columns:minmax(180px,2fr) minmax(100px,1fr) auto;gap:7px;align-items:end;}\n  .wfm-supplier-page .wfm-receive-entry label{display:block;font-size:11px;margin:0 0 3px;}\n  .wfm-supplier-page .wfm-receive-entry input,.wfm-supplier-page .wfm-receive-entry select{height:34px;padding:5px 7px;font-size:12px;}\n  .wfm-supplier-page .wfm-entry-hint{font-size:12px;margin-top:7px;}\n  .wfm-supplier-page .wfm-receive-today{overflow-x:auto;}\n  .wfm-supplier-page .wfm-receive-today table{min-width:660px!important;table-layout:auto!important;}\n  .wfm-supplier-page .wfm-receive-today th,.wfm-supplier-page .wfm-receive-today td{padding:5px 6px;font-size:11px;}\n  @media(max-width:1100px){.wfm-supplier-page .wfm-supplier-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}\n  @media(max-width:700px){\n    .wfm-supplier-page .wfm-supplier-grid{grid-template-columns:repeat(2,minmax(0,1fr));}\n    .wfm-supplier-page .wfm-receive-entry{grid-template-columns:1fr;}\n    .wfm-supplier-page .wfm-receive-entry input,.wfm-supplier-page .wfm-receive-entry select{height:42px;font-size:16px;}\n    .wfm-supplier-page .btn{min-height:40px;}\n  }\n}\n</style><style>  .wfm-item-cell{font-size:11px;line-height:1.15;text-align:center;border:1px solid var(--line);border-radius:7px;padding:10px 3px;min-height:88px;height:88px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;}.wfm-item-cell span{font-size:10px!important;font-weight:900!important;letter-spacing:.3px;line-height:1.15;}.wfm-item-cell strong{font-size:15px;line-height:1.2;white-space:nowrap;}.wfm-item-opening{background:#f4f1e8;cursor:pointer;}.wfm-item-new{background:#edf5ef;color:#2f6d4f;}.wfm-item-pay{background:#eef4fb;color:#315b86;cursor:pointer;font:inherit;}.wfm-item-remaining{background:#fff7e8;color:#7b5b18;}.wfm-item-advance{background:#f7eef8;color:#74457b;}\n  .wfm-product-list{display:grid;gap:4px;width:100%;}.wfm-product-row{min-width:0;}.wfm-product-row .btn{white-space:nowrap;}.wfm-product-photo img{width:100%;height:100%;object-fit:cover;}\n  @media(max-width:700px){.wfm-product-list{overflow-x:hidden;}.wfm-product-row{grid-template-columns:34px minmax(0,1fr) minmax(48px,.65fr) minmax(72px,.9fr)!important;gap:5px!important;padding:4px!important;}.wfm-product-photo{width:34px!important;height:34px!important;}.wfm-product-row .btn{padding:4px 6px!important;font-size:10px!important;}.wfm-product-row>div:nth-child(2) div:first-child{font-size:12px;}.wfm-product-row>div:nth-child(2) div:last-child,.wfm-product-row>div:nth-child(3) div:last-child,.wfm-product-row>div:nth-child(4) div:last-child{font-size:8px!important;}.wfm-product-row>div:last-child{grid-column:2/-1;justify-content:flex-start!important;}}\n  @media(max-width:430px){.wfm-product-row{grid-template-columns:32px minmax(0,1fr) minmax(55px,.8fr)!important;}.wfm-product-row>div:nth-child(4){grid-column:2/-1;}.wfm-product-row>div:last-child{grid-column:2/-1;}}</style>";
+const WFM_CSS="<style id=\"wfm-supplier-dynamic-layout\">\n@media screen{\n  body:has(.wfm-supplier-page) #topFactoryName{color:var(--ink);}\n  .wfm-supplier-page{min-width:0;}\n  .wfm-supplier-page .card{padding:10px!important;margin:0 0 8px!important;}\n  .wfm-supplier-page h3{font-size:15px;margin:0 0 8px;}\n  .wfm-supplier-page .wfm-supplier-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}\n  .wfm-supplier-page .wfm-supplier-actions h3{margin:0;}\n  .wfm-supplier-page .btn{min-height:32px;padding:5px 9px;font-size:11px;}\n  .wfm-supplier-page .wfm-supplier-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:6px;}\n  .wfm-supplier-page .wfm-supplier-grid>.empty{grid-column:1/-1;}\n  .wfm-supplier-page .wfm-supplier-card{min-width:0;min-height:88px;padding:7px 4px;border:2px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;font-family:inherit;}\n  .wfm-supplier-page .wfm-supplier-card.selected{border-color:var(--brass);background:#edf7ef;}\n  .wfm-supplier-page .wfm-supplier-card strong{font-size:11px;max-width:100%;overflow-wrap:anywhere;}\n  .wfm-supplier-page .wfm-supplier-card span{font-size:10px;}\n  .wfm-supplier-page .wfm-supplier-completed{color:#23785c;font-weight:800;}\n  .wfm-supplier-page .wfm-entry-heading{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:7px;}\n  .wfm-supplier-page .wfm-entry-heading h3{margin:0;}\n  .wfm-supplier-page .wfm-receive-entry{display:grid;grid-template-columns:minmax(130px,.8fr) minmax(0,2fr) minmax(90px,1fr) auto;gap:7px;align-items:end;}\n  .wfm-supplier-page .wfm-receive-entry label{display:block;font-size:11px;margin:0 0 3px;}\n  .wfm-supplier-page .wfm-receive-entry input,.wfm-supplier-page .wfm-receive-entry select{height:34px;padding:5px 7px;font-size:12px;}\n  .wfm-supplier-page .wfm-entry-hint{font-size:12px;margin-top:7px;}\n  .wfm-supplier-page .wfm-receive-today{overflow-x:auto;}\n  .wfm-supplier-page .wfm-receive-today table{min-width:660px!important;table-layout:auto!important;}\n  .wfm-supplier-page .wfm-receive-today th,.wfm-supplier-page .wfm-receive-today td{padding:5px 6px;font-size:11px;}\n  @media(max-width:1100px){.wfm-supplier-page .wfm-supplier-grid{grid-template-columns:repeat(5,minmax(0,1fr));}}\n  @media(max-width:700px){\n    .wfm-supplier-page .wfm-supplier-grid{grid-template-columns:repeat(2,minmax(0,1fr));}\n    .wfm-supplier-page .wfm-receive-entry{grid-template-columns:1fr;}\n    .wfm-supplier-page .wfm-receive-entry input,.wfm-supplier-page .wfm-receive-entry select{height:42px;font-size:16px;}\n    .wfm-supplier-page .btn{min-height:40px;}\n  }\n}\n</style><style>  .wfm-item-cell{font-size:11px;line-height:1.15;text-align:center;border:1px solid var(--line);border-radius:7px;padding:10px 3px;min-height:88px;height:88px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;}.wfm-item-cell span{font-size:10px!important;font-weight:900!important;letter-spacing:.3px;line-height:1.15;}.wfm-item-cell strong{font-size:15px;line-height:1.2;white-space:nowrap;}.wfm-item-opening{background:#f4f1e8;cursor:pointer;}.wfm-item-new{background:#edf5ef;color:#2f6d4f;}.wfm-item-pay{background:#eef4fb;color:#315b86;cursor:pointer;font:inherit;}.wfm-item-remaining{background:#fff7e8;color:#7b5b18;}.wfm-item-advance{background:#f7eef8;color:#74457b;}\n  .wfm-product-list{display:grid;gap:4px;width:100%;}.wfm-product-row{min-width:0;}.wfm-product-row .btn{white-space:nowrap;}.wfm-product-photo img{width:100%;height:100%;object-fit:cover;}\n  @media(max-width:700px){.wfm-product-list{overflow-x:hidden;}.wfm-product-row{grid-template-columns:34px minmax(0,1fr) minmax(48px,.65fr) minmax(72px,.9fr)!important;gap:5px!important;padding:4px!important;}.wfm-product-photo{width:34px!important;height:34px!important;}.wfm-product-row .btn{padding:4px 6px!important;font-size:10px!important;}.wfm-product-row>div:nth-child(2) div:first-child{font-size:12px;}.wfm-product-row>div:nth-child(2) div:last-child,.wfm-product-row>div:nth-child(3) div:last-child,.wfm-product-row>div:nth-child(4) div:last-child{font-size:8px!important;}.wfm-product-row>div:last-child{grid-column:2/-1;justify-content:flex-start!important;}}\n  @media(max-width:430px){.wfm-product-row{grid-template-columns:32px minmax(0,1fr) minmax(55px,.8fr)!important;}.wfm-product-row>div:nth-child(4){grid-column:2/-1;}.wfm-product-row>div:last-child{grid-column:2/-1;}}</style>";
 const SHOE_SOLE_RECEIVE_VOUCHER_FIELDS = [
   {id:'supplierName',label:'Supplier Name',builtin:true},
   {id:'voucherNo',label:'Voucher Number',builtin:true},
@@ -6247,7 +6420,7 @@ function pageShoeSoleSuppliers(){
   return `<div class="wfm-supplier-page">
     <div class="card wfm-supplier-actions"><button class="btn ghost small" id="wfm_soleBack">Back</button><button class="btn ghost small" id="wfm_soleDashboard">Back to Dashboard</button><button class="btn brass small" id="wfm_soleAddSupplier">+ Add Supplier</button><button class="btn brass small" id="wfm_soleAddArticle" ${selected?'':'disabled'}>+ Add Material</button><button class="btn ghost small" id="wfm_soleToday">Today Receive Material <strong>${esc(shoeSoleQuantityDisplay(todayTotal))}</strong></button></div>
     <div class="card"><h3>Select Material Supplier</h3><div class="wfm-supplier-grid">${suppliers.length?supplierCards.map(({supplier,i,rows})=>{const qty=wfmTotals(rows);return `<div style="min-width:0;display:flex;flex-direction:column;gap:4px;"><button type="button" class="wfm-supplier-card ${i===index?'selected':''}" data-wfm-sole-select="${esc(supplier.id)}" aria-pressed="${i===index}"><strong title="${esc(shoeSoleSupplierDisplayName(supplier,i))}">${esc(shoeSoleSupplierDisplayName(supplier,i))}</strong><span>Today: ${esc(shoeSoleQuantityDisplay(qty))}</span>${rows.length?'<span class="wfm-supplier-completed">Completed</span>':''}</button><button class="btn ghost small" data-wfm-wfm-create-bill="${esc(supplier.id)}">Create Bill</button></div>`;}).join(''):'<div class="empty">Add a Material Supplier to begin.</div>'}</div></div>
-    ${selected?`<div class="card"><div class="wfm-entry-heading"><h3>Receive Material - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="wfm_soleSupplierDetails">Supplier Details / History</button></div><div class="wfm-receive-entry"><div><label for="wfm_soleArticle">Select Material</label><select id="wfm_soleArticle"><option value="">Select Material</option>${(selected.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ${esc(shoeSoleProductDisplayUnit(p))} in stock</option>`).join('')}</select></div><div><label for="wfm_soleQuantity" id="wfm_wfmReceiveUnitLabel">Quantity / saved unit</label><input id="wfm_soleQuantity" type="number" min="0" step="any" placeholder="Quantity"></div><button class="btn brass" id="wfm_soleReceive">Receive / Save</button></div>${(selected.products||[]).length?'':'<div class="wfm-entry-hint">Add Material for this supplier before receiving.</div>'}</div>`:'<div class="card empty">Select a supplier to receive materials.</div>'}
+    ${selected?`<div class="card"><div class="wfm-entry-heading"><h3>Receive Material - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="wfm_soleSupplierDetails">Supplier Details / History</button></div><div class="wfm-receive-entry"><div><label for="wfm_soleReceiveDate">Date</label><input id="wfm_soleReceiveDate" type="date" value="${shoeSoleReportDateKey()}"></div><div><label for="wfm_soleArticle">Select Material</label><select id="wfm_soleArticle"><option value="">Select Material</option>${(selected.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ${esc(shoeSoleProductDisplayUnit(p))} in stock</option>`).join('')}</select></div><div><label for="wfm_soleQuantity" id="wfm_wfmReceiveUnitLabel">Quantity / saved unit</label><input id="wfm_soleQuantity" type="number" min="0" step="any" placeholder="Quantity"></div><button class="btn brass" id="wfm_soleReceive">Receive / Save</button></div>${(selected.products||[]).length?'':'<div class="wfm-entry-hint">Add Material for this supplier before receiving.</div>'}</div>`:'<div class="card empty">Select a supplier to receive materials.</div>'}
   </div>`;
 }
 function shoeSoleReportDateKey(date=new Date()){return String(date.getFullYear()).padStart(4,'0')+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0')}
@@ -6296,7 +6469,10 @@ function bindShoeSoleLanding(){
   const request={};
   document.getElementById('wfm_soleReceive')?.addEventListener('click',async()=>{
     const supplierId=window.__soleSelectedId,productId=document.getElementById('wfm_soleArticle')?.value,atoms=Number(document.getElementById('wfm_soleQuantity')?.value),now=new Date().toISOString();
-    const result=await saveShoeSoleReceiving(supplierId,productId,atoms,now,'',now,request);
+    const selectedDate=shoeSoleReportDay(document.getElementById('wfm_soleReceiveDate')?.value||'');
+    if(!selectedDate){toast('Select a valid receiving date.');return;}
+    const clock=new Date(now);selectedDate.setHours(clock.getHours(),clock.getMinutes(),clock.getSeconds(),clock.getMilliseconds());
+    const result=await saveShoeSoleReceiving(supplierId,productId,atoms,selectedDate.toISOString(),'',now,request);
     if(result){render();openShoeSoleReceiveVoucherModal(result.supplierIndex,[result.purchaseId]);toast(result.voucherNo+' saved');}
   });
   document.querySelectorAll('[data-wfm-sole-view],[data-wfm-sole-delete]').forEach(b=>b.addEventListener('click',()=>{
@@ -16979,8 +17155,8 @@ function pageShoeSoleSuppliers(){
   const now=new Date(),supplierCards=suppliers.map((supplier,i)=>({supplier,i,rows:shoeSoleTodayRows(supplier,now)})).sort((a,b)=>Number(b.rows.length>0)-Number(a.rows.length>0)||a.i-b.i),todayTotal=suppliers.reduce((sum,s)=>sum+shoeSoleTodayRows(s,now).reduce((n,p)=>n+Number(p.atoms??p.items??p.boxes),0),0);
   return `<div class="sole-supplier-page">
     <div class="card sole-supplier-actions"><button class="btn ghost small" id="soleBack">Back</button><button class="btn ghost small" id="soleDashboard">Back to Dashboard</button><button class="btn brass small" id="soleAddSupplier">+ Add Supplier</button><button class="btn brass small" id="soleAddArticle" ${selected?'':'disabled'}>+ Add Articles</button><button class="btn ghost small" id="soleToday">Today Receive Sole <strong>${shoeSoleQuantityDisplay(todayTotal)} ATOMS</strong></button></div>
-    <div class="card"><h3>Select Sole Supplier</h3><div class="sole-supplier-grid">${suppliers.length?supplierCards.map(({supplier,i,rows})=>{const qty=rows.reduce((n,p)=>n+Number(p.atoms??p.items??p.boxes),0);return `<button type="button" class="sole-supplier-card ${i===index?'selected':''}" data-sole-select="${esc(supplier.id)}" aria-pressed="${i===index}"><strong title="${esc(shoeSoleSupplierDisplayName(supplier,i))}">${esc(shoeSoleSupplierDisplayName(supplier,i))}</strong><span>Today: ${shoeSoleQuantityDisplay(qty)} ATOMS</span>${rows.length?'<span class="sole-supplier-completed">Completed</span>':''}</button>`;}).join(''):'<div class="empty">Add a Sole Supplier to begin.</div>'}</div></div>
-    ${selected?`<div class="card"><div class="sole-entry-heading"><h3>Receive Sole - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="soleSupplierDetails">Supplier Details / History</button></div><div class="sole-receive-entry"><div><label for="soleArticle">Select Article</label><select id="soleArticle"><option value="">Select Article</option>${(selected.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ATOMS in stock</option>`).join('')}</select></div><div><label for="soleQuantity">Quantity / ATOMS</label><input id="soleQuantity" type="number" min="0" step="any" placeholder="ATOMS"></div><button class="btn brass" id="soleReceive">Receive / Save</button></div>${(selected.products||[]).length?'':'<div class="sole-entry-hint">Add Articles for this supplier before receiving.</div>'}</div>`:'<div class="card empty">Select a supplier to receive soles.</div>'}
+    <div class="card"><h3>Select Sole Supplier</h3><div class="sole-supplier-grid">${suppliers.length?supplierCards.map(({supplier,i,rows})=>{const qty=rows.reduce((n,p)=>n+Number(p.atoms??p.items??p.boxes),0);return `<div style="min-width:0;display:flex;flex-direction:column;gap:4px;"><button type="button" class="sole-supplier-card ${i===index?'selected':''}" data-sole-select="${esc(supplier.id)}" aria-pressed="${i===index}"><strong title="${esc(shoeSoleSupplierDisplayName(supplier,i))}">${esc(shoeSoleSupplierDisplayName(supplier,i))}</strong><span>Today: ${shoeSoleQuantityDisplay(qty)} ATOMS</span>${rows.length?'<span class="sole-supplier-completed">Completed</span>':''}</button><button type="button" class="btn ghost small" data-sole-create-bill="${esc(supplier.id)}">Create Bill</button></div>`;}).join(''):'<div class="empty">Add a Sole Supplier to begin.</div>'}</div></div>
+    ${selected?`<div class="card"><div class="sole-entry-heading"><h3>Receive Sole - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="soleSupplierDetails">Supplier Details / History</button></div><div class="sole-receive-entry"><div><label for="soleReceiveDate">Date</label><input id="soleReceiveDate" type="date" value="${shoeSoleReportDateKey()}"></div><div><label for="soleArticle">Select Article</label><select id="soleArticle"><option value="">Select Article</option>${(selected.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ${esc(shoeSoleProductDisplayUnit(p))} in stock</option>`).join('')}</select></div><div><label for="soleQuantity" id="soleReceiveUnitLabel">Quantity / saved unit</label><input id="soleQuantity" type="number" min="0" step="any" placeholder="Quantity"></div><button class="btn brass" id="soleReceive">Receive / Save</button></div>${(selected.products||[]).length?'':'<div class="sole-entry-hint">Add Articles for this supplier before receiving.</div>'}</div>`:'<div class="card empty">Select a supplier to receive soles.</div>'}
   </div>`;
 }
 let shoeSoleReportRange=null;
@@ -16995,14 +17171,14 @@ function pageShoeSoleToday(){
 async function saveShoeSoleReceiving(supplierId,productId,atoms,date,notes='',time=date,request={}){
   if(request.saved||request.saving||window.__soleReceiveSaving)return null;
   const supplier=getShoeSoleSuppliers().find(s=>String(s.id)===String(supplierId)),product=supplier?.products?.find(p=>String(p.id)===String(productId));
-  if(!product||!Number.isFinite(atoms)||atoms<=0||!Number.isFinite(new Date(date).getTime())){toast('Select an article and enter a valid positive ATOMS quantity.');return null;}
+  if(!product||!Number.isFinite(atoms)||atoms<=0||!Number.isFinite(new Date(date).getTime())){toast('Select an article and enter a valid positive quantity.');return null;}
   request.saving=true;window.__soleReceiveSaving=true;
   const before=JSON.stringify(settings);
   try{
     const voucherNo=`RV-${String(settings.nextShoeSoleReceiveVoucherNo||1001).padStart(4,'0')}`;
     product.stockItems=shoeSoleProductStockItems(product)+atoms;
     product.stockBoxes=Math.max(0,Number(product.stockBoxes)||0)+atoms;
-    const purchase={id:uid(),productId:product.id,productName:product.name,date,items:atoms,atoms,boxes:atoms,voucherNo,notes,time};
+    const purchase={id:uid(),productId:product.id,productName:product.name,unit:shoeSoleProductDisplayUnit(product),date,items:atoms,atoms,boxes:atoms,voucherNo,notes,time};
     supplier.purchases=supplier.purchases||[];supplier.receiveVouchers=supplier.receiveVouchers||[];
     supplier.purchases.push(purchase);
     supplier.receiveVouchers.push({id:uid(),voucherNo,date,purchaseIds:[String(purchase.id)],notes,createdAt:time});
@@ -17026,10 +17202,15 @@ function bindShoeSoleLanding(){
   document.getElementById('soleReportPrint')?.addEventListener('click',()=>printAggregateThermal(document.getElementById('soleAggregatePrintArea')?.outerHTML,'Shoe Sole Receive Report','element',{portraitSafe:true}));
   document.getElementById('soleSupplierDetails')?.addEventListener('click',()=>goto('shoeSoleSupplierDetail'));
   document.querySelectorAll('[data-sole-select]').forEach(b=>b.addEventListener('click',()=>{window.__soleSelectedId=b.dataset.soleSelect;render();}));
+  document.querySelectorAll('[data-sole-create-bill]').forEach(button=>button.addEventListener('click',()=>{window.__soleSelectedId=button.dataset.soleCreateBill;shoeSoleBillingModule.open(button.dataset.soleCreateBill);}));
+  document.getElementById('soleArticle')?.addEventListener('change',()=>{const supplier=getShoeSoleSuppliers()[shoeSoleSelectedIndex()],product=supplier?.products?.find(p=>String(p.id)===String(document.getElementById('soleArticle').value));document.getElementById('soleReceiveUnitLabel').textContent='Quantity / '+(product?shoeSoleProductDisplayUnit(product):'saved unit');});
   const request={};
   document.getElementById('soleReceive')?.addEventListener('click',async()=>{
     const supplierId=window.__soleSelectedId,productId=document.getElementById('soleArticle')?.value,atoms=Number(document.getElementById('soleQuantity')?.value),now=new Date().toISOString();
-    const result=await saveShoeSoleReceiving(supplierId,productId,atoms,now,'',now,request);
+    const selectedDate=shoeSoleReportDay(document.getElementById('soleReceiveDate')?.value||'');
+    if(!selectedDate){toast('Select a valid receiving date.');return;}
+    const clock=new Date(now);selectedDate.setHours(clock.getHours(),clock.getMinutes(),clock.getSeconds(),clock.getMilliseconds());
+    const result=await saveShoeSoleReceiving(supplierId,productId,atoms,selectedDate.toISOString(),'',now,request);
     if(result){render();openShoeSoleReceiveVoucherModal(result.supplierIndex,[result.purchaseId]);toast(result.voucherNo+' saved');}
   });
   document.querySelectorAll('[data-sole-view],[data-sole-delete]').forEach(b=>b.addEventListener('click',()=>{
@@ -17550,6 +17731,7 @@ function openShoeSoleProductModal(supplierIndex,productId){
   modal(`<h3>${product?'Edit':'Add'} Product — ${esc(shoeSoleSupplierDisplayName(supplier,supplierIndex))}</h3>
     <div class="row"><div><label>Product Name</label><input id="sspName" value="${esc(product?.name||'')}" placeholder="e.g. Footprint"></div><div><label>Product Stock (Items)</label><input id="sspStock" type="number" min="0" step="any" value="${product?Math.round(shoeSoleProductStockItems(product)*100)/100:0}"></div><div><label>Product Unit</label><select id="sspUnit"><option value="Box" ${(product?.unit||'Box')==='Box'?'selected':''}>Box</option><option value="Atom" ${(product?.unit||'')==='Atom'?'selected':''}>Atom</option><option value="Piece" ${(product?.unit||'')==='Piece'?'selected':''}>Piece</option><option value="Custom" ${(product?.unit||'')==='Custom'?'selected':''}>Custom Unit</option></select></div></div>
     <div id="sspCustomUnitWrap" style="display:none;"><label>Custom Unit</label><input id="sspCustomUnit" value="${esc(customUnit)}" placeholder="e.g. Packet"></div>
+    <label>Rate Per Unit</label><input id="soleRatePerUnit" type="number" min="0" step="any" value="${esc(String(product?.ratePerUnit??0))}">
     <label>Notes / Product Details</label><textarea id="sspNotes" rows="3" placeholder="Product details">${esc(product?.notes||'')}</textarea>
     <label>Product Photo</label><input type="file" id="sspPhoto" accept="image/*">
     <div id="sspPhotoPreview" style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">${pendingPhoto?`<img src="${pendingPhoto}" class="settings-logo-preview zoomable" style="max-width:120px;max-height:120px;object-fit:cover;border-radius:8px;"><button type="button" class="btn red small" id="sspRemovePhoto">Remove Photo</button>`:'<div style="font-size:12px;color:var(--muted);">No photo selected</div>'}</div>
@@ -17563,9 +17745,10 @@ function openShoeSoleProductModal(supplierIndex,productId){
   document.getElementById('sspSave').onclick=()=>{
     const name=document.getElementById('sspName').value.trim(); if(!name){toast('Enter product name');return;}
     const unit=unitEl.value, cu=document.getElementById('sspCustomUnit').value.trim(); if(unit==='Custom'&&!cu){toast('Enter custom unit');return;}
+    const ratePerUnit=Number(document.getElementById('soleRatePerUnit').value);if(!Number.isFinite(ratePerUnit)||ratePerUnit<0){toast('Enter a valid Rate Per Unit');return;}
     const stockItems=Math.max(0,Number(document.getElementById('sspStock').value)||0);
     if(product){
-      product.name=name;
+      product.name=name;product.ratePerUnit=ratePerUnit;
       product.unit=unit;
       product.customUnit=cu;
       product.stockItems=stockItems;
@@ -17573,7 +17756,7 @@ function openShoeSoleProductModal(supplierIndex,productId){
       product.notes=document.getElementById('sspNotes').value.trim();
       product.photo=pendingPhoto;
     }
-    else supplier.products.push({id:uid(),name,photo:pendingPhoto,unit,customUnit:cu,stockItems,stockBoxes:stockItems,notes:document.getElementById('sspNotes').value.trim(),customFields:[]});
+    else supplier.products.push({id:uid(),name,photo:pendingPhoto,ratePerUnit,unit,customUnit:cu,stockItems,stockBoxes:stockItems,notes:document.getElementById('sspNotes').value.trim(),customFields:[]});
     persistAll();closeModal();render();toast(product?'Product updated':'Product added');
   };
 }
@@ -21865,7 +22048,7 @@ function bindMB20(){mb20BindReceiveReport();document.querySelectorAll('[data-mb2
   .sole-supplier-page .sole-supplier-completed{color:#23785c;font-weight:800;}
   .sole-supplier-page .sole-entry-heading{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:7px;}
   .sole-supplier-page .sole-entry-heading h3{margin:0;}
-  .sole-supplier-page .sole-receive-entry{display:grid;grid-template-columns:minmax(180px,2fr) minmax(100px,1fr) auto;gap:7px;align-items:end;}
+  .sole-supplier-page .sole-receive-entry{display:grid;grid-template-columns:minmax(130px,.8fr) minmax(0,2fr) minmax(90px,1fr) auto;gap:7px;align-items:end;}
   .sole-supplier-page .sole-receive-entry label{display:block;font-size:11px;margin:0 0 3px;}
   .sole-supplier-page .sole-receive-entry input,.sole-supplier-page .sole-receive-entry select{height:34px;padding:5px 7px;font-size:12px;}
   .sole-supplier-page .sole-entry-hint{font-size:12px;margin-top:7px;}
