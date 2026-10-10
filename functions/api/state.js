@@ -42,6 +42,104 @@ function isPlainObject(value) {
 }
 
 const RUNTIME_DATASETS = DATASETS.filter((name) => name !== "backups");
+const SETTINGS_ROOTS = [
+  "shoesPressManProduction", "shoesLaminationShopsProduction", "supplierProductionBilling",
+  "upperArticles", "upperMaterials", "upperDistributions", "nextUpperVoucherNo",
+  "upperPendingRecords", "upperManualPendingResets", "upperWeeklyLabourRecords", "productionKharchaAdjustments", "nextBillNo",
+  "batamMansProduction", "batamMansProductionArticles", "batamMansProductionMaterials",
+  "batamMansProductionVouchers", "batamMansMaterialDistributions", "batamMansExpenses",
+  "batamMansPendingRecords", "nextBatamMansVoucherNo", "batamMansVerificationSlips", "nextBatamMansSlipNo",
+  "finishedMansProduction", "finishedMansProductionArticles", "finishedMansProductionMaterials",
+  "finishedMansProductionVouchers", "finishedMansMaterialDistributions", "finishedMansExpenses",
+  "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo"
+];
+async function baselineHash(value) {
+  const encoded = value === undefined ? "missing" : JSON.stringify(value);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(encoded));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+async function stateBaselines(state) {
+  const baselines = {};
+  for (const name of RUNTIME_DATASETS) {
+    if (!Object.prototype.hasOwnProperty.call(state, name)) continue;
+    baselines[name] = await baselineHash(state[name]);
+    if (name === "settings") for (const root of SETTINGS_ROOTS) {
+      baselines['settings/' + root] = await baselineHash(state.settings[root]);
+    }
+  }
+  return baselines;
+}
+async function savePartialState({ env, request }, body) {
+  const sectionsMode = stateMode(request) === "settings-sections";
+  if (!isPlainObject(body) || body.version !== 1 || !isPlainObject(body.expected) ||
+      !isPlainObject(body.updates) || (sectionsMode && !isPlainObject(body.set)) ||
+      (!sectionsMode && Object.prototype.hasOwnProperty.call(body, 'set')) ||
+      Object.keys(body).some(key => !['version', 'expected', 'updates', 'set'].includes(key))) {
+    return json({ error: "Invalid partial-state envelope." }, 400);
+  }
+  const updates = body.updates, roots = sectionsMode ? Object.keys(body.set) : [];
+  const names = Object.keys(updates), expected = Object.keys(body.expected);
+  if ((!names.length && !roots.length) || names.some(name => !RUNTIME_DATASETS.includes(name) ||
+      (sectionsMode && name === 'settings') ||
+      (name === 'settings' ? !isPlainObject(updates[name]) : !Array.isArray(updates[name]))) ||
+      roots.some(root => !SETTINGS_ROOTS.includes(root) ||
+        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling'].includes(root)
+          ? !isPlainObject(body.set[root]) : root.startsWith('next')
+          ? !Number.isSafeInteger(body.set[root]) || body.set[root] < 0 : !Array.isArray(body.set[root]))) ||
+      expected.some(key => !(RUNTIME_DATASETS.includes(key) ||
+        (key.startsWith('settings/') && SETTINGS_ROOTS.includes(key.slice(9)))) ||
+        !/^[a-f0-9]{64}$/.test(body.expected[key])) ||
+      names.some(name => !Object.prototype.hasOwnProperty.call(body.expected, name)) ||
+      roots.some(root => !Object.prototype.hasOwnProperty.call(body.expected, 'settings/' + root))) {
+    return json({ error: "Invalid partial datasets, sections, or baselines." }, 400);
+  }
+  const readNames = [...new Set([...names, ...expected.map(key => key.split('/')[0]), ...(roots.length ? ['settings'] : [])])];
+  try {
+    const rows = await env.DB.prepare(
+      `SELECT dataset, data_json FROM app_state WHERE dataset IN (${readNames.map(() => '?').join(',')})`
+    ).bind(...readNames).all();
+    const raw = Object.fromEntries(rows.results.map(row => [row.dataset, row.data_json]));
+    if (readNames.some(name => !Object.prototype.hasOwnProperty.call(raw, name))) {
+      return json({ error: "conflict", message: "Required authoritative dataset is missing." }, 409);
+    }
+    const current = Object.fromEntries(readNames.map(name => [name, JSON.parse(raw[name])]));
+    for (const key of expected) {
+      const value = key.startsWith('settings/') ? current.settings[key.slice(9)] : current[key];
+      if (await baselineHash(value) !== body.expected[key]) {
+        return json({ error: "conflict", dataset: key, message: "Authoritative data changed. Reload before saving." }, 409);
+      }
+    }
+    const writes = { ...updates };
+    if (roots.length) {
+      if (!isPlainObject(current.settings)) throw new Error('Invalid stored settings.');
+      writes.settings = { ...current.settings, ...body.set };
+    }
+    const changed = Object.keys(writes).filter(name => JSON.stringify(writes[name]) !== raw[name]);
+    const now = new Date().toISOString();
+    const baselines = await stateBaselines(writes);
+    if (changed.length) {
+      // One UPDATE, one shared guard: all changed rows commit, or none do.
+      // Exact stored JSON guards also catch legacy writers and timestamp collisions.
+      const statement = env.DB.prepare(
+        `WITH guard AS MATERIALIZED (SELECT 1 AS allowed WHERE
+          ${readNames.map(() => 'EXISTS (SELECT 1 FROM app_state AS checked WHERE checked.dataset = ? AND checked.data_json = ?)').join(' AND ')})
+          UPDATE app_state SET data_json = CASE dataset ${changed.map(() => 'WHEN ? THEN ?').join(' ')} ELSE data_json END,
+          updated_at = ? WHERE dataset IN (${changed.map(() => '?').join(',')}) AND EXISTS (SELECT 1 FROM guard)`
+      ).bind(...readNames.flatMap(name => [name, raw[name]]),
+        ...changed.flatMap(name => [name, JSON.stringify(writes[name])]), now, ...changed);
+      const result = await env.DB.batch([statement]);
+      if (result[0]?.meta?.changes !== changed.length) {
+        return json({ error: "conflict", message: "Authoritative data changed during save. No rows were written." }, 409);
+      }
+    }
+    return json({ ok: true, saved: Object.keys(writes), updatedAt: now,
+      baselines });
+  } catch (error) {
+    console.error("Partial state save failed:", error);
+    return json({ error: "Partial cloud save failed. No partial application-state commit was accepted." }, 500);
+  }
+}
+
 function stateMode(request) {
   return new URL(request.url).searchParams.get("mode");
 }
@@ -183,7 +281,8 @@ export async function onRequestGet({ env, request }) {
       );
     }
 
-    return json({ state });
+    return json(new URL(request.url).searchParams.get("baselines") === "1"
+      ? { state, baselines: await stateBaselines(state) } : { state });
   } catch (error) {
     console.error("GET /api/state failed:", error);
     return json(
@@ -205,11 +304,21 @@ export async function onRequestPut({ env, request }) {
     return json({ error: "Request body is not valid JSON." }, 400);
   }
 
+  if (["patch", "settings-sections"].includes(stateMode(request))) return savePartialState({ env, request }, state);
   if (stateMode(request) === "backups") return appendBackup({ env }, state);
   const datasets = stateMode(request) === "runtime" ? RUNTIME_DATASETS : DATASETS;
   const validation = validateState(state, datasets);
   if (!validation.ok) {
     return json({ error: validation.error }, 400);
+  }
+
+  // Optional CAS protection for current clients' runtime fallbacks. Legacy
+  // requests without this header retain their existing complete-state contract.
+  if (stateMode(request) === 'runtime' && request.headers.has('X-State-Baselines')) {
+    let expected;
+    try { expected = JSON.parse(request.headers.get('X-State-Baselines')); }
+    catch { return json({ error: 'Invalid runtime save baselines.' }, 400); }
+    return savePartialState({ env, request }, { version: 1, updates: state, expected });
   }
 
   const now = new Date().toISOString();
@@ -238,6 +347,7 @@ export async function onRequestPut({ env, request }) {
       ok: true,
       saved: datasets,
       updatedAt: now,
+      ...(new URL(request.url).searchParams.get("baselines") === "1" ? { baselines: await stateBaselines(state) } : {}),
     });
   } catch (error) {
     console.error("PUT /api/state failed:", error);

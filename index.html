@@ -1603,13 +1603,14 @@ let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
 let cloudSyncQueued = false;
 const CLOUD_API = './api/state';
+const RUNTIME_CLOUD_API = CLOUD_API+'?mode=runtime';
+const BACKUP_CLOUD_API = CLOUD_API+'?mode=backups';
 
-function getCurrentState(){
-  return {
-    settings, materials, workers, transactions, stockMovements,
-    articles, shopkeepers, bills, auditLog, gasVouchers,
-    backups: backupVersions
-  };
+function getCurrentState(includeBackups=true){
+  const state={settings, materials, workers, transactions, stockMovements,
+    articles, shopkeepers, bills, auditLog, gasVouchers};
+  if(includeBackups) state.backups=backupVersions;
+  return state;
 }
 
 function applyCloudState(state){
@@ -1681,20 +1682,96 @@ function hasUnsavedCloudChanges(){
   return cloudSavedRevision < cloudChangeRevision;
 }
 
-function captureCloudState(){
+const CLOUD_SETTINGS_ROOTS=["shoesPressManProduction","shoesLaminationShopsProduction","supplierProductionBilling","upperArticles","upperMaterials","upperDistributions","nextUpperVoucherNo","upperPendingRecords","upperManualPendingResets","upperWeeklyLabourRecords","productionKharchaAdjustments","nextBillNo","batamMansProduction","batamMansProductionArticles","batamMansProductionMaterials","batamMansProductionVouchers","batamMansMaterialDistributions","batamMansExpenses","batamMansPendingRecords","nextBatamMansVoucherNo","batamMansVerificationSlips","nextBatamMansSlipNo","finishedMansProduction","finishedMansProductionArticles","finishedMansProductionMaterials","finishedMansProductionVouchers","finishedMansMaterialDistributions","finishedMansExpenses","finishedMansPendingRecords","nextFinishedMansVoucherNo","finishedMansVerificationSlips","nextFinishedMansSlipNo"];
+const CLOUD_SAVE_SCOPES={
+  worker:{datasets:['workers','auditLog'],sections:[],reads:['settings','workers']},
+  salesBill:{datasets:['articles','bills','auditLog'],sections:['nextBillNo'],reads:['settings','articles','shopkeepers','bills']},
+  payment:{datasets:['shopkeepers','auditLog'],sections:[],reads:['shopkeepers','bills']},
+  press:{datasets:[],sections:['shoesPressManProduction'],reads:['settings']},
+  lamination:{datasets:[],sections:['shoesLaminationShopsProduction'],reads:['settings']},
+  supplierBill:{datasets:[],sections:['supplierProductionBilling'],reads:['settings','workers']},
+  upper:{datasets:['auditLog'],sections:['upperArticles','upperMaterials','upperDistributions','nextUpperVoucherNo','upperPendingRecords','upperManualPendingResets'],reads:['settings','workers']},
+  bottom:{datasets:['auditLog'],sections:["batamMansProduction","batamMansProductionArticles","batamMansProductionMaterials","batamMansProductionVouchers","batamMansMaterialDistributions","batamMansExpenses","batamMansPendingRecords","nextBatamMansVoucherNo","batamMansVerificationSlips","nextBatamMansSlipNo"],reads:['settings','workers']},
+  finish:{datasets:['auditLog'],sections:["finishedMansProduction","finishedMansProductionArticles","finishedMansProductionMaterials","finishedMansProductionVouchers","finishedMansMaterialDistributions","finishedMansExpenses","finishedMansPendingRecords","nextFinishedMansVoucherNo","finishedMansVerificationSlips","nextFinishedMansSlipNo"],reads:['settings','workers']},
+  weekly:{datasets:['auditLog'],sections:['upperDistributions','upperWeeklyLabourRecords'],reads:['settings','workers']},
+  adjustment:{datasets:[],sections:['productionKharchaAdjustments'],reads:['settings','workers']}
+};
+let cloudBaselines={},cloudBaselineValues={},cloudNeedsReload=false,cloudReconcilePromise=null;
+function rememberCloudValues(state){
+  for(const [name,value] of Object.entries(state)){
+    if(name==='backups')continue;
+    cloudBaselineValues[name]=JSON.stringify(value);
+    if(name==='settings')for(const root of CLOUD_SETTINGS_ROOTS)cloudBaselineValues['settings/'+root]=JSON.stringify(value[root]);
+  }
+}
+function validCloudBaselines(baselines,keys){
+  return baselines && typeof baselines==='object' && keys.every(key=>typeof baselines[key]==='string' && /^[a-f0-9]{64}$/.test(baselines[key]));
+}
+function capturePartialCloudState(scopeName){
+  const scope=CLOUD_SAVE_SCOPES[scopeName];
+  if(!scope)throw new Error('Unknown save scope.');
+  if(!Object.keys(cloudBaselines).length)throw new Error('Confirmed save baselines are unavailable. Reload first.');
+  const state=getCurrentState(false),updates={},set={};
+  // Do not omit an earlier unsaved mutation outside this action's proven scope.
+  const originalSettings=JSON.parse(cloudBaselineValues.settings||'{}');
+  const unexpectedDataset=Object.keys(state).some(name=>name!=='settings' && !scope.datasets.includes(name) && JSON.stringify(state[name])!==cloudBaselineValues[name]);
+  const unexpectedSection=[...new Set([...Object.keys(settings),...Object.keys(originalSettings)])].some(root=>{
+    if(scope.sections.includes(root))return false;
+    const before=CLOUD_SETTINGS_ROOTS.includes(root)?cloudBaselineValues['settings/'+root]:JSON.stringify(originalSettings[root]);
+    return JSON.stringify(settings[root])!==before;
+  });
+  if(unexpectedDataset||unexpectedSection)return captureCloudState(true);
+  for(const name of scope.datasets){const encoded=JSON.stringify(state[name]);if(encoded!==cloudBaselineValues[name])updates[name]=JSON.parse(encoded);}
+  for(const root of scope.sections){const encoded=JSON.stringify(settings[root]);if(encoded!==cloudBaselineValues['settings/'+root]){
+    if(encoded===undefined)throw new Error('Removing a settings root requires the runtime save path.');
+    set[root]=JSON.parse(encoded);
+  }}
+  return {partial:true,scope:scopeName,updates,set};
+}
+
+function captureCloudState(serialized=false){
   // Freeze the exact state that belongs to this save. Later UI mutations cannot
-  // leak into an older queued request.
-  return JSON.parse(JSON.stringify(getCurrentState()));
+  // leak into an older queued request. Keep object snapshots for rollback callers.
+  const snapshot=JSON.stringify(getCurrentState(false));
+  return serialized ? snapshot : JSON.parse(snapshot);
 }
 
 async function performCloudWrite(snapshot){
-  if(!cloudReady) return false;
-  const res=await fetch(CLOUD_API,{
-    method:'PUT',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(snapshot)
-  });
-  if(!res.ok) throw new Error('Cloud save failed: '+res.status);
+  if(!cloudReady || cloudNeedsReload)throw new Error('Authoritative cloud reconciliation is required.');
+  if(snapshot?.partial){
+    const scope=CLOUD_SAVE_SCOPES[snapshot.scope],updates={...snapshot.updates},set={...snapshot.set};
+    // An earlier queued save may already contain a submitted value.
+    for(const name of Object.keys(updates))if(JSON.stringify(updates[name])===cloudBaselineValues[name])delete updates[name];
+    for(const root of Object.keys(set))if(JSON.stringify(set[root])===cloudBaselineValues['settings/'+root])delete set[root];
+    if(!Object.keys(updates).length&&!Object.keys(set).length)return true;
+    const expected={};
+    for(const key of [...scope.reads,...Object.keys(updates),...Object.keys(set).map(root=>'settings/'+root)]){
+      if(!cloudBaselines[key])throw new Error('Missing authoritative baseline: '+key);
+      expected[key]=cloudBaselines[key];
+    }
+    const sections=Object.keys(set).length>0;
+    const body={version:1,updates,expected,...(sections?{set}:{})};
+    const res=await fetch(CLOUD_API+'?mode='+(sections?'settings-sections':'patch'),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const payload=await res.json().catch(()=>null);
+    if(!res.ok || payload?.ok!==true || !Array.isArray(payload.saved) || !validCloudBaselines(payload.baselines,[...Object.keys(updates),...Object.keys(set).map(root=>'settings/'+root),...(sections?['settings']:[])]) || [...Object.keys(updates),...(sections?['settings']:[])].some(name=>!payload.saved.includes(name)))throw new Error(payload?.error==='conflict'?'Cloud save conflict. Reloading authoritative data.':'Cloud save failed: '+res.status);
+    Object.assign(cloudBaselines,payload.baselines);
+    for(const [name,value] of Object.entries(updates))cloudBaselineValues[name]=JSON.stringify(value);
+    for(const [root,value] of Object.entries(set))cloudBaselineValues['settings/'+root]=JSON.stringify(value);
+    return true;
+  }
+  const body=typeof snapshot==='string'?snapshot:JSON.stringify(snapshot);
+  const headers={'Content-Type':'application/json'};
+  if(Object.keys(cloudBaselines).length){
+    const expected=Object.fromEntries(Object.keys(JSON.parse(body)).map(name=>[name,cloudBaselines[name]]));
+    if(!validCloudBaselines(expected,Object.keys(expected)))throw new Error('Runtime save baselines are incomplete.');
+    headers['X-State-Baselines']=JSON.stringify(expected);
+  }
+  const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{method:'PUT',headers,body});
+  if(!res.ok)throw new Error('Cloud save failed: '+res.status);
+  const payload=await res.json();
+  if(payload?.ok!==true || !validCloudBaselines(payload.baselines,Object.keys(JSON.parse(body))))throw new Error('Invalid cloud save confirmation.');
+  cloudBaselines=payload.baselines;
+  rememberCloudValues(JSON.parse(body));
   return true;
 }
 
@@ -1745,7 +1822,7 @@ async function syncCloudNow(snapshot, revision){
     console.error('Cloud sync failed',e);
     setD1SafeIndicator('bad');
     toast('Cloud save failed. Retrying automatically; do not close the app yet.');
-    scheduleCloudRetry();
+    if(!cloudNeedsReload)scheduleCloudRetry();
     return false;
   }
 }
@@ -1769,17 +1846,17 @@ function scheduleCloudSync(markChange=true){
 
 // Critical Upper writes get their own revision and block ordinary snapshots until
 // success or rollback. This keeps the D1 state and the visible app state aligned.
-async function saveCriticalCloudState(){
-  if(!cloudReady) return false;
+async function saveCriticalCloudState(scopeName=null){
+  if(!cloudReady || cloudNeedsReload || criticalCloudSaveActive)return false;
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer=null;
   criticalCloudSaveActive=true;
   setCriticalUiLock(true);
 
   const revision=++cloudChangeRevision;
-  const snapshot=captureCloudState();
   let ok=false;
   try{
+    const snapshot=scopeName?capturePartialCloudState(scopeName):captureCloudState(true);
     await enqueueCloudWrite(snapshot);
     cloudSavedRevision=Math.max(cloudSavedRevision,revision);
     ok=true;
@@ -1789,10 +1866,13 @@ async function saveCriticalCloudState(){
     return true;
   }catch(e){
     console.error('Critical cloud save failed',e);
+    cloudNeedsReload=true;
+    clearTimeout(cloudSyncTimer);clearTimeout(cloudRetryTimer);
+    setTimeout(()=>reconcileCloudAfterCriticalRollback(),0);
     return false;
   }finally{
     criticalCloudSaveActive=false;
-    setCriticalUiLock(false);
+    setCriticalUiLock(cloudNeedsReload);
     const shouldFlush=deferredCloudSync;
     deferredCloudSync=false;
 
@@ -1805,23 +1885,25 @@ async function saveCriticalCloudState(){
 }
 
 async function reconcileCloudAfterCriticalRollback(){
-  // Called only AFTER the caller has restored the pre-change state.
-  const revision=cloudChangeRevision;
-  const snapshot=captureCloudState();
-  try{
-    await enqueueCloudWrite(snapshot);
-    cloudSavedRevision=Math.max(cloudSavedRevision,revision);
-    cloudRetryCount=0;
-    clearTimeout(cloudRetryTimer);
-    cloudRetryTimer=null;
-    if(hasUnsavedCloudChanges()) setTimeout(()=>scheduleCloudSync(false),0);
-    return true;
-  }catch(e){
-    console.error('Rollback reconciliation save failed',e);
-    toast('Cloud reconciliation is pending. Retrying automatically; do not close the app yet.');
-    scheduleCloudRetry();
-    return false;
-  }
+  // A failed/lost acknowledgement must never upload a before-image over D1.
+  if(cloudReconcilePromise)return cloudReconcilePromise;
+  cloudNeedsReload=true;
+  clearTimeout(cloudSyncTimer);clearTimeout(cloudRetryTimer);
+  cloudReconcilePromise=(async()=>{
+    setCriticalUiLock(true);
+    try{
+      await cloudWriteChain;
+      const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{cache:'no-store'});
+      if(!res.ok)throw new Error('Authoritative reload failed: '+res.status);
+      const payload=await res.json();
+      if(!isCompleteCloudState(payload.state)||!payload.baselines)throw new Error('Invalid authoritative reload.');
+      applyCloudState(payload.state);cloudBaselines=payload.baselines;rememberCloudValues(getCurrentState(false));
+      cloudSavedRevision=cloudChangeRevision;deferredCloudSync=false;cloudNeedsReload=false;
+      render();return true;
+    }catch(error){console.error('Cloud reconciliation failed',error);toast('D1 reload is required before more saves. Reload when the connection is available.');return false;}
+    finally{setCriticalUiLock(cloudNeedsReload);cloudReconcilePromise=null;}
+  })();
+  return cloudReconcilePromise;
 }
 
 function setCriticalUiLock(locked){
@@ -1845,7 +1927,7 @@ window.addEventListener('beforeunload',(e)=>{
 function isCompleteCloudState(state){
   if(!state || typeof state!=='object' || Array.isArray(state)) return false;
   if(!state.settings || typeof state.settings!=='object' || Array.isArray(state.settings)) return false;
-  const arrayDatasets=['materials','workers','transactions','stockMovements','articles','shopkeepers','bills','auditLog','gasVouchers','backups'];
+  const arrayDatasets=['materials','workers','transactions','stockMovements','articles','shopkeepers','bills','auditLog','gasVouchers'];
   return arrayDatasets.every(name=>Array.isArray(state[name]));
 }
 
@@ -1853,7 +1935,7 @@ async function hydrateCloud(startupLocalSignature){
   let cloudStateApplied=false;
   let cloudConnectionVerified=false;
   try{
-    const res=await fetch(CLOUD_API,{cache:'no-store'});
+    const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{cache:'no-store'});
     if(!res.ok) throw new Error('Cloud load failed: '+res.status);
     const payload=await res.json();
 
@@ -1862,13 +1944,15 @@ async function hydrateCloud(startupLocalSignature){
         throw new Error('Cloud response contains an incomplete or invalid application state.');
       }
 
-      const localChangedDuringCloudLoad = JSON.stringify(getCurrentState()) !== startupLocalSignature;
+      const localChangedDuringCloudLoad = JSON.stringify(getCurrentState(false)) !== startupLocalSignature;
       if(localChangedDuringCloudLoad){
         console.warn('A local change occurred before D1 finished loading. D1 remains authoritative; the startup-local change was not uploaded.');
       }
       // D1 is authoritative whenever a valid cloud state exists. This prevents
       // stale LocalStorage/RAM state from overwriting production during startup.
+      if(!payload.baselines)throw new Error('Authoritative save baselines are missing.');
       applyCloudState(payload.state);
+      cloudBaselines=payload.baselines;rememberCloudValues(getCurrentState(false));
       cloudStateApplied=true;
       cloudConnectionVerified=true;
     }
@@ -1976,6 +2060,8 @@ async function deleteR2ImageUrl(url){
   return res.ok;
 }
 function cleanupReplacedR2ImagesAfterSave(){
+  // Unknown backup references must never cause an R2 deletion.
+  if(!authoritativeBackupsLoaded)return;
   if(!r2RefsBeforePendingUpload)return;
   const before=r2RefsBeforePendingUpload;r2RefsBeforePendingUpload=null;
   const current=collectR2ImageUrls(getCurrentState());
@@ -2413,7 +2499,11 @@ if(localStorage.getItem('fac_owner_pin_default_v2')!=='1'){
   settings.ownerPin = settings.ownerPin || '1234';
 }
 settings.nextBillNo = Number(settings.nextBillNo)||1001;
-let backupVersions = loadDB(DB_KEYS.backups, []);
+// Backup versions are read explicitly from authoritative D1, never at startup.
+let backupVersions = [];
+let authoritativeBackupsLoaded = false;
+let backupLoadPromise = null;
+let backupLoadError = false;
 let materials = loadDB(DB_KEYS.materials, []);
 let workers = loadDB(DB_KEYS.workers, []);
 let workerCategoryFilter = null;
@@ -2806,9 +2896,9 @@ const shoesLaminationShopsServices={
   read:()=>settings.shoesLaminationShopsProduction,
   common:()=>{const keys=['factoryName','address','phone','receiptFooter','thankYou','workerColumnOrder','workerColumnLabels','workerHiddenBuiltinFields','customWorkerColumns'];return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(settings,key)).map(key=>[key,JSON.parse(JSON.stringify(settings[key]))]));},
   exists:()=>Object.prototype.hasOwnProperty.call(settings,'shoesLaminationShopsProduction'),
-  publish:value=>{settings={...settings,shoesLaminationShopsProduction:value};},
+  publish:value=>{settings={...settings,shoesLaminationShopsProduction:{...(settings.shoesLaminationShopsProduction||{}),...value}};},
   restore:(value,exists)=>{const next={...settings};if(exists)next.shoesLaminationShopsProduction=value;else delete next.shoesLaminationShopsProduction;settings=next;},
-  critical:()=>saveCriticalCloudState(),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
+  critical:()=>saveCriticalCloudState('lamination'),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
   navigate:(page,...args)=>goto(page,...args),render:()=>render()
 };
 const shoesLaminationShopsModule=(()=>{
@@ -8996,9 +9086,9 @@ const shoesPressManServices={
   read:()=>settings.shoesPressManProduction,
   common:()=>{const keys=['factoryName','address','phone','receiptFooter','thankYou','workerColumnOrder','workerColumnLabels','workerHiddenBuiltinFields','customWorkerColumns'];return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(settings,key)).map(key=>[key,JSON.parse(JSON.stringify(settings[key]))]));},
   exists:()=>Object.prototype.hasOwnProperty.call(settings,'shoesPressManProduction'),
-  publish:value=>{settings={...settings,shoesPressManProduction:value};},
+  publish:value=>{settings={...settings,shoesPressManProduction:{...(settings.shoesPressManProduction||{}),...value}};},
   restore:(value,exists)=>{const next={...settings};if(exists)next.shoesPressManProduction=value;else delete next.shoesPressManProduction;settings=next;},
-  critical:()=>saveCriticalCloudState(),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
+  critical:()=>saveCriticalCloudState('press'),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
   navigate:(page,...args)=>goto(page,...args),render:()=>render()
 };
 const shoesPressManModule=(()=>{
@@ -13521,7 +13611,7 @@ function deleteSupplierProductionWorker(workerId){
     if(supplierProductionProfileSaving||!supplierProductionBillWorker(worker.id))return;
     if(supplierProductionHasLinkedData(worker.id)){toast('This supplier has linked records and cannot be deleted.');return;}
     const previous=workers;supplierProductionProfileSaving=true;workers=workers.filter(item=>String(item.id)!==String(worker.id));
-    try{if(!await saveCriticalCloudState())throw new Error('Supplier deletion failed');closeModal();render();toast('Supplier deleted');}catch(error){workers=previous;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Supplier was not deleted. Please try again.');}finally{supplierProductionProfileSaving=false;}
+    try{if(!await saveCriticalCloudState('worker'))throw new Error('Supplier deletion failed');closeModal();render();toast('Supplier deleted');}catch(error){workers=previous;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Supplier was not deleted. Please try again.');}finally{supplierProductionProfileSaving=false;}
   });
 }
 function openSupplierProductionProfile(workerId){
@@ -13560,7 +13650,7 @@ async function saveSupplierProductionProfile(workerId,draft){
   supplierProductionProfileSaving=true;
   for(const id of ['supplierProfileSave','supplierProfileCancel','supplierProfilePhoto']){const element=document.getElementById(id);if(element)element.disabled=true;}
   workers=workers.map(w=>String(w.id)===String(worker.id)?updated:w);
-  try{if(!await saveCriticalCloudState())throw new Error('Supplier save failed');}
+  try{if(!await saveCriticalCloudState('worker'))throw new Error('Supplier save failed');}
   catch(error){
     workers=workers.map(w=>String(w.id)===String(worker.id)?previous:w);
     try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
@@ -13643,7 +13733,7 @@ async function saveSupplierProductionBill(workerId,lines,openingValue){
   for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
   settings={...settings,supplierProductionBilling:next};
   try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
+    if(!await saveCriticalCloudState('supplierBill'))throw new Error('Bill save failed');
   }catch(error){
     if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
     try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
@@ -13689,7 +13779,7 @@ async function saveSupplierProductionBillHistory(workerId,billId,quantities){
   supplierProductionBillSaving=true;
   for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
   settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
+  try{if(!await saveCriticalCloudState('supplierBill'))throw new Error('Bill history save failed');}
   catch(error){
     settings={...settings,supplierProductionBilling:previous};
     try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
@@ -13779,7 +13869,7 @@ function setUpperWorkerSelection(workerId){
 function getUpperSelectedWorkerId(){return upperSelWorker||'';}
 function setUpperRowSelection(row,kind,id){
   if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
-  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials();
+  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials().filter(m=>workerMaterialAllowed(workers.find(w=>String(w.id)===String(getUpperSelectedWorkerId())),'upper',m.id));
   const item=list.find(x=>String(x.id)===String(id));
   const input=row.querySelector(kind==='article'?'.upper-article-search':'.upper-material-search');
   const results=row.querySelector(kind==='article'?'.upper-article-results':'.upper-material-results');
@@ -13790,7 +13880,7 @@ function setUpperRowSelection(row,kind,id){
   updateUpperDistributionRow(row);
 }
 function renderUpperRowResults(row,kind,query){
-  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials();
+  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials().filter(m=>workerMaterialAllowed(workers.find(w=>String(w.id)===String(getUpperSelectedWorkerId())),'upper',m.id));
   const input=row.querySelector(kind==='article'?'.upper-article-search':'.upper-material-search');
   const results=row.querySelector(kind==='article'?'.upper-article-results':'.upper-material-results'); if(!input||!results)return;
   const q=String(query||'').trim().toLowerCase();
@@ -13853,7 +13943,7 @@ async function saveUpperManualPending(workerId){
   if(!raw||!Number.isSafeInteger(qty)||qty<0){toast('Enter a non-negative whole Pending quantity in the selected saved unit.');return;}
   const previous=settings.upperManualPendingResets,existed=Object.prototype.hasOwnProperty.call(settings,'upperManualPendingResets');button.disabled=true;
   settings.upperManualPendingResets=[...(previous||[]),{id:uid(),date:new Date().toISOString(),workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty,articleId:String(article.id),articleName:String(article.name||''),unit,recordIds:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(workerId)).map(record=>String(record.id))}];
-  try{if(!await saveCriticalCloudState())throw new Error('Pending save failed');}
+  try{if(!await saveCriticalCloudState('upper'))throw new Error('Pending save failed');}
   catch(error){if(existed)settings.upperManualPendingResets=previous;else delete settings.upperManualPendingResets;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}button.disabled=false;toast('Worker Pending was not saved. Please try again.');return;}
   closeModal();updateUpperWorkflowSummary();toast('Article Pending saved: '+qty+' '+unit);
 }
@@ -13952,15 +14042,15 @@ function collectUpperDistributionDraft(){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const defaultMaterial=shoeLamination?null:upperDefaultMaterial(worker);
-  if(!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
-  const backgroundMaterial=document.querySelector('.upper-distribution-row .upper-material-search');if(backgroundMaterial&&!shoeLamination)backgroundMaterial.dataset.selectedId=String(defaultMaterial?.id||'');
+  if(!workerEditorDefaultModules(worker).includes('upper')&&!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
+  const backgroundMaterial=document.querySelector('.upper-distribution-row .upper-material-search');if(backgroundMaterial&&!shoeLamination&&!workerEditorDefaultModules(worker).includes('upper'))backgroundMaterial.dataset.selectedId=String(defaultMaterial?.id||'');
   document.querySelectorAll('.upper-distribution-row').forEach(row=>{
-    const articleId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',materialId=articleOnly||shoeLamination?'':row.querySelector('.upper-material-search')?.dataset.selectedId||'',article=upperCategoryArticles().find(a=>String(a.id)===String(articleId)),material=shoeLamination?null:upperCategoryMaterials().find(m=>String(m.id)===String(materialId)),enteredQty=Number(row.querySelector('.upper-qty')?.value||0),enteredReceivedQty=Number(row.querySelector('.upper-received-qty')?.value||0),unit=upperArticleUnit(article),snapshot=upperUnitSnapshot(unit,enteredQty,enteredReceivedQty,Number(article?.rate)||0,shoeLamination&&article?.laminationUnit===true),qty=snapshot.internalAtomsQty,receivedQty=snapshot.internalReceivedAtomsQty,labourExpense=Number(row.querySelector('.upper-labour-expense')?.value||0);
+    const articleId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',materialId=articleOnly||shoeLamination?'':row.querySelector('.upper-material-search')?.dataset.selectedId||'',article=upperCategoryArticles().find(a=>String(a.id)===String(articleId)),material=shoeLamination?null:upperCategoryMaterials().find(m=>String(m.id)===String(materialId)&&workerMaterialAllowed(worker,'upper',m.id)),enteredQty=Number(row.querySelector('.upper-qty')?.value||0),enteredReceivedQty=Number(row.querySelector('.upper-received-qty')?.value||0),unit=upperArticleUnit(article),snapshot=upperUnitSnapshot(unit,enteredQty,enteredReceivedQty,workerArticleLabourRate(worker,'upper',article),shoeLamination&&article?.laminationUnit===true),qty=snapshot.internalAtomsQty,receivedQty=snapshot.internalReceivedAtomsQty,labourExpense=Number(row.querySelector('.upper-labour-expense')?.value||0);
     if((articleId&&!article)||(materialId&&!material)){invalid=true;return;}
     if(!qty&&!receivedQty&&!labourExpense)return;
     if(!Number.isSafeInteger(enteredQty)||!Number.isSafeInteger(enteredReceivedQty)||!Number.isSafeInteger(receivedQty)||!Number.isSafeInteger(qty)||qty<0||!Number.isInteger(receivedQty)||receivedQty<0||!Number.isFinite(labourExpense)||labourExpense<0||(!article&&!material)||(receivedQty>0&&!article)){invalid=true;return;}
     if(article&&!articleOnly&&!shoeLamination)articleNeed[article.id]=(articleNeed[article.id]||0)+qty;if(material)materialNeed[material.id]=(materialNeed[material.id]||0)+qty;
-    lines.push({articleId:article?.id||'',articleName:article?.name||'',articleStockBefore:Number(article?.stock)||0,materialId:material?.id||'',materialName:material?.name||'',materialStockBefore:Number(material?.stock)||0,...snapshot,qty,receivedQty,rate:Number(article?.rate)||0,labourExpense,lineTotal:labourExpense});
+    lines.push({articleId:article?.id||'',articleName:article?.name||'',articleStockBefore:Number(article?.stock)||0,materialId:material?.id||'',materialName:material?.name||'',materialStockBefore:Number(material?.stock)||0,...snapshot,qty,receivedQty,rate:workerArticleLabourRate(worker,'upper',article),labourExpense,lineTotal:labourExpense});
   });
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   if(invalid||!lines.length){toast('Enter whole non-negative Issued/Received quantities and select an Article for received work.');return null;}
@@ -13977,7 +14067,7 @@ function collectUpperDistributionDraft(){
 }
 
 async function createUpperDistribution(){if(window.__upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState();
+  const cloudSaved=await saveCriticalCloudState('upper');
   if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}
   updateUpperWorkflowSummary();
   showUpperVoucher(record);
@@ -14330,7 +14420,7 @@ function upperManClearOldPending(workerId,expectedQty){
     window.__upperManOldPendingClearing=true;
     const existed=Object.prototype.hasOwnProperty.call(settings,'upperManualPendingResets'),reset={id:uid(),date:new Date().toISOString(),workerId:String(workerId),workerName:account.workerName,workerCategory:'UPPER MANS',qty:0,action:'clearLegacy',recordIds:(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(workerId)).map(r=>String(r.id))};
     settings.upperManualPendingResets=[...(settings.upperManualPendingResets||[]),reset];
-    try{if(!await saveCriticalCloudState())throw new Error('Old Pending save failed');toast('Old Pending cleared for '+account.workerName+'.');}
+    try{if(!await saveCriticalCloudState('upper'))throw new Error('Old Pending save failed');toast('Old Pending cleared for '+account.workerName+'.');}
     catch(error){settings.upperManualPendingResets=(settings.upperManualPendingResets||[]).filter(r=>String(r.id)!==String(reset.id));if(!existed&&!settings.upperManualPendingResets.length)delete settings.upperManualPendingResets;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}toast('Old Pending was not cleared. Please try again.');}
     finally{window.__upperManOldPendingClearing=false;renderUpperPendingPageList();}
   });
@@ -14369,7 +14459,7 @@ async function editUpperPendingEntry(id){
   const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}
   const next=sign*qty;if(!confirm(`Change Pending entry ${old>=0?'+':''}${old} → ${next>=0?'+':''}${next} Atoms?\n\nOnly Pending balance will change.`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);rec.delta=next;rec.qty=Math.abs(next);rec.action=next<0?'minus':'add';rec.editedAt=new Date().toISOString();audit('Upper Pending Edited',`${rec.workerName}: ${old} → ${next} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved to D1. Original Pending was restored.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved to D1. Original Pending was restored.');return;}
   closeModal();render();toast('Pending entry updated');
 }
 async function deleteUpperPendingEntry(id){
@@ -14378,7 +14468,7 @@ async function deleteUpperPendingEntry(id){
   const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);
   if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change. No voucher, stock, weekly item or expense calculation will change.`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.upperPendingRecords=settings.upperPendingRecords.filter(p=>String(p.id)!==String(id));audit('Upper Pending Deleted',`${rec.workerName}: ${d} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved to D1. Original Pending was restored.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved to D1. Original Pending was restored.');return;}
   closeModal();render();toast('Pending entry deleted');
 }
 function buildUpperPendingPrintHtml(){
@@ -14433,7 +14523,7 @@ async function editUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  r.totalAmount=amount; r.editedAt=new Date().toISOString();
  audit('Upper Weekly Kharcha Edited',`${r.workerName||'Worker'}: ${old} → ${amount}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
  render();toast('Weekly kharcha updated');
 }
 async function deleteUpperWeeklyKharcha(id){
@@ -14442,7 +14532,7 @@ async function deleteUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.upperWeeklyLabourRecords=all.filter(x=>String(x.id)!==String(id));
  audit('Upper Weekly Kharcha Deleted',`${r.workerName||'Worker'} — ${Number(r.totalAmount)||0}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
  render();toast('Weekly kharcha deleted');
 }
 function pageUpperWeeklyLabourSummary(){
@@ -14514,7 +14604,7 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
 }
 function deleteUpperDistribution(id){
@@ -14528,7 +14618,7 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
+    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
   });
 }
@@ -14721,7 +14811,7 @@ async function saveProductionKharchaAdjustment(module,workerId,delta){
   if(productionKharchaSaving||!['upper','batam','finished'].includes(module)||!workers.some(w=>String(w.id)===String(workerId)&&workerDefaultArticleModules(w).includes(module))||!Number.isFinite(delta)||delta===0)return false;
   delta=Math.round(delta*100)/100;if(!delta||productionWorkerKharcha(module,workerId)+delta<-.001){toast('Subtraction cannot exceed current Weekly Kharcha.');return false;}
   productionKharchaSaving=true;const existed=Object.prototype.hasOwnProperty.call(settings,'productionKharchaAdjustments'),previous=(settings.productionKharchaAdjustments||[]).slice();
-  try{settings.productionKharchaAdjustments=[...previous,{id:uid(),module,workerId:String(workerId),date:new Date().toISOString(),delta}];if(!await saveCriticalCloudState())throw new Error('Kharcha was not saved');return true;}
+  try{settings.productionKharchaAdjustments=[...previous,{id:uid(),module,workerId:String(workerId),date:new Date().toISOString(),delta}];if(!await saveCriticalCloudState('adjustment'))throw new Error('Kharcha was not saved');return true;}
   catch(error){if(existed)settings.productionKharchaAdjustments=previous;else delete settings.productionKharchaAdjustments;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Kharcha was not saved. Previous amount restored.');return false;}
   finally{productionKharchaSaving=false;}
 }
@@ -14763,16 +14853,21 @@ function productionArticleChoice(worker,module){if(!worker)return null;const key
 function rememberProductionArticleChoice(workerId,module,id){const worker=workers.find(w=>String(w.id)===String(workerId));if(worker)productionArticleChoices.set(productionArticleChoiceKey(worker,module),String(id||''))}
 function workerDefaultArticleCard(worker,module){const name=(module==='upper'?upperProductionDefaultArticles(worker):workerDefaultArticles(worker,module)).map(a=>a.name).join(', ')||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Article: '+esc(name)+'">Default Article: '+esc(name)+'</div>'}
 const upperMaterialChoices=new Map();
-function upperDefaultMaterial(worker){if(workerProductionArticleOnly(worker?.category))return null;const id=worker?.upperDefaultMaterialId;return id?upperCategoryMaterials(worker?.category).find(m=>String(m.id)===String(id))||null:null}
+function upperDefaultMaterial(worker){if(workerProductionArticleOnly(worker?.category))return null;const id=workerDefaultMaterialIds(worker,'upper')[0];return id?upperCategoryMaterials(worker?.category).find(m=>String(m.id)===String(id))||null:null}
 function upperMaterialChoice(worker){if(!worker||workerProductionArticleOnly(worker.category))return null;const key=productionArticleChoiceKey(worker,'upper-material');return upperMaterialChoices.has(key)?upperCategoryMaterials(worker?.category).find(m=>String(m.id)===upperMaterialChoices.get(key))||null:upperDefaultMaterial(worker)}
 function rememberUpperMaterialChoice(id){const worker=workers.find(w=>String(w.id)===String(upperSelWorker));if(worker)upperMaterialChoices.set(productionArticleChoiceKey(worker,'upper-material'),String(id||''))}
-function upperDefaultMaterialCard(worker){const name=upperDefaultMaterial(worker)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
+function upperDefaultMaterialCard(worker){const name=workerSelectedDefaultMaterials(worker,'upper').map(m=>m.name).join(', ')||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
 const bfMaterialChoices=new Map();
 function bfMaterialList(module){return settings[module+'MansProductionMaterials']||[]}
-function bfDefaultMaterial(worker,module){const id=worker?.[module+'DefaultMaterialId'];return id?bfMaterialList(module).find(m=>String(m.id)===String(id))||null:null}
+function bfDefaultMaterial(worker,module){const id=workerDefaultMaterialIds(worker,module)[0];return id?bfMaterialList(module).find(m=>String(m.id)===String(id))||null:null}
 function bfMaterialChoice(worker,module){if(!worker)return null;const key=productionArticleChoiceKey(worker,module+'-material');return bfMaterialChoices.has(key)?bfMaterialList(module).find(m=>String(m.id)===bfMaterialChoices.get(key))||null:bfDefaultMaterial(worker,module)}
-function bfDefaultMaterialCard(worker,module){const name=bfDefaultMaterial(worker,module)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
-function bindBfMaterialChoice(module,prefix,selectedId){const input=document.getElementById(prefix+'DistMaterial'),workerInput=document.getElementById(prefix+'DistWorker');const workerId=()=>workerInput?.value||selectedId;workerInput?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.delete(productionArticleChoiceKey(w,module+'-material'));if(input)input.value=bfDefaultMaterial(w,module)?.id||'';});input?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.set(productionArticleChoiceKey(w,module+'-material'),input.value);});}
+function bfDefaultMaterialCard(worker,module){const name=workerSelectedDefaultMaterials(worker,module).map(m=>m.name).join(', ')||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
+function bindBfMaterialChoice(module,prefix,selectedId){const input=document.getElementById(prefix+'DistMaterial'),workerInput=document.getElementById(prefix+'DistWorker');const workerId=()=>workerInput?.value||selectedId;workerInput?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.delete(productionArticleChoiceKey(w,module+'-material'));if(input){input.innerHTML='<option value="">Select Material</option>'+bfMaterialList(module).filter(m=>workerMaterialAllowed(w,module,m.id)).map(m=>'<option value="'+esc(m.id)+'">'+esc(m.name)+' &mdash; Stock '+(Number(m.stock)||0)+' Atoms</option>').join('');input.value=bfDefaultMaterial(w,module)?.id||'';}});input?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.set(productionArticleChoiceKey(w,module+'-material'),input.value);});}
+function workerArticleLabourRate(worker,module,article){const rate=worker?.articleLabourRates?.[module]?.[String(article?.id)];return workerEditorDefaultModules(worker).includes(module)&&rate!==undefined&&rate!==null&&rate!==''&&Number.isFinite(Number(rate))&&Number(rate)>=0?Number(rate):Number(article?.rate)||0;}
+function workerDefaultMaterialIds(worker,module){const ids=worker?.defaultMaterialLists?.[module];return Array.isArray(ids)?[...new Set(ids.map(String))]:(worker?.[module+'DefaultMaterialId']?[String(worker[module+'DefaultMaterialId'])]:[]);}
+function workerSelectedDefaultMaterials(worker,module){const list=module==='upper'?upperCategoryMaterials(worker?.category):bfMaterialList(module);return workerDefaultMaterialIds(worker,module).map(id=>list.find(m=>String(m.id)===id)).filter(Boolean);}
+function workerMaterialAllowed(worker,module,id){return !workerEditorDefaultModules(worker).includes(module)||workerDefaultMaterialIds(worker,module).includes(String(id));}
+function workerMaterialDefaultsMarkup(worker,module,ids){const list=module==='upper'?upperCategoryMaterials(worker?.category):bfMaterialList(module),options=[...list,...ids.filter(id=>!list.some(m=>String(m.id)===id)).map(id=>({id,name:'Unavailable material'}))];return '<fieldset data-worker-material-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Materials ('+module+')</legend>'+options.map(m=>'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" style="width:auto;" value="'+esc(m.id)+'" '+(ids.includes(String(m.id))?'checked':'')+'> '+esc(m.name||'')+'</label>').join('')+'<div style="font-size:12px;color:var(--muted);">Optional; vouchers can be saved without materials.</div></fieldset>';}
 function openWorkerModal(id,initialCategory=''){
   const w = id? workers.find(x=>x.id===id): null;
   let pendingPhoto = w? (w.photo||'') : '';
@@ -14808,14 +14903,18 @@ function openWorkerModal(id,initialCategory=''){
       <button class="btn ghost" id="wCancel">Cancel</button>
     </div>
   `);
+  const pendingMaterialLists=Object.fromEntries(['upper','batam','finished'].map(module=>[module,workerDefaultMaterialIds(w,module)]));
+  const refreshSelectedMaterials=category=>{document.querySelectorAll('[data-worker-material-module]').forEach(group=>pendingMaterialLists[group.dataset.workerMaterialModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value));const worker={...w,category},modules=workerEditorDefaultModules(worker);if(!modules.length)return false;document.getElementById('workerDefaultMaterial').innerHTML=modules.map(module=>workerMaterialDefaultsMarkup(worker,module,pendingMaterialLists[module])).join('');return true;};
   let pendingMaterial=String(w?.upperDefaultMaterialId||'');
-  const refreshWorkerMaterial=()=>{const current=document.getElementById('wDefaultMaterial');if(current)pendingMaterial=current.value;const category=document.getElementById('wCategory')?.value??w?.category??'',list=upperCategoryMaterials(category),missing=pendingMaterial&&!list.some(m=>String(m.id)===pendingMaterial);document.getElementById('workerDefaultMaterial').innerHTML=!workerProductionArticleOnly(category)&&upperWorkerEditorModules({...w,category}).includes('upper')?'<label>Default Material</label><select id="wDefaultMaterial"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(pendingMaterial)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===pendingMaterial?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>':'';};
+  const refreshWorkerMaterial=()=>{if(refreshSelectedMaterials(document.getElementById('wCategory')?.value??w?.category??initialCategory))return;const current=document.getElementById('wDefaultMaterial');if(current)pendingMaterial=current.value;const category=document.getElementById('wCategory')?.value??w?.category??'',list=upperCategoryMaterials(category),missing=pendingMaterial&&!list.some(m=>String(m.id)===pendingMaterial);document.getElementById('workerDefaultMaterial').innerHTML=!workerProductionArticleOnly(category)&&upperWorkerEditorModules({...w,category}).includes('upper')?'<label>Default Material</label><select id="wDefaultMaterial"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(pendingMaterial)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===pendingMaterial?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>':'';};
   refreshWorkerMaterial();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerMaterial);
   const pendingBfMaterials={batam:String(w?.batamDefaultMaterialId||''),finished:String(w?.finishedDefaultMaterialId||'')};
-  const refreshBfMaterials=()=>{document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerProductionArticleOnly(category)?[]:workerEditorDefaultModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
+  const refreshBfMaterials=()=>{if(workerEditorDefaultModules({...w,category:document.getElementById('wCategory')?.value??w?.category??initialCategory}).length){document.getElementById('workerBfDefaultMaterials').innerHTML='';return;}document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerProductionArticleOnly(category)?[]:workerEditorDefaultModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
   refreshBfMaterials();document.getElementById('wCategory')?.addEventListener('change',refreshBfMaterials);
+  const pendingRates=JSON.parse(JSON.stringify(w?.articleLabourRates||{}));
   const pendingDefaults=Object.fromEntries(['upper','batam','finished'].map(module=>[module,workerDefaultArticleIds(w,module)]));
-  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-default-module]').forEach(group=>{pendingDefaults[group.dataset.workerDefaultModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value);});const category=document.getElementById('wCategory')?.value??w?.category??'',modules=upperWorkerEditorModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=module==='upper'?upperCategoryArticles(category):workerDefaultArticleList(module),ids=pendingDefaults[module],options=[...list,...ids.filter(id=>!list.some(a=>String(a.id)===id)).map(id=>({id,name:'Unavailable article'}))];return '<fieldset data-worker-default-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Articles'+(modules.length>1?' ('+module+')':'')+'</legend>'+options.map(a=>'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" style="width:auto;" value="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>').join('')+'</fieldset>';}).join('');};
+  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-article-rate]').forEach(el=>{const module=el.dataset.workerRateModule;pendingRates[module]={...(pendingRates[module]||{}),[el.dataset.workerArticleRate]:el.value};});document.querySelectorAll('[data-worker-default-module]').forEach(group=>{pendingDefaults[group.dataset.workerDefaultModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value);});const category=document.getElementById('wCategory')?.value??w?.category??'',modules=upperWorkerEditorModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=module==='upper'?upperCategoryArticles(category):workerDefaultArticleList(module),ids=pendingDefaults[module],options=[...list,...ids.filter(id=>!list.some(a=>String(a.id)===id)).map(id=>({id,name:'Unavailable article'}))];return '<fieldset data-worker-default-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Articles'+(modules.length>1?' ('+module+')':'')+'</legend>'+options.map(a=>(workerEditorDefaultModules({...w,category}).includes(module)?'<span style="display:inline-flex;align-items:center;flex-wrap:wrap;">':'')+'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" data-worker-article-check style="width:auto;" value="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>'+(workerEditorDefaultModules({...w,category}).includes(module)?'<label data-worker-rate-label="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'':'hidden')+' style="display:'+(ids.includes(String(a.id))?'inline-flex':'none')+';gap:5px;align-items:center;margin-right:10px;">Labour Rate <input data-worker-article-rate="'+esc(a.id)+'" data-worker-rate-module="'+module+'" type="number" min="0" step="0.01" style="width:100px;display:inline-block;" value="'+esc(pendingRates[module]?.[String(a.id)]??workerArticleLabourRate({...w,category},module,a))+'"></label>':'')+(workerEditorDefaultModules({...w,category}).includes(module)?'</span>':'')).join('')+'</fieldset>';}).join('');};
+  document.getElementById('workerDefaultArticles').addEventListener('change',event=>{if(!event.target.matches('[data-worker-article-check]'))return;const group=event.target.closest('[data-worker-default-module]');group.querySelectorAll('[data-worker-rate-label]').forEach(label=>{if(label.dataset.workerRateLabel===event.target.value){label.hidden=!event.target.checked;label.style.display=event.target.checked?'inline-flex':'none';}});});
   refreshWorkerDefaults();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerDefaults);
   const applyWorkerCrop=async cropped=>{if(!cropped)return;try{pendingPhoto=await compressImageDataUrl(cropped,700,.78);const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview zoomable" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
   const cropWorkerPhoto=()=>{if(pendingPhoto)openImageCropper(pendingPhoto,applyWorkerCrop);else{const file=document.getElementById('wPhoto').files?.[0];if(file)openImageCropper(file,applyWorkerCrop);else toast('پہلے Worker کی تصویر منتخب کریں');}};
@@ -14861,15 +14960,20 @@ function openWorkerModal(id,initialCategory=''){
     const phoneEl=document.getElementById('wPhone');
     const whatsappEl=document.getElementById('wWhatsapp');
     const category=categoryEl ? categoryEl.value : (w?.category||initialCategory);
-    const phone=phoneEl ? phoneEl.value.trim() : '';
-    const whatsapp=whatsappEl ? whatsappEl.value.trim() : '';
+    const phone=phoneEl ? phoneEl.value.trim() : (workerEditorDefaultModules({...w,category}).length?w?.phone||'':'');
+    const whatsapp=whatsappEl ? whatsappEl.value.trim() : (workerEditorDefaultModules({...w,category}).length?w?.whatsapp||'':'');
     if(!name){ toast('Please enter a name'); return; }
-    const customFields = {};
+    const customFields = workerEditorDefaultModules({...w,category}).length?{...(w?.customFields||{})}:{};
     document.querySelectorAll('.wCustomField').forEach(inp=>{ customFields[inp.dataset.colid] = inp.value.trim(); });
     const defaultArticleUpdates={};let invalidDefault=false;document.querySelectorAll('[data-worker-default-module]').forEach(group=>{const module=group.dataset.workerDefaultModule,ids=[...group.querySelectorAll('input:checked')].map(el=>el.value),old=workerDefaultArticleIds(w,module);if(ids.some(id=>!old.includes(id)&&!workerDefaultArticleList(module).some(a=>String(a.id)===id)))invalidDefault=true;if(ids.length!==old.length||ids.some(id=>!old.includes(id)))defaultArticleUpdates[module]=ids;});if(invalidDefault){toast('Select valid Default Articles');return;}
     const materialSelect=document.getElementById('wDefaultMaterial'),materialValue=materialSelect?.value||'',materialChanged=!!materialSelect&&materialValue!==String(w?.upperDefaultMaterialId||'');
     if(materialChanged&&materialValue&&!(settings.upperMaterials||[]).some(m=>String(m.id)===materialValue)){toast('Select a valid Default Material');return;}
     const bfMaterialUpdates={};let invalidBfMaterial=false;document.querySelectorAll('[data-bf-default-material]').forEach(el=>{const module=el.dataset.bfDefaultMaterial,value=el.value,key=module+'DefaultMaterialId';if(value!==String(w?.[key]||'')){if(value&&!bfMaterialList(module).some(m=>String(m.id)===value))invalidBfMaterial=true;else bfMaterialUpdates[key]=value;}});if(invalidBfMaterial){toast('Select a valid Default Material');return;}
+    const rateUpdates=JSON.parse(JSON.stringify(w?.articleLabourRates||{}));let invalidRate=false;
+    document.querySelectorAll('[data-worker-default-module]').forEach(group=>{const module=group.dataset.workerDefaultModule;group.querySelectorAll('[data-worker-article-check]:checked').forEach(box=>{const input=[...group.querySelectorAll('[data-worker-article-rate]')].find(el=>el.dataset.workerArticleRate===box.value);if(!input)return;const rate=Number(input.value);if(!input.value.trim()||!Number.isFinite(rate)||rate<0)invalidRate=true;else rateUpdates[module]={...(rateUpdates[module]||{}),[box.value]:rate};});});
+    if(invalidRate){toast('Enter a non-negative Labour Rate for each selected article');return;}
+    const materialListUpdates={};let invalidMaterialList=false;document.querySelectorAll('[data-worker-material-module]').forEach(group=>{const module=group.dataset.workerMaterialModule,ids=[...group.querySelectorAll('input:checked')].map(el=>el.value),old=workerDefaultMaterialIds(w,module),list=module==='upper'?upperCategoryMaterials(category):bfMaterialList(module);if(ids.some(id=>!old.includes(id)&&!list.some(m=>String(m.id)===id)))invalidMaterialList=true;if(ids.length!==old.length||ids.some(id=>!old.includes(id)))materialListUpdates[module]=ids;});
+    if(invalidMaterialList){toast('Select valid Default Materials');return;}
     const beforeWorkerSave=captureCloudState();
     if(saveBtn) saveBtn.disabled=true;
     if(w){ w.name=name; w.category=category; w.phone=phone; w.whatsapp=whatsapp; w.photo=pendingPhoto; w.customFields=customFields; }
@@ -14877,15 +14981,20 @@ function openWorkerModal(id,initialCategory=''){
     if(Object.keys(defaultArticleUpdates).length){const target=w||workers[workers.length-1];target.defaultArticleLists={...(target.defaultArticleLists||{}),...defaultArticleUpdates};}
     if(materialChanged)(w||workers[workers.length-1]).upperDefaultMaterialId=materialValue;
     Object.assign(w||workers[workers.length-1],bfMaterialUpdates);
-    const workerSaved=await saveCriticalCloudState();
+    const defaultsTarget=w||workers[workers.length-1];if(document.querySelector('[data-worker-article-rate]'))defaultsTarget.articleLabourRates=rateUpdates;
+    if(Object.keys(materialListUpdates).length){defaultsTarget.defaultMaterialLists={...(defaultsTarget.defaultMaterialLists||{}),...materialListUpdates};Object.entries(materialListUpdates).forEach(([module,ids])=>{defaultsTarget[module+'DefaultMaterialId']=ids[0]||'';});}
+    // Worker and audit must commit or roll back together, without a second PUT.
+    auditLog.push({id:uid(), date:new Date().toISOString(), action:w?'Worker Updated':'Worker Created', details:String(name||'')});
+    if(auditLog.length>500) auditLog=auditLog.slice(-500);
+    const workerSaved=await saveCriticalCloudState('worker');
     if(!workerSaved){
       applyCloudState(beforeWorkerSave);
       if(saveBtn) saveBtn.disabled=false;
       toast('Worker could not be saved. Please try again.');
       return;
     }
-    const savedWorker=w||workers[workers.length-1];Object.keys(defaultArticleUpdates).forEach(module=>{productionDefaultSelections.delete(productionArticleChoiceKey(savedWorker,module));productionArticleChoices.delete(productionArticleChoiceKey(savedWorker,module));});
-    audit(w?'Worker Updated':'Worker Created',name); closeModal(); render(); toast('Saved successfully');
+    const savedWorker=w||workers[workers.length-1];Object.keys(materialListUpdates).forEach(module=>{if(module==='upper')upperMaterialChoices.delete(productionArticleChoiceKey(savedWorker,'upper-material'));else bfMaterialChoices.delete(productionArticleChoiceKey(savedWorker,module+'-material'));});Object.keys(defaultArticleUpdates).forEach(module=>{productionDefaultSelections.delete(productionArticleChoiceKey(savedWorker,module));productionArticleChoices.delete(productionArticleChoiceKey(savedWorker,module));});
+    closeModal(); render(); toast('Saved successfully');
   };
 }
 
@@ -15231,7 +15340,7 @@ function openPaymentModal(id,type){
   const s=shopkeepers.find(x=>x.id===id);if(!s)return;
   const label=type==='payment-in'?'Receive Payment':'Pay Shopkeeper';
   modal(`<h3>${label} — ${esc(s.name)}</h3><label>Amount</label><input id="payAmount" type="number" min="0.01" step="0.01"><label>Note (optional)</label><input id="payNote" placeholder="e.g. Cash received"><div class="modal-actions"><button class="btn ${type==='payment-in'?'green':'red'}" id="paySave">Save</button><button class="btn ghost" id="payCancel">Cancel</button></div>`);
-  document.getElementById('payCancel').onclick=closeModal;document.getElementById('paySave').onclick=()=>{const amount=parseFloat(document.getElementById('payAmount').value)||0;if(amount<=0){toast('Enter a valid amount');return;}s.ledger=s.ledger||[];s.ledger.push({id:uid(),date:new Date().toISOString(),type,amount,note:document.getElementById('payNote').value.trim()});persistAll();audit(type==='payment-in'?'Payment Received':'Payment Paid',`${s.name}: ${amount}`);closeModal();openKhata(id);};
+  document.getElementById('payCancel').onclick=closeModal;document.getElementById('paySave').onclick=async()=>{const amount=parseFloat(document.getElementById('payAmount').value)||0;if(amount<=0){toast('Enter a valid amount');return;}const before={shopkeepers:JSON.parse(JSON.stringify(shopkeepers)),auditLog:JSON.parse(JSON.stringify(auditLog))};s.ledger=s.ledger||[];s.ledger.push({id:uid(),date:new Date().toISOString(),type,amount,note:document.getElementById('payNote').value.trim()});audit(type==='payment-in'?'Payment Received':'Payment Paid',`${s.name}: ${amount}`);if(!await saveCriticalCloudState('payment')){shopkeepers=before.shopkeepers;auditLog=before.auditLog;await reconcileCloudAfterCriticalRollback();toast('Payment was not saved.');return;}closeModal();openKhata(id);};
 }
 
 /* ============ SALES BILLS ============ */
@@ -15260,15 +15369,16 @@ function openBillModal(){
   }
   modal(`<h3>Create Sales Bill</h3><div id="billFormRoot"></div>`);renderBillForm();
 }
-function createBill(lines){
+async function createBill(lines){
   const skId=window.__billSk||document.getElementById('billShopkeeper')?.value;const s=shopkeepers.find(x=>x.id===skId);if(!s){toast('Select a shopkeeper');return;}
   if(!lines.length){toast('Add at least one article');return;}
   const clean=lines.map(l=>{const a=getArticle(l.articleId);return {articleId:l.articleId,articleName:a?a.name:'',qty:parseInt(l.qty)||0,rate:parseFloat(l.rate)||0};});
   if(clean.some(l=>!getArticle(l.articleId)||l.qty<=0||l.rate<0)){toast('Check bill items');return;}
   const bad=clean.find(l=>getArticle(l.articleId).stock<l.qty);if(bad){toast(`Insufficient stock for ${bad.articleName}`);return;}
   const total=clean.reduce((sum,l)=>sum+l.qty*l.rate,0);const paid=Math.max(0,parseFloat(window.__billPaid??document.getElementById('billPaid').value)||0);if(paid>total){toast('Paid amount cannot exceed total');return;}
+  const before={articles:JSON.parse(JSON.stringify(articles)),bills:JSON.parse(JSON.stringify(bills)),auditLog:JSON.parse(JSON.stringify(auditLog)),nextBillNo:settings.nextBillNo};
   clean.forEach(l=>{const a=getArticle(l.articleId);a.stock-=l.qty;});
-  const bill={id:uid(),billNo:settings.nextBillNo||1001,date:new Date().toISOString(),shopkeeperId:s.id,shopkeeperName:s.name,lines:clean,total,paid,note:window.__billNote||''};settings.nextBillNo=(bill.billNo||1001)+1;bills.push(bill);persistAll();audit('Sales Bill Created',`Bill #${bill.billNo} — ${s.name} — ${total}`);delete window.__billSk;delete window.__billPaid;delete window.__billNote;closeModal();render();showBill(bill);toast('Bill created');
+  const bill={id:uid(),billNo:settings.nextBillNo||1001,date:new Date().toISOString(),shopkeeperId:s.id,shopkeeperName:s.name,lines:clean,total,paid,note:window.__billNote||''};settings.nextBillNo=(bill.billNo||1001)+1;bills.push(bill);audit('Sales Bill Created',`Bill #${bill.billNo} — ${s.name} — ${total}`);if(!await saveCriticalCloudState('salesBill')){articles=before.articles;bills=before.bills;auditLog=before.auditLog;settings.nextBillNo=before.nextBillNo;await reconcileCloudAfterCriticalRollback();toast('Bill was not saved.');return;}delete window.__billSk;delete window.__billPaid;delete window.__billNote;closeModal();render();showBill(bill);toast('Bill created');
 }
 function showBill(b){const s=shopkeepers.find(x=>x.id===b.shopkeeperId);modal(`<h3>Bill #${b.billNo}</h3><div id="billPrintArea" class="receipt-paper" style="width:80mm;margin:auto;"><h3>${esc(settings.factoryName)}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub">Sales Bill</div><hr><div class="rline"><span>Bill #:</span><span>${b.billNo}</span></div><div class="rline"><span>Date:</span><span>${fmtDate(b.date)}</span></div><div class="rline"><span>Shopkeeper:</span><span>${esc(s?s.name:b.shopkeeperName)}</span></div><hr>${b.lines.map(l=>`<div style="margin:4px 0;"><div>${esc(l.articleName)}</div><div class="rline"><span>${l.qty} × ${money(l.rate)}</span><span>${money(l.qty*l.rate)}</span></div></div>`).join('')}<hr><div class="rline"><b>Total</b><b>${money(b.total)}</b></div><div class="rline"><span>Paid</span><span>${money(b.paid)}</span></div><div class="rline"><span>Balance</span><span>${money(b.total-b.paid)}</span></div>${b.note?`<hr><div class="footer">${esc(b.note)}</div>`:''}</div><div class="modal-actions"><button class="btn brass" id="printBill">🖨️ Print Bill</button><button class="btn ghost" id="closeBill">Close</button></div>`);document.getElementById('printBill').onclick=()=>printElement('billPrintArea');document.getElementById('closeBill').onclick=closeModal;}
 async function prepareSettledThermalPage(win,receipt,pageStyle){
@@ -15512,7 +15622,11 @@ function pageArchive(){
 
 /* ============ BACKUP ============ */
 function pageBackup(){
-  const versions = loadDB(DB_KEYS.backups, []).slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
+  if(cloudReady && !authoritativeBackupsLoaded && !backupLoadPromise && !backupLoadError){
+    loadAuthoritativeBackups().then(()=>{if(currentPage==='backup')render();})
+      .catch(()=>{if(currentPage==='backup')render();});
+  }
+  const versions = backupVersions.slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
   return `
     <h2 class="page-title">Backup</h2>
     <div class="card">
@@ -15528,9 +15642,9 @@ function pageBackup(){
       <h3 style="margin-top:0;">Versioned Backups (Automatic)</h3>
       <p style="font-size:13px;color:var(--muted);">A version is saved automatically once per day, and also right before any restore — so you can always step back.</p>
       <button class="btn ghost" id="btnSaveVersionNow" style="margin-bottom:12px;">Save a Version Now</button>
-      ${versions.length? `<table><thead><tr><th>Saved At</th><th>Action</th></tr></thead><tbody>
+      ${authoritativeBackupsLoaded && versions.length? `<table><thead><tr><th>Saved At</th><th>Action</th></tr></thead><tbody>
         ${versions.map(v=>`<tr><td>${fmtDate(v.timestamp)}</td><td class="actions-cell"><button class="btn ghost small" data-restoreversion="${v.id}">Restore</button></td></tr>`).join('')}
-      </tbody></table>` : `<div class="empty">No versions saved yet.</div>`}
+      </tbody></table>` : `<div class="empty">${authoritativeBackupsLoaded ? 'No versions saved yet.' : backupLoadError ? 'Backups could not be loaded.' : 'Loading backup versions...'}</div>`}
     </div>
   `;
 }
@@ -15559,20 +15673,23 @@ function doExport(){
 
 function doImport(file){
   const reader = new FileReader();
-  reader.onload = (e)=>{
+  reader.onload = async(e)=>{
+    if(!cloudReady)return;
+    setCriticalUiLock(true);
     try{
       const data = JSON.parse(e.target.result);
       if(!data.settings || !data.materials || !data.workers || !data.transactions) throw new Error('bad file');
-      saveBackupVersion(); // safety snapshot of current state before importing
+      if(!await saveBackupVersion().catch(()=>false)){toast('Safety backup could not be saved. Import cancelled.');return;}
+      const before=captureCloudState(); // rollback if runtime save fails
       settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials; workers = data.workers;
       transactions = data.transactions; stockMovements = data.stockMovements || []; articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
        articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
-      persistAll();
+      if(!await saveCriticalCloudState()){applyCloudState(before);await reconcileCloudAfterCriticalRollback();render();toast('Restore could not be saved to D1.');return;}
       toast('Backup restored successfully');
       render();
     }catch(err){
       toast('This is not a valid backup file');
-    }
+    }finally{setCriticalUiLock(false);}
   };
   reader.readAsText(file);
 }
@@ -19570,7 +19687,7 @@ async function saveUpperPending(){
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();
   settings.upperPendingRecords.push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});
   audit(delta<0?'Upper Pending Reduced':'Upper Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
   const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 
@@ -19637,7 +19754,7 @@ function batamMansProductionWorkers(){
 function getBatamMansProductionArticle(id){normalizeBatamMansState();return settings.batamMansProductionArticles.find(x=>String(x.id)===String(id));}
 function getBatamMansProductionMaterial(id){normalizeBatamMansState();return settings.batamMansProductionMaterials.find(x=>String(x.id)===String(id));}
 function bfArticleUnit(article){return article?.unit==='SET'?'SET':'ATOMS';}
-function bfUnitSnapshot(module,id){const a=(settings[module+'MansProductionArticles']||[]).find(a=>String(a.id)===String(id)),unit=bfArticleUnit(a);return {unit,rateSnapshot:Number(a?.rate)||0,pairsPerUnit:unit==='SET'?24:12};}
+function bfUnitSnapshot(module,id,workerId=null){const a=(settings[module+'MansProductionArticles']||[]).find(a=>String(a.id)===String(id)),unit=bfArticleUnit(a);return {unit,rateSnapshot:workerArticleLabourRate(workers.find(w=>String(w.id)===String(workerId)),module,a),pairsPerUnit:unit==='SET'?24:12};}
 function bfQuantityText(q,record){return String(q??'—')+(q===null||q===undefined?'':' '+bfArticleUnit(record));}
 function bfQuantityTotals(rows,field='reportedQty'){const units=new Map();rows.forEach(r=>{const q=Number(r[field])||0;if(!q)return;const unit=bfArticleUnit(r);units.set(unit,(units.get(unit)||0)+q);});return [...units].map(([unit,q])=>q+' '+unit).join(' + ')||'0 ATOMS';}
 function bfRefreshEntryUnits(module){const prefix=module==='batam'?'bm':'fm',primary=document.getElementById(prefix+'Article')?.closest('.bm-entry-row'),rows=[primary,...document.querySelectorAll('#'+prefix+'ExtraItemRows .'+prefix+'-extra-item-row')].filter(Boolean);rows.forEach(row=>{const select=row.querySelector('#'+prefix+'Article,[data-'+prefix+'-extra-article]'),input=row.querySelector('#'+prefix+'Reported,[data-'+prefix+'-extra-qty]');if(!select||!input)return;const snapshot=bfUnitSnapshot(module,select.value),label=input.parentElement.querySelector('label'),note=input.parentElement.querySelector('[data-bf-pairs]');input.placeholder=snapshot.unit;if(label)label.textContent='Quantity / '+snapshot.unit;if(note)note.textContent=(Math.max(0,Number(input.value)||0)*snapshot.pairsPerUnit)+' PAIR';});}
@@ -19654,7 +19771,7 @@ function openBatamMansProductionMaterialModal(id){
   modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} Production Material</h3><label>Material Photo (optional)</label><input type="file" id="bmpmPhoto" accept="image/*"><div id="bmpmPreview" style="margin-top:8px;max-width:180px;">${pending.photo?`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div><label>Material Name</label><input id="bmpmName" value="${esc(existing?.name||'')}"><label>Stock (Atoms)</label><input id="bmpmStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}"><div style="font-size:12px;color:var(--muted);margin-top:5px;">Production Material has stock only. No rate, price, amount or cost.</div><div class="modal-actions"><button class="btn brass" id="bmpmSave">Save</button><button class="btn ghost" id="bmpmCancel">Cancel</button></div>`);
   document.getElementById('bmpmPhoto').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{pending.photo=await compressImageFile(f,800,.78);document.getElementById('bmpmPreview').innerHTML=`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(_){toast('Could not read Production Material photo');}};
   document.getElementById('bmpmCancel').onclick=closeModal;
-  document.getElementById('bmpmSave').onclick=async()=>{const name=document.getElementById('bmpmName').value.trim(),stock=Math.max(0,parseInt(document.getElementById('bmpmStock').value,10)||0);if(!name){toast('Material Name is required');return;}const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();if(existing)Object.assign(existing,{name,stock,photo:pending.photo,updatedAt:now});else settings.batamMansProductionMaterials.push({id:uid(),name,stock,photo:pending.photo,createdAt:now,updatedAt:now});audit(existing?'Batam Production Material Edited':'Batam Production Material Added',name);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material was NOT saved.');return;}closeModal();render();toast('Production Material saved');};
+  document.getElementById('bmpmSave').onclick=async()=>{const name=document.getElementById('bmpmName').value.trim(),stock=Math.max(0,parseInt(document.getElementById('bmpmStock').value,10)||0);if(!name){toast('Material Name is required');return;}const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();if(existing)Object.assign(existing,{name,stock,photo:pending.photo,updatedAt:now});else settings.batamMansProductionMaterials.push({id:uid(),name,stock,photo:pending.photo,createdAt:now,updatedAt:now});audit(existing?'Batam Production Material Edited':'Batam Production Material Added',name);if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material was NOT saved.');return;}closeModal();render();toast('Production Material saved');};
 }
 function openBatamMansProductionArticlesList(){
   normalizeBatamMansState();const list=settings.batamMansProductionArticles;
@@ -19679,7 +19796,7 @@ async function deleteBatamProductionMaterial(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.batamMansProductionMaterials=settings.batamMansProductionMaterials.filter(x=>String(x.id)!==String(id));
  audit('Batam Production Material Deleted',`${m.name}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material delete was NOT saved.');return;}
  render();toast('Production Material deleted');
 }
 let batamMansDraftItems=[];
@@ -19881,8 +19998,8 @@ async function createBatamProductionVoucher(){
  for(const row of extraRows){const articleId=row.querySelector('[data-bm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-bm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole quantities.');return;}voucherDraftItems.push({id:uid(),articleId,reportedQty:qty});}
  if(!voucherDraftItems.length){toast('Select Production Article and enter positive whole quantities.');return;}
  const notes=document.getElementById('bmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('bmExpenseAmount')?.value)||0),pendingQty=Math.max(0,Number(document.getElementById('bmPendingQtyEntry')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=batamMansVoucherNo(),voucherId=uid();if(!Number.isInteger(pendingQty)){toast('Pending must be a positive whole Atom quantity.');return;}
- for(const dm of batamMansDraftMaterials){const mat=getBatamMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
- const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('batam',i.articleId),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
+ for(const dm of batamMansDraftMaterials){if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(batamMansSelectedWorker)),'batam',dm.materialId)){toast('Select a Default Material saved for this worker');return;}const mat=getBatamMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
+ const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('batam',i.articleId,batamMansSelectedWorker),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
  const materials=batamMansDraftMaterials.map(dm=>({id:uid(),materialId:dm.materialId,materialName:getBatamMansProductionMaterial(dm.materialId)?.name||'',qty:Number(dm.qty)}));
  materials.forEach(dm=>{const mat=getBatamMansProductionMaterial(dm.materialId);mat.stock=Number(mat.stock)-dm.qty;});
  const previousWorkerTotal=batamMansVouchers().filter(x=>String(x.workerId)===String(batamMansSelectedWorker)&&!x.deletedAt).reduce((s,x)=>s+(x.items||[]).reduce((q,i)=>q+(Number(i.reportedQty)||0),0),0);
@@ -19893,7 +20010,7 @@ async function createBatamProductionVoucher(){
  if(expenseAmount>0)batamMansExpenses().push({id:uid(),voucherId,workerId:String(v.workerId),workerName:batamMansWorkerName(v.workerId),amount:expenseAmount,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'});if(pendingQty>0){const w=workers.find(x=>String(x.id)===String(v.workerId))||{};batamPendingRecords().push({id:uid(),date:now,voucherId,workerId:String(v.workerId),workerName:batamMansWorkerName(v.workerId),workerCategory:String(w.category||''),qty:pendingQty,delta:pendingQty,action:'add',source:'productionVoucher'});}
  materials.forEach(dm=>batamMaterialDistributions().push({id:uid(),voucherId,workerId:v.workerId,materialId:dm.materialId,qty:dm.qty,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'}));
  audit('Batam Mans Production Voucher Created',`${voucherNo} — ${batamMansWorkerName(v.workerId)} — ${voucherTotal} Atoms`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher was not saved.');return;}
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher was not saved.');return;}
  batamMansDraftItems=[];batamMansDraftMaterials=[];render();openBatamVoucher(voucherId,false);toast('Production voucher saved as Pending Verification');
 }
 
@@ -19908,7 +20025,7 @@ async function saveEditBatamVoucher(id){
  v.expenseAmount=Math.max(0,Number(document.getElementById('bmEditExpense')?.value)||0);v.notes=document.getElementById('bmEditNotes')?.value.trim()||'';v.editedAt=new Date().toISOString();
  let ex=batamMansExpenses().find(x=>String(x.voucherId)===String(v.id));if(v.expenseAmount>0){if(ex){ex.amount=v.expenseAmount;ex.editedAt=v.editedAt;}else batamMansExpenses().push({id:uid(),voucherId:v.id,workerId:v.workerId,workerName:batamMansWorkerName(v.workerId),amount:v.expenseAmount,notes:`Voucher ${v.voucherNo}`,createdAt:v.editedAt,createdBy:'Admin'});}else if(ex)settings.batamMansExpenses=settings.batamMansExpenses.filter(x=>String(x.id)!==String(ex.id));
  audit('Batam Mans Voucher Edited',v.voucherNo);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher edit was NOT saved.');return;}closeModal();render();toast('Voucher updated');
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher edit was NOT saved.');return;}closeModal();render();toast('Voucher updated');
 }
 async function deleteBatamVoucher(id){
  const v=batamMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(!confirm(`Delete ${v.voucherNo}?\n\nIts linked Batam material distribution and expense will also be reversed/removed. Other modules will not be changed.`))return;
@@ -19919,7 +20036,7 @@ async function deleteBatamVoucher(id){
  settings.batamMansProduction=batamMansEntries().filter(x=>String(x.voucherId)!==String(v.id));
  settings.batamMansProductionVouchers=batamMansVouchers().filter(x=>String(x.id)!==String(v.id));
  audit('Batam Mans Voucher Deleted',v.voucherNo);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher delete was NOT saved.');return;}render();toast('Voucher deleted');
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher delete was NOT saved.');return;}render();toast('Voucher deleted');
 }
 function batamVerificationSlipHtml(vouchers){
  const flat=[];vouchers.forEach(v=>(v.items||[]).forEach(i=>flat.push({v,i})));const total=flat.reduce((s,x)=>s+(Number(x.i.reportedQty)||0),0);
@@ -19968,7 +20085,7 @@ async function saveBatamExpense(){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
  batamMansExpenses().push({id:uid(),workerId:String(w.id),workerName:String(w.name||''),amount,notes,createdAt:now,createdBy:'Admin'});
  audit('Batam Mans Expense Added',`${w.name} — ${upperMoney(amount)}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Expense was NOT saved.');return;}
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Expense was NOT saved.');return;}
  render();toast('Expense saved successfully');
 }
 
@@ -20002,6 +20119,7 @@ function batamMaterialWorkerAccounts(){
   const a=map.get(id),mid=String(r.materialId),name=getBatamMansProductionMaterial(mid)?.name||'Material',qty=Number(r.qty)||0;
   if(!a.materials.has(mid))a.materials.set(mid,{name,qty:0});a.materials.get(mid).qty+=qty;a.total+=qty;a.rows.push(r);
  });
+ (workers||[]).filter(w=>!w.archived&&workerEditorDefaultModules(w).includes('batam')).forEach(w=>{const query=String(batamMaterialSearch||'').trim().toLowerCase(),selected=workerSelectedDefaultMaterials(w,'batam').filter(m=>!query||String(w.name||'').toLowerCase().includes(query)||String(m.name||'').toLowerCase().includes(query));if(!selected.length)return;const id=String(w.id);if(!map.has(id))map.set(id,{workerId:id,workerName:w.name||'',materials:new Map(),total:0,rows:[]});const account=map.get(id);selected.forEach(m=>{if(!account.materials.has(String(m.id)))account.materials.set(String(m.id),{name:m.name,qty:0});});});
  return Array.from(map.values()).sort((a,b)=>a.workerName.localeCompare(b.workerName));
 }
 function openBatamMaterialAccount(workerId){
@@ -20032,7 +20150,7 @@ async function editBatamMaterialDistribution(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  m.stock=Number(m.stock)-diff;syncBatamVoucherMaterialFromDistribution(r,qty,false);r.qty=qty;r.editedAt=new Date().toISOString();
  audit('Batam Material Distribution Edited',`${batamMansWorkerName(r.workerId)} — ${m.name}: ${oldQty} → ${qty} ATOMS`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material edit was NOT saved.');return;}
  closeModal();render();toast('Material distribution updated');
 }
 async function deleteBatamMaterialDistribution(id){
@@ -20042,7 +20160,7 @@ async function deleteBatamMaterialDistribution(id){
  if(m)m.stock=Number(m.stock)+(Number(r.qty)||0);syncBatamVoucherMaterialFromDistribution(r,null,true);
  settings.batamMansMaterialDistributions=batamMaterialDistributions().filter(x=>String(x.id)!==String(id));
  audit('Batam Material Distribution Deleted',`${batamMansWorkerName(r.workerId)} — ${m?.name||'Material'} — ${Number(r.qty)||0} ATOMS`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material delete was NOT saved.');return;}
  closeModal();render();toast('Material distribution deleted');
 }
 async function clearBatamMaterialAccount(workerId){
@@ -20052,7 +20170,7 @@ async function clearBatamMaterialAccount(workerId){
  rows.forEach(r=>{const m=getBatamMansProductionMaterial(r.materialId);if(m)m.stock=Number(m.stock)+(Number(r.qty)||0);syncBatamVoucherMaterialFromDistribution(r,null,true);});
  settings.batamMansMaterialDistributions=batamMaterialDistributions().filter(r=>!ids.has(String(r.id)));
  audit('Batam Worker Material Account Cleared',`${batamMansWorkerName(workerId)} — ${rows.length} entries`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Account clear was NOT saved.');return;}
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Account clear was NOT saved.');return;}
  closeModal();render();toast('Worker material account cleared');
 }
 function batamMaterialAccountsReportHtml(){
@@ -20111,7 +20229,7 @@ function pageBatamMansMaterialAccounts(){
  <div class="card bm-material-entry-card">
    <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Batam Man above first</span>'}</div>
    <div class="bm-material-entry-row">
-    <div><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'batam')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${list.filter(m=>workerMaterialAllowed(selected,'batam',m.id)).map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'batam')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
     <div><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"></div>
     <div><label>Notes (Optional)</label><input id="bmDistNotes" placeholder="Notes"></div>
     <button class="btn brass" id="bmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
@@ -20125,16 +20243,17 @@ function pageBatamMansProductionList(){
 function batamMaterialDistributions(){normalizeBatamMansState();return settings.batamMansMaterialDistributions;}
 function pageBatamMansDistributeMaterial(){
  const ws=batamMansProductionWorkers(),ms=settings.batamMansProductionMaterials||[],rows=batamMaterialDistributions().slice().reverse();
- return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="bmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Batam Man</label><select id="bmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${ms.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="bmDistNotes" rows="2"></textarea><button class="btn brass" id="bmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(r.workerId))}</td><td>${esc(getBatamMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
+ return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="bmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Batam Man</label><select id="bmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option></select><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="bmDistNotes" rows="2"></textarea><button class="btn brass" id="bmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(r.workerId))}</td><td>${esc(getBatamMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
 }
 async function saveBatamMaterialDistribution(){
  const workerId=batamMaterialSelectedWorker||document.getElementById('bmDistWorker')?.value,materialId=document.getElementById('bmDistMaterial')?.value,qty=Number(document.getElementById('bmDistQty')?.value),notes=document.getElementById('bmDistNotes')?.value.trim()||'',m=getBatamMansProductionMaterial(materialId);
  if(!workerId||!m||!Number.isInteger(qty)||qty<=0){toast('Select Employee, Material and enter positive whole Atoms.');return;}
+ if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(workerId)),'batam',materialId)){toast('Select a Default Material saved for this worker');return;}
  if(Number(m.stock)<qty){toast('Not enough Production Material stock.');return;}
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
  m.stock=Number(m.stock)-qty;batamMaterialDistributions().push({id:uid(),workerId:String(workerId),materialId:String(materialId),qty,notes,createdAt:now,createdBy:'Admin'});
  audit('Batam Mans Material Distributed',`${batamMansWorkerName(workerId)} — ${m.name} — ${qty} Atoms`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material distribution was not saved.');return;}
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material distribution was not saved.');return;}
  render();toast('Material distribution saved successfully');
 }
 
@@ -20217,13 +20336,13 @@ async function saveBatamPending(){
  const current=getBatamPendingForWorker(workerId)?.qty||0,delta=action==='minus'?-qty:qty;if(delta<0&&qty>current){toast(`Current Pending is ${current} Atoms. You cannot minus ${qty}.`);return;}const next=current+delta;
  if(!confirm(`${worker.name}\nCurrent Pending: ${current} Atoms\n${delta>0?'Add':'Minus'}: ${qty} Atoms\nNew Pending: ${next} Atoms\n\nOnly Pending balance will change. Confirm?`))return;
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();batamPendingRecords().push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});audit(delta<0?'Batam Pending Reduced':'Batam Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved.');return;}render();toast(`${worker.name} Current Pending: ${next} ATOMS`);
+ if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved.');return;}render();toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 async function editBatamPendingEntry(id){
- const rec=batamPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const old=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0),sign=old<0?-1:1,raw=prompt(`Old Pending Entry: ${old>=0?'+':''}${old} Atoms\nEnter new whole Atoms for this entry:`,Math.abs(old));if(raw===null)return;const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}const next=sign*qty;if(!confirm(`Change Pending entry ${old>=0?'+':''}${old} → ${next>=0?'+':''}${next} Atoms?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);rec.delta=next;rec.qty=Math.abs(next);rec.action=next<0?'minus':'add';rec.editedAt=new Date().toISOString();audit('Batam Pending Edited',`${rec.workerName}: ${old} → ${next} ATOMS`);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved.');return;}closeModal();render();toast('Pending entry updated');
+ const rec=batamPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const old=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0),sign=old<0?-1:1,raw=prompt(`Old Pending Entry: ${old>=0?'+':''}${old} Atoms\nEnter new whole Atoms for this entry:`,Math.abs(old));if(raw===null)return;const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}const next=sign*qty;if(!confirm(`Change Pending entry ${old>=0?'+':''}${old} → ${next>=0?'+':''}${next} Atoms?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);rec.delta=next;rec.qty=Math.abs(next);rec.action=next<0?'minus':'add';rec.editedAt=new Date().toISOString();audit('Batam Pending Edited',`${rec.workerName}: ${old} → ${next} ATOMS`);if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved.');return;}closeModal();render();toast('Pending entry updated');
 }
 async function deleteBatamPendingEntry(id){
- const rec=batamPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.batamMansPendingRecords=settings.batamMansPendingRecords.filter(p=>String(p.id)!==String(id));audit('Batam Pending Deleted',`${rec.workerName}: ${d} ATOMS`);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved.');return;}closeModal();render();toast('Pending entry deleted');
+ const rec=batamPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.batamMansPendingRecords=settings.batamMansPendingRecords.filter(p=>String(p.id)!==String(id));audit('Batam Pending Deleted',`${rec.workerName}: ${d} ATOMS`);if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved.');return;}closeModal();render();toast('Pending entry deleted');
 }
 function pageBatamMansProduction(){
  normalizeBatamMansState();queueMicrotask(()=>bfRefreshEntryUnits('batam'));
@@ -20284,9 +20403,9 @@ async function saveBatamMansEntry(){
   const date=document.getElementById('bmDate')?.value,workerId=document.getElementById('bmWorker')?.value,articleId=document.getElementById('bmArticle')?.value,reportedQty=Number(document.getElementById('bmReported')?.value),notes=document.getElementById('bmNotes')?.value.trim()||'';
   if(!date||!workerId||!articleId||!Number.isInteger(reportedQty)||reportedQty<=0){toast('Select Date, Worker, Article and enter positive whole Pairs.');return;}
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
-  batamMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('batam',articleId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
+  batamMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('batam',articleId,workerId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
   audit('Batam Mans Production Reported',`${batamMansWorkerName(workerId)} — ${batamMansArticleName(articleId)} — ${reportedQty} Pairs`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
+  if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
   window.__batamMansDate=date;render();toast('Reported production saved as Pending Verification');
 }
 async function editBatamMansEntry(id){
@@ -20294,13 +20413,13 @@ async function editBatamMansEntry(id){
   const raw=prompt(`Reported Quantity for ${batamMansWorkerName(e.workerId)} / ${batamMansArticleName(e.articleId)}`,e.reportedQty);if(raw===null)return;const q=Number(raw);
   if(!Number.isInteger(q)||q<=0){toast('Enter positive whole Pairs only');return;}if(!confirm(`Change Reported Quantity ${e.reportedQty} → ${q} Pairs?`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),old=e.reportedQty;e.reportedQty=q;e.editedAt=new Date().toISOString();audit('Batam Mans Reported Entry Edited',`${old} → ${q} Pairs`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Edit was not saved. Original entry restored.');return;}render();
+  if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Edit was not saved. Original entry restored.');return;}render();
 }
 async function deleteBatamMansEntry(id){
   const e=batamMansEntries().find(x=>String(x.id)===String(id));if(!e||batamMansStatus(e)!=='Pending Verification')return;
   if(!confirm(`Delete Pending entry?\n${batamMansWorkerName(e.workerId)} — ${batamMansArticleName(e.articleId)} — ${e.reportedQty} Pairs`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.batamMansProduction=batamMansEntries().filter(x=>String(x.id)!==String(id));audit('Batam Mans Reported Entry Deleted',`${batamMansWorkerName(e.workerId)} — ${e.reportedQty} Pairs`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Delete was not saved. Entry restored.');return;}render();
+  if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Delete was not saved. Entry restored.');return;}render();
 }
 function batamMansSlipHtml(slip){
   const rows=slip.entryIds.map(id=>batamMansEntries().find(e=>String(e.id)===String(id))).filter(Boolean);
@@ -20311,7 +20430,7 @@ async function createBatamMansSlip(){
   if(!pending.length){toast('No Pending Verification entries for selected date.');return;}
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),slipNo=batamMansUniqueSlipNo(),id=uid(),now=new Date().toISOString();
   const slip={id,slipNo,date,entryIds:pending.map(e=>e.id),createdAt:now,createdBy:'Admin'};batamMansSlips().push(slip);pending.forEach(e=>e.slipId=id);audit('Batam Mans Verification Slip Created',`${slipNo} — ${pending.length} entries`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Slip was not saved.');return;}
+  if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Slip was not saved.');return;}
   modal(`${batamMansSlipHtml(slip)}<div class="modal-actions"><button class="btn brass" id="bmDoPrint">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('bmDoPrint').onclick=()=>printBatamMansHtml(batamMansSlipHtml(slip),'Batam Mans Verification Slip');
 }
 function pageBatamMansSlips(){
@@ -20332,7 +20451,7 @@ async function verifyBatamMansEntry(id){
   const diff=q-Number(e.reportedQty);const status=diff===0?'Verified':'Short / Not Fully Verified';
   if(!confirm(`Reported: ${e.reportedQty}\nVerified: ${q}\nDifference: ${diff}\nStatus: ${status}\n\nConfirm physical verification?`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);e.verifiedQty=q;e.difference=diff;e.status=status;e.verificationNotes=notes;e.verificationAt=new Date().toISOString();e.verifiedBy='Admin';audit('Batam Mans Production Verified',`${batamMansWorkerName(e.workerId)} — Reported ${e.reportedQty}, Verified ${q}, Difference ${diff}`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Verification was not saved. Entry remains Pending.');return;}render();toast(status);
+  if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Verification was not saved. Entry remains Pending.');return;}render();toast(status);
 }
 function batamMansFilteredRows(){
   const q=String(window.__bmSearch||'').toLowerCase(),status=window.__bmStatus||'all',worker=window.__bmWorker||'',article=window.__bmArticle||'',date=window.__bmHistoryDate||'';
@@ -20426,7 +20545,7 @@ function openFinishedMansProductionMaterialModal(id){
   modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} Production Material</h3><label>Material Photo (optional)</label><input type="file" id="fmpmPhoto" accept="image/*"><div id="fmpmPreview" style="margin-top:8px;max-width:180px;">${pending.photo?`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div><label>Material Name</label><input id="fmpmName" value="${esc(existing?.name||'')}"><label>Stock (Atoms)</label><input id="fmpmStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}"><div style="font-size:12px;color:var(--muted);margin-top:5px;">Production Material has stock only. No rate, price, amount or cost.</div><div class="modal-actions"><button class="btn brass" id="fmpmSave">Save</button><button class="btn ghost" id="fmpmCancel">Cancel</button></div>`);
   document.getElementById('fmpmPhoto').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{pending.photo=await compressImageFile(f,800,.78);document.getElementById('fmpmPreview').innerHTML=`<img src="${pending.photo}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(_){toast('Could not read Production Material photo');}};
   document.getElementById('fmpmCancel').onclick=closeModal;
-  document.getElementById('fmpmSave').onclick=async()=>{const name=document.getElementById('fmpmName').value.trim(),stock=Math.max(0,parseInt(document.getElementById('fmpmStock').value,10)||0);if(!name){toast('Material Name is required');return;}const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();if(existing)Object.assign(existing,{name,stock,photo:pending.photo,updatedAt:now});else settings.finishedMansProductionMaterials.push({id:uid(),name,stock,photo:pending.photo,createdAt:now,updatedAt:now});audit(existing?'Finished Production Material Edited':'Finished Production Material Added',name);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material was NOT saved.');return;}closeModal();render();toast('Production Material saved');};
+  document.getElementById('fmpmSave').onclick=async()=>{const name=document.getElementById('fmpmName').value.trim(),stock=Math.max(0,parseInt(document.getElementById('fmpmStock').value,10)||0);if(!name){toast('Material Name is required');return;}const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();if(existing)Object.assign(existing,{name,stock,photo:pending.photo,updatedAt:now});else settings.finishedMansProductionMaterials.push({id:uid(),name,stock,photo:pending.photo,createdAt:now,updatedAt:now});audit(existing?'Finished Production Material Edited':'Finished Production Material Added',name);if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material was NOT saved.');return;}closeModal();render();toast('Production Material saved');};
 }
 function openFinishedMansProductionArticlesList(){
   normalizeFinishedMansState();const list=settings.finishedMansProductionArticles;
@@ -20451,7 +20570,7 @@ async function deleteFinishedProductionMaterial(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.finishedMansProductionMaterials=settings.finishedMansProductionMaterials.filter(x=>String(x.id)!==String(id));
  audit('Finished Production Material Deleted',`${m.name}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Production Material delete was NOT saved.');return;}
  render();toast('Production Material deleted');
 }
 let finishedMansDraftItems=[];
@@ -20620,8 +20739,8 @@ async function createFinishedProductionVoucher(){
  for(const row of extraRows){const articleId=row.querySelector('[data-fm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-fm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole quantities.');return;}voucherDraftItems.push({id:uid(),articleId,reportedQty:qty});}
  if(!voucherDraftItems.length){toast('Select Production Article and enter positive whole quantities.');return;}
  const notes=document.getElementById('fmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('fmExpenseAmount')?.value)||0),pendingQty=Math.max(0,Number(document.getElementById('fmPendingQtyEntry')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=finishedMansVoucherNo(),voucherId=uid();if(!Number.isInteger(pendingQty)){toast('Pending must be a positive whole Atom quantity.');return;}
- for(const dm of finishedMansDraftMaterials){const mat=getFinishedMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
- const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('finished',i.articleId),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
+ for(const dm of finishedMansDraftMaterials){if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(finishedMansSelectedWorker)),'finished',dm.materialId)){toast('Select a Default Material saved for this worker');return;}const mat=getFinishedMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
+ const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('finished',i.articleId,finishedMansSelectedWorker),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
  const materials=finishedMansDraftMaterials.map(dm=>({id:uid(),materialId:dm.materialId,materialName:getFinishedMansProductionMaterial(dm.materialId)?.name||'',qty:Number(dm.qty)}));
  materials.forEach(dm=>{const mat=getFinishedMansProductionMaterial(dm.materialId);mat.stock=Number(mat.stock)-dm.qty;});
  const previousWorkerTotal=finishedMansVouchers().filter(x=>String(x.workerId)===String(finishedMansSelectedWorker)&&!x.deletedAt).reduce((s,x)=>s+(x.items||[]).reduce((q,i)=>q+(Number(i.reportedQty)||0),0),0);
@@ -20632,7 +20751,7 @@ async function createFinishedProductionVoucher(){
  if(expenseAmount>0)finishedMansExpenses().push({id:uid(),voucherId,workerId:String(v.workerId),workerName:finishedMansWorkerName(v.workerId),amount:expenseAmount,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'});if(pendingQty>0){const w=workers.find(x=>String(x.id)===String(v.workerId))||{};finishedPendingRecords().push({id:uid(),date:now,voucherId,workerId:String(v.workerId),workerName:finishedMansWorkerName(v.workerId),workerCategory:String(w.category||''),qty:pendingQty,delta:pendingQty,action:'add',source:'productionVoucher'});}
  materials.forEach(dm=>finishedMaterialDistributions().push({id:uid(),voucherId,workerId:v.workerId,materialId:dm.materialId,qty:dm.qty,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'}));
  audit('Finished Mans Production Voucher Created',`${voucherNo} — ${finishedMansWorkerName(v.workerId)} — ${voucherTotal} Atoms`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher was not saved.');return;}
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher was not saved.');return;}
  finishedMansDraftItems=[];finishedMansDraftMaterials=[];render();openFinishedVoucher(voucherId,false);toast('Production voucher saved as Pending Verification');
 }
 
@@ -20647,7 +20766,7 @@ async function saveEditFinishedVoucher(id){
  v.expenseAmount=Math.max(0,Number(document.getElementById('fmEditExpense')?.value)||0);v.notes=document.getElementById('fmEditNotes')?.value.trim()||'';v.editedAt=new Date().toISOString();
  let ex=finishedMansExpenses().find(x=>String(x.voucherId)===String(v.id));if(v.expenseAmount>0){if(ex){ex.amount=v.expenseAmount;ex.editedAt=v.editedAt;}else finishedMansExpenses().push({id:uid(),voucherId:v.id,workerId:v.workerId,workerName:finishedMansWorkerName(v.workerId),amount:v.expenseAmount,notes:`Voucher ${v.voucherNo}`,createdAt:v.editedAt,createdBy:'Admin'});}else if(ex)settings.finishedMansExpenses=settings.finishedMansExpenses.filter(x=>String(x.id)!==String(ex.id));
  audit('Finished Mans Voucher Edited',v.voucherNo);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher edit was NOT saved.');return;}closeModal();render();toast('Voucher updated');
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher edit was NOT saved.');return;}closeModal();render();toast('Voucher updated');
 }
 async function deleteFinishedVoucher(id){
  const v=finishedMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(!confirm(`Delete ${v.voucherNo}?\n\nIts linked Finished material distribution and expense will also be reversed/removed. Other modules will not be changed.`))return;
@@ -20658,7 +20777,7 @@ async function deleteFinishedVoucher(id){
  settings.finishedMansProduction=finishedMansEntries().filter(x=>String(x.voucherId)!==String(v.id));
  settings.finishedMansProductionVouchers=finishedMansVouchers().filter(x=>String(x.id)!==String(v.id));
  audit('Finished Mans Voucher Deleted',v.voucherNo);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher delete was NOT saved.');return;}render();toast('Voucher deleted');
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher delete was NOT saved.');return;}render();toast('Voucher deleted');
 }
 function finishedVerificationSlipHtml(vouchers){
  const flat=[];vouchers.forEach(v=>(v.items||[]).forEach(i=>flat.push({v,i})));const total=flat.reduce((s,x)=>s+(Number(x.i.reportedQty)||0),0);
@@ -20684,7 +20803,7 @@ async function saveFinishedExpense(){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
  finishedMansExpenses().push({id:uid(),workerId:String(w.id),workerName:String(w.name||''),amount,notes,createdAt:now,createdBy:'Admin'});
  audit('Finished Mans Expense Added',`${w.name} — ${upperMoney(amount)}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Expense was NOT saved.');return;}
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Expense was NOT saved.');return;}
  render();toast('Expense saved successfully');
 }
 
@@ -20718,6 +20837,7 @@ function finishedMaterialWorkerAccounts(){
   const a=map.get(id),mid=String(r.materialId),name=getFinishedMansProductionMaterial(mid)?.name||'Material',qty=Number(r.qty)||0;
   if(!a.materials.has(mid))a.materials.set(mid,{name,qty:0});a.materials.get(mid).qty+=qty;a.total+=qty;a.rows.push(r);
  });
+ (workers||[]).filter(w=>!w.archived&&workerEditorDefaultModules(w).includes('finished')).forEach(w=>{const query=String(finishedMaterialSearch||'').trim().toLowerCase(),selected=workerSelectedDefaultMaterials(w,'finished').filter(m=>!query||String(w.name||'').toLowerCase().includes(query)||String(m.name||'').toLowerCase().includes(query));if(!selected.length)return;const id=String(w.id);if(!map.has(id))map.set(id,{workerId:id,workerName:w.name||'',materials:new Map(),total:0,rows:[]});const account=map.get(id);selected.forEach(m=>{if(!account.materials.has(String(m.id)))account.materials.set(String(m.id),{name:m.name,qty:0});});});
  return Array.from(map.values()).sort((a,b)=>a.workerName.localeCompare(b.workerName));
 }
 function openFinishedMaterialAccount(workerId){
@@ -20748,7 +20868,7 @@ async function editFinishedMaterialDistribution(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  m.stock=Number(m.stock)-diff;syncFinishedVoucherMaterialFromDistribution(r,qty,false);r.qty=qty;r.editedAt=new Date().toISOString();
  audit('Finished Material Distribution Edited',`${finishedMansWorkerName(r.workerId)} — ${m.name}: ${oldQty} → ${qty} ATOMS`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material edit was NOT saved.');return;}
  closeModal();render();toast('Material distribution updated');
 }
 async function deleteFinishedMaterialDistribution(id){
@@ -20758,7 +20878,7 @@ async function deleteFinishedMaterialDistribution(id){
  if(m)m.stock=Number(m.stock)+(Number(r.qty)||0);syncFinishedVoucherMaterialFromDistribution(r,null,true);
  settings.finishedMansMaterialDistributions=finishedMaterialDistributions().filter(x=>String(x.id)!==String(id));
  audit('Finished Material Distribution Deleted',`${finishedMansWorkerName(r.workerId)} — ${m?.name||'Material'} — ${Number(r.qty)||0} ATOMS`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material delete was NOT saved.');return;}
  closeModal();render();toast('Material distribution deleted');
 }
 async function clearFinishedMaterialAccount(workerId){
@@ -20768,7 +20888,7 @@ async function clearFinishedMaterialAccount(workerId){
  rows.forEach(r=>{const m=getFinishedMansProductionMaterial(r.materialId);if(m)m.stock=Number(m.stock)+(Number(r.qty)||0);syncFinishedVoucherMaterialFromDistribution(r,null,true);});
  settings.finishedMansMaterialDistributions=finishedMaterialDistributions().filter(r=>!ids.has(String(r.id)));
  audit('Finished Worker Material Account Cleared',`${finishedMansWorkerName(workerId)} — ${rows.length} entries`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Account clear was NOT saved.');return;}
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Account clear was NOT saved.');return;}
  closeModal();render();toast('Worker material account cleared');
 }
 function finishedMaterialAccountsReportHtml(){
@@ -20827,7 +20947,7 @@ function pageFinishedMansMaterialAccounts(){
  <div class="card bm-material-entry-card">
    <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Finished Man above first</span>'}</div>
    <div class="bm-material-entry-row">
-    <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'finished')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.filter(m=>workerMaterialAllowed(selected,'finished',m.id)).map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'finished')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
     <div><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"></div>
     <div><label>Notes (Optional)</label><input id="fmDistNotes" placeholder="Notes"></div>
     <button class="btn brass" id="fmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
@@ -20841,16 +20961,17 @@ function pageFinishedMansProductionList(){
 function finishedMaterialDistributions(){normalizeFinishedMansState();return settings.finishedMansMaterialDistributions;}
 function pageFinishedMansDistributeMaterial(){
  const ws=finishedMansProductionWorkers(),ms=settings.finishedMansProductionMaterials||[],rows=finishedMaterialDistributions().slice().reverse();
- return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="fmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Finished Man</label><select id="fmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${ms.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="fmDistNotes" rows="2"></textarea><button class="btn brass" id="fmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(r.workerId))}</td><td>${esc(getFinishedMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
+ return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="fmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Finished Man</label><select id="fmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option></select><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="fmDistNotes" rows="2"></textarea><button class="btn brass" id="fmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(r.workerId))}</td><td>${esc(getFinishedMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
 }
 async function saveFinishedMaterialDistribution(){
  const workerId=finishedMaterialSelectedWorker||document.getElementById('fmDistWorker')?.value,materialId=document.getElementById('fmDistMaterial')?.value,qty=Number(document.getElementById('fmDistQty')?.value),notes=document.getElementById('fmDistNotes')?.value.trim()||'',m=getFinishedMansProductionMaterial(materialId);
  if(!workerId||!m||!Number.isInteger(qty)||qty<=0){toast('Select Employee, Material and enter positive whole Atoms.');return;}
+ if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(workerId)),'finished',materialId)){toast('Select a Default Material saved for this worker');return;}
  if(Number(m.stock)<qty){toast('Not enough Production Material stock.');return;}
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
  m.stock=Number(m.stock)-qty;finishedMaterialDistributions().push({id:uid(),workerId:String(workerId),materialId:String(materialId),qty,notes,createdAt:now,createdBy:'Admin'});
  audit('Finished Mans Material Distributed',`${finishedMansWorkerName(workerId)} — ${m.name} — ${qty} Atoms`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material distribution was not saved.');return;}
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Material distribution was not saved.');return;}
  render();toast('Material distribution saved successfully');
 }
 
@@ -20933,13 +21054,13 @@ async function saveFinishedPending(){
  const current=getFinishedPendingForWorker(workerId)?.qty||0,delta=action==='minus'?-qty:qty;if(delta<0&&qty>current){toast(`Current Pending is ${current} Atoms. You cannot minus ${qty}.`);return;}const next=current+delta;
  if(!confirm(`${worker.name}\nCurrent Pending: ${current} Atoms\n${delta>0?'Add':'Minus'}: ${qty} Atoms\nNew Pending: ${next} Atoms\n\nOnly Pending balance will change. Confirm?`))return;
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();finishedPendingRecords().push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});audit(delta<0?'Finished Pending Reduced':'Finished Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved.');return;}render();toast(`${worker.name} Current Pending: ${next} ATOMS`);
+ if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved.');return;}render();toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 async function editFinishedPendingEntry(id){
- const rec=finishedPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const old=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0),sign=old<0?-1:1,raw=prompt(`Old Pending Entry: ${old>=0?'+':''}${old} Atoms\nEnter new whole Atoms for this entry:`,Math.abs(old));if(raw===null)return;const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}const next=sign*qty;if(!confirm(`Change Pending entry ${old>=0?'+':''}${old} → ${next>=0?'+':''}${next} Atoms?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);rec.delta=next;rec.qty=Math.abs(next);rec.action=next<0?'minus':'add';rec.editedAt=new Date().toISOString();audit('Finished Pending Edited',`${rec.workerName}: ${old} → ${next} ATOMS`);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved.');return;}closeModal();render();toast('Pending entry updated');
+ const rec=finishedPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const old=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0),sign=old<0?-1:1,raw=prompt(`Old Pending Entry: ${old>=0?'+':''}${old} Atoms\nEnter new whole Atoms for this entry:`,Math.abs(old));if(raw===null)return;const qty=parseInt(raw,10);if(!Number.isInteger(qty)||qty<=0||String(qty)!==String(raw).trim()){toast('Enter positive whole Atoms only');return;}const next=sign*qty;if(!confirm(`Change Pending entry ${old>=0?'+':''}${old} → ${next>=0?'+':''}${next} Atoms?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);rec.delta=next;rec.qty=Math.abs(next);rec.action=next<0?'minus':'add';rec.editedAt=new Date().toISOString();audit('Finished Pending Edited',`${rec.workerName}: ${old} → ${next} ATOMS`);if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending edit was NOT saved.');return;}closeModal();render();toast('Pending entry updated');
 }
 async function deleteFinishedPendingEntry(id){
- const rec=finishedPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.finishedMansPendingRecords=settings.finishedMansPendingRecords.filter(p=>String(p.id)!==String(id));audit('Finished Pending Deleted',`${rec.workerName}: ${d} ATOMS`);if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved.');return;}closeModal();render();toast('Pending entry deleted');
+ const rec=finishedPendingRecords().find(p=>String(p.id)===String(id));if(!rec)return;const d=Number.isFinite(Number(rec.delta))?Number(rec.delta):(Number(rec.qty)||0);if(!confirm(`Delete this Pending entry (${d>=0?'+':''}${d} Atoms)?\n\nOnly Pending balance will change.`))return;const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.finishedMansPendingRecords=settings.finishedMansPendingRecords.filter(p=>String(p.id)!==String(id));audit('Finished Pending Deleted',`${rec.workerName}: ${d} ATOMS`);if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending delete was NOT saved.');return;}closeModal();render();toast('Pending entry deleted');
 }
 function pageFinishedMansProduction(){
  normalizeFinishedMansState();queueMicrotask(()=>bfRefreshEntryUnits('finished'));
@@ -21000,9 +21121,9 @@ async function saveFinishedMansEntry(){
   const date=document.getElementById('fmDate')?.value,workerId=document.getElementById('fmWorker')?.value,articleId=document.getElementById('fmArticle')?.value,reportedQty=Number(document.getElementById('fmReported')?.value),notes=document.getElementById('fmNotes')?.value.trim()||'';
   if(!date||!workerId||!articleId||!Number.isInteger(reportedQty)||reportedQty<=0){toast('Select Date, Worker, Article and enter positive whole Pairs.');return;}
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
-  finishedMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('finished',articleId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
+  finishedMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('finished',articleId,workerId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
   audit('Finished Mans Production Reported',`${finishedMansWorkerName(workerId)} — ${finishedMansArticleName(articleId)} — ${reportedQty} Pairs`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
+  if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
   window.__finishedMansDate=date;render();toast('Reported production saved as Pending Verification');
 }
 async function editFinishedMansEntry(id){
@@ -21010,13 +21131,13 @@ async function editFinishedMansEntry(id){
   const raw=prompt(`Reported Quantity for ${finishedMansWorkerName(e.workerId)} / ${finishedMansArticleName(e.articleId)}`,e.reportedQty);if(raw===null)return;const q=Number(raw);
   if(!Number.isInteger(q)||q<=0){toast('Enter positive whole Pairs only');return;}if(!confirm(`Change Reported Quantity ${e.reportedQty} → ${q} Pairs?`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),old=e.reportedQty;e.reportedQty=q;e.editedAt=new Date().toISOString();audit('Finished Mans Reported Entry Edited',`${old} → ${q} Pairs`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Edit was not saved. Original entry restored.');return;}render();
+  if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Edit was not saved. Original entry restored.');return;}render();
 }
 async function deleteFinishedMansEntry(id){
   const e=finishedMansEntries().find(x=>String(x.id)===String(id));if(!e||finishedMansStatus(e)!=='Pending Verification')return;
   if(!confirm(`Delete Pending entry?\n${finishedMansWorkerName(e.workerId)} — ${finishedMansArticleName(e.articleId)} — ${e.reportedQty} Pairs`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);settings.finishedMansProduction=finishedMansEntries().filter(x=>String(x.id)!==String(id));audit('Finished Mans Reported Entry Deleted',`${finishedMansWorkerName(e.workerId)} — ${e.reportedQty} Pairs`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Delete was not saved. Entry restored.');return;}render();
+  if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Delete was not saved. Entry restored.');return;}render();
 }
 function finishedMansSlipHtml(slip){
   const rows=slip.entryIds.map(id=>finishedMansEntries().find(e=>String(e.id)===String(id))).filter(Boolean);
@@ -21027,7 +21148,7 @@ async function createFinishedMansSlip(){
   if(!pending.length){toast('No Pending Verification entries for selected date.');return;}
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),slipNo=finishedMansUniqueSlipNo(),id=uid(),now=new Date().toISOString();
   const slip={id,slipNo,date,entryIds:pending.map(e=>e.id),createdAt:now,createdBy:'Admin'};finishedMansSlips().push(slip);pending.forEach(e=>e.slipId=id);audit('Finished Mans Verification Slip Created',`${slipNo} — ${pending.length} entries`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Slip was not saved.');return;}
+  if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Slip was not saved.');return;}
   modal(`${finishedMansSlipHtml(slip)}<div class="modal-actions"><button class="btn brass" id="fmDoPrint">Print</button><button class="btn ghost" onclick="closeModal()">Close</button></div>`);document.getElementById('fmDoPrint').onclick=()=>printFinishedMansHtml(finishedMansSlipHtml(slip),'Finished Mans Verification Slip');
 }
 function pageFinishedMansSlips(){
@@ -21048,7 +21169,7 @@ async function verifyFinishedMansEntry(id){
   const diff=q-Number(e.reportedQty);const status=diff===0?'Verified':'Short / Not Fully Verified';
   if(!confirm(`Reported: ${e.reportedQty}\nVerified: ${q}\nDifference: ${diff}\nStatus: ${status}\n\nConfirm physical verification?`))return;
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);e.verifiedQty=q;e.difference=diff;e.status=status;e.verificationNotes=notes;e.verificationAt=new Date().toISOString();e.verifiedBy='Admin';audit('Finished Mans Production Verified',`${finishedMansWorkerName(e.workerId)} — Reported ${e.reportedQty}, Verified ${q}, Difference ${diff}`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Verification was not saved. Entry remains Pending.');return;}render();toast(status);
+  if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Verification was not saved. Entry remains Pending.');return;}render();toast(status);
 }
 function finishedMansFilteredRows(){
   const q=String(window.__fmSearch||'').toLowerCase(),status=window.__fmStatus||'all',worker=window.__fmWorker||'',article=window.__fmArticle||'',date=window.__fmHistoryDate||'';
@@ -21166,13 +21287,15 @@ function attachPageHandlers(){
   });
   document.getElementById('btnManageColumns')?.addEventListener('click', openManageColumnsModal);
   document.querySelectorAll('[data-editwk]').forEach(b=>b.addEventListener('click', (e)=>{ e.stopPropagation(); openWorkerModal(b.dataset.editwk); }));
-  document.querySelectorAll('[data-delwk]').forEach(b=>b.addEventListener('click', (e)=>{
+  document.querySelectorAll('[data-delwk]').forEach(b=>b.addEventListener('click', async(e)=>{
     e.stopPropagation();
     if(confirm('Archive this worker? Their history stays intact and they can be restored anytime from Archive.')){
       const delId = b.dataset.delwk;
       const wk = workers.find(w=>w.id===delId);
-      if(wk) wk.archived = true;
-      persistAll();
+      if(!wk)return;
+      const before=JSON.parse(JSON.stringify(workers));
+      wk.archived=true;
+      if(!await saveCriticalCloudState('worker')){workers=before;await reconcileCloudAfterCriticalRollback();toast('Worker was not archived.');return;}
       if(currentPage==='workerHistory' && selectedWorkerId===delId){ goto('workers'); }
       else { render(); }
       toast('Worker archived');
@@ -21741,8 +21864,11 @@ function attachPageHandlers(){
     if(!f){ toast('Please select a file first'); return; }
     if(confirm('This will replace all current data. Continue?')) doImport(f);
   });
-  document.getElementById('btnSaveVersionNow')?.addEventListener('click', ()=>{
-    saveBackupVersion(); render(); toast('Version saved');
+  document.getElementById('btnSaveVersionNow')?.addEventListener('click', async(e)=>{
+    e.currentTarget.disabled=true;
+    try{await saveBackupVersion();render();toast('Version saved');}
+    catch(err){toast('Version could not be saved to D1.');}
+    finally{e.target.disabled=false;}
   });
   document.querySelectorAll('[data-restoreversion]').forEach(b=>b.addEventListener('click', ()=>restoreBackupVersion(b.dataset.restoreversion)));
 
@@ -21751,36 +21877,82 @@ function attachPageHandlers(){
     const mat = materials.find(m=>m.id===b.dataset.restoremat);
     if(mat){ mat.archived=false; persistAll(); render(); toast('Material restored'); }
   }));
-  document.querySelectorAll('[data-restorewk]').forEach(b=>b.addEventListener('click', ()=>{
+  document.querySelectorAll('[data-restorewk]').forEach(b=>b.addEventListener('click', async()=>{
     const wk = workers.find(w=>w.id===b.dataset.restorewk);
-    if(wk){ wk.archived=false; persistAll(); render(); toast('Worker restored'); }
+    if(wk){const before=JSON.parse(JSON.stringify(workers));wk.archived=false;if(!await saveCriticalCloudState('worker')){workers=before;await reconcileCloudAfterCriticalRollback();toast('Worker was not restored.');return;}render();toast('Worker restored');}
   }));
 }
 
 /* ============ VERSIONED BACKUPS (in addition to manual Export/Import) ============ */
-function saveBackupVersion(){
-  const data = {settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
-  backupVersions.push({id:uid(), timestamp:data.savedAt, data});
-  if(backupVersions.length>10) backupVersions = backupVersions.slice(backupVersions.length-10);
-  saveDB(DB_KEYS.backups, backupVersions);
+async function loadAuthoritativeBackups(force=false){
+  if(force && backupLoadPromise){await backupLoadPromise;}
+  if(backupLoadPromise)return backupLoadPromise;
+  if(authoritativeBackupsLoaded && !force)return backupVersions;
+  authoritativeBackupsLoaded=false;
+  backupLoadError=false;
+  backupLoadPromise=(async()=>{
+    try{
+      if(!cloudReady)throw new Error('D1 is not ready.');
+      const res=await fetch(BACKUP_CLOUD_API,{cache:'no-store'});
+      if(!res.ok)throw new Error('Backup load failed: '+res.status);
+      const payload=await res.json();
+      if(!Array.isArray(payload.backups))throw new Error('Invalid backups response.');
+      backupVersions=payload.backups;
+      authoritativeBackupsLoaded=true;
+      return backupVersions;
+    }catch(err){backupLoadError=true;throw err;}
+    finally{backupLoadPromise=null;}
+  })();
+  return backupLoadPromise;
 }
-function maybeAutoSnapshot(){
-  const todayStr = new Date().toISOString().slice(0,10);
-  const hasToday = backupVersions.some(v=>v.timestamp.slice(0,10)===todayStr);
-  if(!hasToday) saveBackupVersion();
+async function saveBackupVersion(automaticDay=null){
+  if(!cloudReady)throw new Error('D1 is not ready.');
+  const data={settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
+  const version=JSON.parse(JSON.stringify({id:uid(), timestamp:data.savedAt, data}));
+  authoritativeBackupsLoaded=false; // append makes cached references incomplete
+  const res=await fetch(BACKUP_CLOUD_API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,automaticDay})});
+  if(!res.ok)throw new Error('Backup save failed: '+res.status);
+  const payload=await res.json();
+  if(payload.ok!==true || typeof payload.saved!=='boolean')throw new Error('Invalid backup save response.');
+  if(payload.saved){
+    // A concurrent backup read may predate this append; refresh explicitly.
+    authoritativeBackupsLoaded=false;
+    backupLoadError=false;
+    if(currentPage==='backup')await loadAuthoritativeBackups(true);
+  }
+  return true;
 }
-function restoreBackupVersion(versionId){
-  if(!confirm('Restore this version? Your current data will first be saved as a new backup version so nothing is lost.')) return;
-  saveBackupVersion();
-  const v = backupVersions.find(x=>x.id===versionId);
-  if(!v){ toast('Version not found'); return; }
-  settings = v.data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = v.data.materials || []; workers = v.data.workers || [];
-  transactions = v.data.transactions || []; stockMovements = v.data.stockMovements || [];
-  articles = v.data.articles || []; shopkeepers = v.data.shopkeepers || []; bills = v.data.bills || []; auditLog = v.data.auditLog || [];
-  persistAll();
-  audit('Backup Version Restored','Version '+versionId+' restored');
-  toast('Backup version restored');
-  render();
+async function maybeAutoSnapshot(){
+  if(!cloudReady)return;
+  const todayStr=new Date().toISOString().slice(0,10);
+  const res=await fetch(BACKUP_CLOUD_API+'&day='+todayStr,{cache:'no-store'});
+  if(!res.ok)throw new Error('Backup metadata load failed: '+res.status);
+  const payload=await res.json();
+  if(typeof payload.hasDay!=='boolean')throw new Error('Invalid backup metadata response.');
+  if(!payload.hasDay)await saveBackupVersion(todayStr);
+}
+async function restoreBackupVersion(versionId){
+  if(!confirm('Restore this version? Your current data will first be saved as a new backup version so nothing is lost.'))return;
+  if(!cloudReady)return;
+  setCriticalUiLock(true);
+  try{
+    let data;
+    try{
+      const versions=await loadAuthoritativeBackups(true);
+      const version=versions.find(x=>x.id===versionId);
+      if(!version){toast('Version not found');return;}
+      data=JSON.parse(JSON.stringify(version.data));
+      await saveBackupVersion();
+    }catch(err){toast('Backups could not be read or the safety backup could not be saved. Restore cancelled.');return;}
+    const before=captureCloudState();
+    settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials || []; workers = data.workers || [];
+    transactions = data.transactions || []; stockMovements = data.stockMovements || [];
+    articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
+    audit('Backup Version Restored','Version '+versionId+' restored');
+    if(!await saveCriticalCloudState()){applyCloudState(before);await reconcileCloudAfterCriticalRollback();render();toast('Restore could not be saved to D1.');return;}
+    toast('Backup version restored');
+    render();
+  }finally{setCriticalUiLock(false);}
 }
 
 /* ============ INIT ============ */
@@ -21807,20 +21979,21 @@ document.getElementById('topLogoInput')?.addEventListener('change', async(e)=>{
 async function initApp(){
   // D1 is authoritative. Render immediately for fast startup, but temporarily
   // block mutations until the initial D1 hydration has completed.
-  const startupLocalSignature = JSON.stringify(getCurrentState());
+  const startupLocalSignature = JSON.stringify(getCurrentState(false));
   render();
   const app=document.getElementById('appBody');
   if(app){app.setAttribute('inert','');app.setAttribute('aria-busy','true');}
 
   try{
     const cloudStateApplied = await hydrateCloud(startupLocalSignature);
-    try{ maybeAutoSnapshot(); }catch(e){ console.error('Auto-snapshot skipped:', e); }
     if(cloudStateApplied) render();
   }finally{
     const currentApp=document.getElementById('appBody');
     if(currentApp && cloudReady){
       currentApp.removeAttribute('inert');
       currentApp.removeAttribute('aria-busy');
+      // Backup metadata/creation runs separately and never holds startup locked.
+      maybeAutoSnapshot().catch(e=>console.error('Auto-snapshot skipped:',e));
     }else if(currentApp){
       // Fail closed: if authoritative D1 could not be verified, do not allow
       // business-data edits that could exist only in RAM and disappear on close.
