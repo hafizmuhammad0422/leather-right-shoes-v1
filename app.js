@@ -1240,6 +1240,15 @@ function sidebarMenuChange(config,action,id,value){
 }
 function renderNav(){
   const container=document.getElementById('navItems'),config=sidebarMenuLoad(),activePage=wholeFactoryMaterialsRoute(currentPage)?'wholeFactoryMaterials':shoesPressManRoute(currentPage)?'shoesPressMan':homeLaserAndStitchManRoute(currentPage)?'homeLaserAndStitchMan':shoesLabelManRoute(currentPage)?'shoesLabelMan':shoesLaserManRoute(currentPage)?'shoesLaserMan':shoesLaminationShopsRoute(currentPage)?'shoesLaminationShops':workerProductionRoute(currentPage)?(workerCategoryCompareKey(workerProductionRoute(currentPage).category)==='shoes, magzi dori & batawa suppliers'?'shoesMagziDoriBatawaProduction':'distributeUpper'):currentPage;
+  // Keep Gas visible in its original main-menu slot without rewriting preferences.
+  const gasMenuEntry=config.entries.find(e=>e.id==='gas'&&e.kind==='item');
+  if(gasMenuEntry){
+    const gasIndex=config.entries.indexOf(gasMenuEntry);
+    config.entries.splice(gasIndex,1);
+    const previousIndex=config.entries.findIndex(e=>e.id==='shopkeepers');
+    const nextIndex=config.entries.findIndex(e=>e.id==='shoeBoxSuppliers');
+    config.entries.splice(previousIndex>=0?previousIndex+1:nextIndex>=0?nextIndex:NAV_KEYS.findIndex(([id])=>id==='gas'),0,{...gasMenuEntry,parent:null,label:NAV_KEYS.find(([id])=>id==='gas')[2]});
+  }
   const itemHtml=e=>{const route=NAV_KEYS.find(([id])=>id===e.id);return '<button class="nav-item" data-page="'+e.id+'">'+route[1]+' '+esc(e.label===null?navLabel(e.id):e.label)+'</button>';};
   container.innerHTML=config.entries.filter(e=>e.parent===null).map(e=>{
     if(e.kind==='item')return itemHtml(e);
@@ -1530,7 +1539,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('SHOES LAMINATION SHOPS WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity ATOMS',21,'left',String(line.qty));add('Rate',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -1737,27 +1746,56 @@ function openSupplierProductionProfile(workerId){
   saveButton.onclick=()=>{if(photoLoading)return;return saveSupplierProductionProfile(worker.id,{name:document.getElementById('supplierProfileName').value,photo:pendingPhoto,assignedIds:[...document.querySelectorAll('[data-supplier-profile-assign]:checked')].map(el=>el.dataset.supplierProfileAssign),defaultIds:[...document.querySelectorAll('[data-supplier-profile-default]:checked')].map(el=>el.dataset.supplierProfileDefault)});};
   document.getElementById('supplierProfileCancel').onclick=()=>{if(!supplierProductionProfileSaving)closeModal();};
 }
+function supplierProductionBillAccountState(workerId){const account=settings.supplierProductionBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.supplierProductionBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=upperWeeklyRecords().filter(record=>String(record.workerId)===String(worker.id)),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=slRoleNumber(line.qty+qty);lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{(record.lines||[]).forEach(saved=>{
+   const snapshot=saved.laminationUnit===true||saved.unit==='ATOMS'||saved.unit==='SET',hasEntered=present(saved.enteredReceivedQty),hasRaw=present(saved.receivedQty),unit=typeof saved.unit==='string'&&saved.unit.trim()?saved.unit:upperLineDisplay(saved).unit;
+   if(!hasEntered&&!hasRaw){if(Number(saved.qty)>0||Number(saved.enteredQty)>0)return;throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));}
+   if(snapshot&&unit==='SET'&&!hasEntered&&Number(saved.receivedQty)>0)throw Error('Missing saved received quantity in SET for '+name(saved.articleName));
+   const rawQty=snapshot&&hasEntered?saved.enteredReceivedQty:saved.receivedQty;if(!present(rawQty)||!Number.isFinite(Number(rawQty))||Number(rawQty)<0)throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));const qty=Number(rawQty);if(qty===0)return;
+   if(!saved.articleId)throw Error('Missing saved article/material association for '+name(saved.articleName||saved.materialName));
+   const article=(settings.upperArticles||[]).find(a=>String(a.id)===String(saved.articleId));if(!article)throw Error('Missing saved article/material: '+name(saved.articleName));
+   const rawRate=article?article.rate:(snapshot?saved.rateSnapshot:saved.rate);if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(saved.articleName||article?.name));
+   if(article&&unit!==upperArticleUnit(article))throw Error('Missing saved rate for received Unit '+unit+' of '+name(saved.articleName||article.name));
+   add(record,saved.articleId,saved.articleName||article?.name,unit,Number(rawRate),qty);
+  });});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(worker.id)),articles:settings.upperArticles||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.supplierProductionBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
+}
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker),lines=articles.map(a=>({articleId:a.id,articleName:a.name,rate:Number(a.rate),qty:0}));
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.supplierProductionBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.supplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.supplierBillEdit)));
   document.querySelectorAll('[data-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.supplierBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('supplierBillOpening').value)*100))/100;document.getElementById('supplierBillGrand').textContent=upperMoney(grand);document.getElementById('supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
   document.getElementById('supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('supplierBillOpening').value);
-  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value);
+  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value,document.getElementById('supplierBillPaid').value,received);
   document.getElementById('supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['supplierBillOpening','supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
 function openUpperArticleModal(id){normalizeUpperFeatureState();const category=upperProductionCategory;if(supplierProductionContextScope()&&!supplierProductionActiveWorker()){toast('Select a Supplier Card first.');return;}let existing=getUpperArticle(id);const articleOnly=workerProductionArticleOnly(existing?(existing.workerCategory||'UPPER MANS'):category);const shoeLamination=workerProductionShoeLamination(existing?.workerCategory||category),supplierAtoms=workerCategoryCompareKey(existing?.workerCategory||category)==='shoes lamination shops';let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} ${esc(upperCategoryLabel(category))} Article</h3>${articleOnly?'':`<label>Article Photo</label><input type="file" id="upperArticlePhoto" accept="image/*"><div id="upperArticlePhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div>`}<label>Article Name</label><input id="upperArticleName" value="${esc(existing?.name||'')}" placeholder="e.g. Formal Black Upper"><label>Unit${supplierAtoms?' <button type="button" class="btn ghost small" id="supplierArticleCustomUnits" style="float:right;">Custom Units</button>':''}</label><select id="upperArticleUnit">${supplierAtoms?supplierProductionArticleUnitOptions(existing):shoeLamination?`<option value="RULE" ${!existing||existing.unit==='RULE'?'selected':''}>RULE</option><option value="__custom__" ${existing&&existing.unit!=='RULE'?'selected':''}>Custom</option>`:`<option value="ATOMS">ATOMS</option><option value="SET" ${existing?.unit==='SET'?'selected':''}>SET</option>`}</select>${supplierAtoms?'<div id="supplierArticleCustomUnitsPanel" hidden style="margin:6px 0;"></div>':''}${shoeLamination&&!supplierAtoms?`<input id="upperArticleCustomUnit" aria-label="Custom unit" placeholder="Enter custom unit" value="${esc(existing?(existing.unit||'ATOMS')!== 'RULE'?(existing.unit||'ATOMS'):'':'')}" ${!existing||existing.unit==='RULE'?'hidden':''}>`:''}<label id="upperArticleRateLabel">Labour Rate Per ${supplierAtoms?esc(existing?.unit||'ATOMS'):shoeLamination?esc(existing?(existing.unit||'ATOMS'):'RULE'):articleOnly?'Item':existing?.unit==='SET'?'Set':'Atom'}</label><input id="upperArticleRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}" placeholder="e.g. 320">${articleOnly||shoeLamination?'':`<label>Stock (Atoms)</label><input id="upperArticleStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 150">`}<div style="font-size:12px;color:var(--muted);margin-top:5px;">${shoeLamination?'':'1 Atom = 12 pairs.'}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperArticle">Save</button><button type="button" class="btn ghost" id="cancelUpperArticle">Cancel</button></div>`);document.getElementById('upperArticlePhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperArticlePhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read '+upperCategoryLabel(category)+' Article photo');}});document.getElementById('upperArticleUnit').onchange=()=>{if(supplierAtoms){document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+document.getElementById('upperArticleUnit').value;return;}if(shoeLamination){const custom=document.getElementById('upperArticleCustomUnit');custom.hidden=document.getElementById('upperArticleUnit').value!=='__custom__';document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(custom.hidden?'RULE':custom.value);return;}document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(articleOnly?'Item':document.getElementById('upperArticleUnit').value==='SET'?'Set':'Atom');};document.getElementById('upperArticleCustomUnit')?.addEventListener('input',()=>document.getElementById('upperArticleUnit').onchange());document.getElementById('cancelUpperArticle').onclick=closeModal;document.getElementById('saveUpperArticle').onclick=async()=>{const button=document.getElementById('saveUpperArticle');if(button.disabled)return;const name=document.getElementById('upperArticleName')?.value.trim()||'';const unit=supplierAtoms?document.getElementById('upperArticleUnit').value:shoeLamination?(document.getElementById('upperArticleUnit').value==='RULE'?'RULE':document.getElementById('upperArticleCustomUnit').value):document.getElementById('upperArticleUnit').value==='SET'?'SET':'ATOMS',rate=Number(document.getElementById('upperArticleRate')?.value);const stock=articleOnly||shoeLamination?(existing?.stock??0):Math.max(0,parseInt(document.getElementById('upperArticleStock')?.value,10)||0);if(shoeLamination&&(!unit.trim()||unit.length>60)){toast('Enter a unit of 1–60 characters');return;}if(!name){toast('Article Name is required');return;}if(!Number.isFinite(rate)||rate<0){toast('Enter a valid Labour Rate Per '+(shoeLamination?unit:unit==='SET'?'Set':'Atom'));return;}const before=captureCloudState();button.disabled=true;settings=JSON.parse(JSON.stringify(before.settings));existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));const now=new Date().toISOString();settings.upperArticles=settings.upperArticles||[];if(existing){existing.name=name;existing.rate=rate;if(shoeLamination&&(existing.unit||'ATOMS')!==unit)existing.laminationUnit=true;existing.unit=unit;if(!articleOnly&&!shoeLamination)existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else {const newArticleId=uid();settings.upperArticles.push({id:newArticleId,workerCategory:category,name,rate,unit,...(shoeLamination?{laminationUnit:true}:{}),stock,photo:pendingPhoto,createdAt:now,updatedAt:now});if(supplierAtoms)settings.supplierProductionArticleSuppliers={...(settings.supplierProductionArticleSuppliers||{}),[newArticleId]:String(supplierProductionActiveWorker().id)};};if(!await saveUpperCategoryConfiguration(before)){existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));button.disabled=false;return;}closeModal();render();toast(upperCategoryLabel(category)+' Article saved');};if(supplierAtoms)bindSupplierProductionCustomUnits(existing);}
 function openWorkerModal(id,initialCategory=''){
@@ -2157,7 +2195,7 @@ function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.supplierProductionBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function upperCategoryLabel(category=upperProductionCategory){return workerCategoryCompareKey(category)==='shoes lamination shops'?'Shoes Lamination':workerCategoryCompareKey(category)==='upper mans'?'Upper Man':String(category||'').trim().replace(/\s+/g,' ');}
 function upperSummaryFilteredRecords(kind,forPrint=false){
@@ -2365,63 +2403,44 @@ function supplierProductionBillHistoryHtml(workerId){
   return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-supplier-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-supplier-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-supplier-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this supplier.</p>'}`;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole ATOMS quantities and article rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:'ATOMS',qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=unit!=='ATOMS'&&unit!=='SET';
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),previous=settings.supplierProductionBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:next};
-  try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Supplier bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.supplierProductionBilling,existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.supplierProductionBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-supplier-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.supplierProductionBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="supplierBillEditSave">Save</button><button class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('supplierBillEditPaid').value)*100))/100);document.getElementById('supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('supplierBillEditPaid').value);document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -2679,36 +2698,28 @@ function supplierProductionHasLinkedData(workerId){
   if(linked(settings)||linked(bills)||linked(transactions))return true;
   return !!settings.supplierProductionReportOpening?.suppliers?.[id]||!!settings.supplierProductionReportOpeningReceived?.suppliers?.[id]||!!settings.supplierProductionBilling?.accounts?.[id];
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,supplierProductionBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill history save failed');
+ }catch(error){settings={...settings,supplierProductionBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES LAMINATION SHOPS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES LAMINATION SHOPS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function setUpperRowSelection(row,kind,id){
   if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
@@ -3144,7 +3155,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('SHOES LASER MAN WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity ATOMS',21,'left',String(line.qty));add('Rate',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -3351,27 +3362,56 @@ function openSupplierProductionProfile(workerId){
   saveButton.onclick=()=>{if(photoLoading)return;return saveSupplierProductionProfile(worker.id,{name:document.getElementById('supplierProfileName').value,photo:pendingPhoto,assignedIds:[...document.querySelectorAll('[data-supplier-profile-assign]:checked')].map(el=>el.dataset.supplierProfileAssign),defaultIds:[...document.querySelectorAll('[data-supplier-profile-default]:checked')].map(el=>el.dataset.supplierProfileDefault)});};
   document.getElementById('supplierProfileCancel').onclick=()=>{if(!supplierProductionProfileSaving)closeModal();};
 }
+function supplierProductionBillAccountState(workerId){const account=settings.supplierProductionBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.supplierProductionBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=upperWeeklyRecords().filter(record=>String(record.workerId)===String(worker.id)),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{(record.lines||[]).forEach(saved=>{
+   const snapshot=saved.laminationUnit===true||saved.unit==='ATOMS'||saved.unit==='SET',hasEntered=present(saved.enteredReceivedQty),hasRaw=present(saved.receivedQty),unit=typeof saved.unit==='string'&&saved.unit.trim()?saved.unit:upperLineDisplay(saved).unit;
+   if(!hasEntered&&!hasRaw){if(Number(saved.qty)>0||Number(saved.enteredQty)>0)return;throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));}
+   if(snapshot&&unit==='SET'&&!hasEntered&&Number(saved.receivedQty)>0)throw Error('Missing saved received quantity in SET for '+name(saved.articleName));
+   const rawQty=snapshot&&hasEntered?saved.enteredReceivedQty:saved.receivedQty;if(!present(rawQty)||!Number.isFinite(Number(rawQty))||Number(rawQty)<0)throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));const qty=Number(rawQty);if(qty===0)return;
+   if(!saved.articleId)throw Error('Missing saved article/material association for '+name(saved.articleName||saved.materialName));
+   const article=(settings.upperArticles||[]).find(a=>String(a.id)===String(saved.articleId));if(!article)throw Error('Missing saved article/material: '+name(saved.articleName));
+   const rawRate=article?article.rate:(snapshot?saved.rateSnapshot:saved.rate);if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(saved.articleName||article?.name));
+   if(article&&unit!==upperArticleUnit(article))throw Error('Missing saved rate for received Unit '+unit+' of '+name(saved.articleName||article.name));
+   add(record,saved.articleId,saved.articleName||article?.name,unit,Number(rawRate),qty);
+  });});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(worker.id)),articles:settings.upperArticles||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.supplierProductionBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
+}
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker),lines=articles.map(a=>({articleId:a.id,articleName:a.name,rate:Number(a.rate),qty:0}));
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.supplierProductionBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.supplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.supplierBillEdit)));
   document.querySelectorAll('[data-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.supplierBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('supplierBillOpening').value)*100))/100;document.getElementById('supplierBillGrand').textContent=upperMoney(grand);document.getElementById('supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
   document.getElementById('supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('supplierBillOpening').value);
-  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value);
+  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value,document.getElementById('supplierBillPaid').value,received);
   document.getElementById('supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['supplierBillOpening','supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
 function openUpperArticleModal(id){normalizeUpperFeatureState();const category=upperProductionCategory;if(supplierProductionContextScope()&&!supplierProductionActiveWorker()){toast('Select a Supplier Card first.');return;}let existing=getUpperArticle(id);const articleOnly=workerProductionArticleOnly(existing?(existing.workerCategory||'UPPER MANS'):category);const shoeLaser=workerProductionShoeLaser(existing?.workerCategory||category),supplierAtoms=workerCategoryCompareKey(existing?.workerCategory||category)==='shoes laser man';let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} ${esc(upperCategoryLabel(category))} Article</h3>${articleOnly?'':`<label>Article Photo</label><input type="file" id="upperArticlePhoto" accept="image/*"><div id="upperArticlePhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div>`}<label>Article Name</label><input id="upperArticleName" value="${esc(existing?.name||'')}" placeholder="e.g. Formal Black Upper"><label>Unit${supplierAtoms?' <button type="button" class="btn ghost small" id="supplierArticleCustomUnits" style="float:right;">Custom Units</button>':''}</label><select id="upperArticleUnit">${supplierAtoms?supplierProductionArticleUnitOptions(existing):shoeLaser?`<option value="RULE" ${!existing||existing.unit==='RULE'?'selected':''}>RULE</option><option value="__custom__" ${existing&&existing.unit!=='RULE'?'selected':''}>Custom</option>`:`<option value="ATOMS">ATOMS</option><option value="SET" ${existing?.unit==='SET'?'selected':''}>SET</option>`}</select>${supplierAtoms?'<div id="supplierArticleCustomUnitsPanel" hidden style="margin:6px 0;"></div>':''}${shoeLaser&&!supplierAtoms?`<input id="upperArticleCustomUnit" aria-label="Custom unit" placeholder="Enter custom unit" value="${esc(existing?(existing.unit||'ATOMS')!== 'RULE'?(existing.unit||'ATOMS'):'':'')}" ${!existing||existing.unit==='RULE'?'hidden':''}>`:''}<label id="upperArticleRateLabel">Labour Rate Per ${supplierAtoms?esc(existing?.unit||'ATOMS'):shoeLaser?esc(existing?(existing.unit||'ATOMS'):'RULE'):articleOnly?'Item':existing?.unit==='SET'?'Set':'Atom'}</label><input id="upperArticleRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}" placeholder="e.g. 320">${articleOnly||shoeLaser?'':`<label>Stock (Atoms)</label><input id="upperArticleStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 150">`}<div style="font-size:12px;color:var(--muted);margin-top:5px;">${shoeLaser?'':'1 Atom = 12 pairs.'}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperArticle">Save</button><button type="button" class="btn ghost" id="cancelUpperArticle">Cancel</button></div>`);document.getElementById('upperArticlePhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperArticlePhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read '+upperCategoryLabel(category)+' Article photo');}});document.getElementById('upperArticleUnit').onchange=()=>{if(supplierAtoms){document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+document.getElementById('upperArticleUnit').value;return;}if(shoeLaser){const custom=document.getElementById('upperArticleCustomUnit');custom.hidden=document.getElementById('upperArticleUnit').value!=='__custom__';document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(custom.hidden?'RULE':custom.value);return;}document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(articleOnly?'Item':document.getElementById('upperArticleUnit').value==='SET'?'Set':'Atom');};document.getElementById('upperArticleCustomUnit')?.addEventListener('input',()=>document.getElementById('upperArticleUnit').onchange());document.getElementById('cancelUpperArticle').onclick=closeModal;document.getElementById('saveUpperArticle').onclick=async()=>{const button=document.getElementById('saveUpperArticle');if(button.disabled)return;const name=document.getElementById('upperArticleName')?.value.trim()||'';const unit=supplierAtoms?document.getElementById('upperArticleUnit').value:shoeLaser?(document.getElementById('upperArticleUnit').value==='RULE'?'RULE':document.getElementById('upperArticleCustomUnit').value):document.getElementById('upperArticleUnit').value==='SET'?'SET':'ATOMS',rate=Number(document.getElementById('upperArticleRate')?.value);const stock=articleOnly||shoeLaser?(existing?.stock??0):Math.max(0,parseInt(document.getElementById('upperArticleStock')?.value,10)||0);if(shoeLaser&&(!unit.trim()||unit.length>60)){toast('Enter a unit of 1–60 characters');return;}if(!name){toast('Article Name is required');return;}if(!Number.isFinite(rate)||rate<0){toast('Enter a valid Labour Rate Per '+(shoeLaser?unit:unit==='SET'?'Set':'Atom'));return;}const before=captureCloudState();button.disabled=true;settings=JSON.parse(JSON.stringify(before.settings));existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));const now=new Date().toISOString();settings.upperArticles=settings.upperArticles||[];if(existing){existing.name=name;existing.rate=rate;if(shoeLaser&&(existing.unit||'ATOMS')!==unit)existing.laminationUnit=true;existing.unit=unit;if(!articleOnly&&!shoeLaser)existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else {const newArticleId=uid();settings.upperArticles.push({id:newArticleId,workerCategory:category,name,rate,unit,...(shoeLaser?{laminationUnit:true}:{}),stock,photo:pendingPhoto,createdAt:now,updatedAt:now});if(supplierAtoms)settings.supplierProductionArticleSuppliers={...(settings.supplierProductionArticleSuppliers||{}),[newArticleId]:String(supplierProductionActiveWorker().id)};};if(!await saveUpperCategoryConfiguration(before)){existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));button.disabled=false;return;}closeModal();render();toast(upperCategoryLabel(category)+' Article saved');};if(supplierAtoms)bindSupplierProductionCustomUnits(existing);}
 function openWorkerModal(id,initialCategory=''){
@@ -3775,7 +3815,7 @@ function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.supplierProductionBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function upperCategoryLabel(category=upperProductionCategory){return workerCategoryCompareKey(category)==='shoes laser man'?'Shoes Laser':workerCategoryCompareKey(category)==='upper mans'?'Upper Man':String(category||'').trim().replace(/\s+/g,' ');}
 function upperSummaryFilteredRecords(kind,forPrint=false){
@@ -3977,63 +4017,44 @@ function supplierProductionBillHistoryHtml(workerId){
   return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-supplier-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-supplier-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-supplier-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this supplier.</p>'}`;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole ATOMS quantities and article rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:'ATOMS',qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=unit!=='ATOMS'&&unit!=='SET';
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),previous=settings.supplierProductionBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:next};
-  try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Supplier bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.supplierProductionBilling,existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.supplierProductionBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-supplier-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.supplierProductionBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="supplierBillEditSave">Save</button><button class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('supplierBillEditPaid').value)*100))/100);document.getElementById('supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('supplierBillEditPaid').value);document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -4290,36 +4311,28 @@ function supplierProductionHasLinkedData(workerId){
   if(linked(settings)||linked(bills)||linked(transactions))return true;
   return !!settings.supplierProductionReportOpening?.suppliers?.[id]||!!settings.supplierProductionReportOpeningReceived?.suppliers?.[id]||!!settings.supplierProductionBilling?.accounts?.[id];
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,supplierProductionBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill history save failed');
+ }catch(error){settings={...settings,supplierProductionBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES LASER MAN WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES LASER MAN WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function setUpperRowSelection(row,kind,id){
   if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
@@ -4591,86 +4604,89 @@ function supplierProductionBillHistoryHtml(workerId){
   return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-solebill-supplier-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-solebill-supplier-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-solebill-supplier-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this supplier.</p>'}`;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole article quantities and article rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:String(line.unit),qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=true;
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
+}
+function supplierProductionBillAccountState(workerId){const account=settings.shoeSoleSupplierBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.shoeSoleSupplierBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=(worker.purchases||[]).filter(record=>{const date=new Date(record.date);return date>=start&&date<end&&date.getDay()!==5;}),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{const rawQty=record.atoms??record.items??record.boxes;if(!present(rawQty))throw Error('Invalid/missing received quantity for '+name(record.productName));const qty=Number(rawQty);if(!Number.isFinite(qty)||qty<0)throw Error('Invalid/missing received quantity for '+name(record.productName));if(qty===0)return;
+  const article=(worker.products||[]).find(a=>String(a.id)===String(record.productId));if(!article)throw Error('Missing saved article/material: '+name(record.productName));
+  const productUnit=shoeSoleProductDisplayUnit(article),unit=record.unit==='Custom'?String(record.customUnit||productUnit):String(record.unit||productUnit);if(!unit.trim()||unit==='Unit unavailable')throw Error('Missing saved Unit for '+name(record.productName||article.name));
+  const rawRate=record.ratePerUnit??article.ratePerUnit;if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(record.productName||article.name));if(!present(record.ratePerUnit)&&unit!==productUnit)throw Error('Missing saved rate for received Unit '+unit+' of '+name(record.productName||article.name));
+  add(record,article.id,record.productName||article.name,unit,Number(rawRate),qty);});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:worker.purchases||[],articles:worker.products||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.shoeSoleSupplierBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
 }
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker);if(articles.some(a=>a.ratePerUnit==null)){toast('Save Rate Per Unit in each article before creating a bill.');return;}
-  const lines=articles.map(a=>({articleId:a.id,articleName:a.name,unit:shoeSoleProductDisplayUnit(a),rate:Number(a.ratePerUnit),qty:0}));
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.shoeSoleSupplierBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="soleBill_supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="soleBill_supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-solebill-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-solebill-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="soleBill_supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="soleBill_supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="soleBill_supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="soleBill_supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="soleBill_supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="soleBill_supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-solebill-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-solebill-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="soleBill_supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="soleBill_supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="soleBill_supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="soleBill_supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="soleBill_supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="soleBill_supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-solebill-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.shoeSoleSupplierBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.solebillSupplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-solebill-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.solebillSupplierBillEdit)));
   document.querySelectorAll('[data-solebill-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.solebillSupplierBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-solebill-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-solebill-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('soleBill_supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('soleBill_supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-solebill-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('soleBill_supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('soleBill_supplierBillOpening').value)*100))/100;document.getElementById('soleBill_supplierBillGrand').textContent=upperMoney(grand);document.getElementById('soleBill_supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('soleBill_supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('soleBill_supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-solebill-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
   document.getElementById('soleBill_supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('soleBill_supplierBillOpening').value);
-  document.getElementById('soleBill_supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('soleBill_supplierBillOpening').value);
+  document.getElementById('soleBill_supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('soleBill_supplierBillOpening').value,document.getElementById('soleBill_supplierBillPaid').value,received);
   document.getElementById('soleBill_supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['soleBill_supplierBillOpening','soleBill_supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter a quantity for at least one article.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'shoeSoleSupplierBilling'),previous=settings.shoeSoleSupplierBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['soleBill_supplierBillSaveOpening','soleBill_supplierBillCreate','soleBill_supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,shoeSoleSupplierBilling:next};
-  try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,shoeSoleSupplierBilling:previous};else delete settings.shoeSoleSupplierBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Supplier bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['soleBill_supplierBillSaveOpening','soleBill_supplierBillCreate','soleBill_supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='soleBill_supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.shoeSoleSupplierBilling,existed=Object.prototype.hasOwnProperty.call(settings,'shoeSoleSupplierBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.shoeSoleSupplierBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('soleBill_supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.shoeSoleSupplierBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,shoeSoleSupplierBilling:next};if(!await saveCriticalCloudState())throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,shoeSoleSupplierBilling:previous};else delete settings.shoeSoleSupplierBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('soleBill_supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.shoeSoleSupplierBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-solebill-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-solebill-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="soleBill_supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="soleBill_supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="soleBill_supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-solebill-supplier-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-solebill-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-solebill-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('soleBill_supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('soleBill_supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('soleBill_supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('soleBill_supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.shoeSoleSupplierBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="soleBill_supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="soleBill_supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="soleBill_supplierBillEditSave">Save</button><button class="btn ghost" id="soleBill_supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('soleBill_supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('soleBill_supplierBillEditPaid').value)*100))/100);document.getElementById('soleBill_supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('soleBill_supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('soleBill_supplierBillEditPaid').value);document.getElementById('soleBill_supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -4689,42 +4705,34 @@ function showSupplierProductionBill(bill){
   };
   document.getElementById('soleBill_supplierBillClose').onclick=()=>{closeModal();render();};
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.shoeSoleSupplierBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter a quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['soleBill_supplierBillEditSave','soleBill_supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,shoeSoleSupplierBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,shoeSoleSupplierBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['soleBill_supplierBillEditSave','soleBill_supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.shoeSoleSupplierBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('soleBill_supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.shoeSoleSupplierBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,shoeSoleSupplierBilling:next};if(!await saveCriticalCloudState())throw Error('Bill history save failed');
+ }catch(error){settings={...settings,shoeSoleSupplierBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('soleBill_supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.shoeSoleSupplierBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOE SOLE SUPPLIERS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOE SOLE SUPPLIERS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -4736,7 +4744,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('SHOE SOLE SUPPLIERS WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity '+line.unit,21,'left',String(line.qty));add('Rate Per Unit',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -5784,85 +5792,89 @@ function supplierProductionBillHistoryHtml(workerId){
   return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-wfm-supplier-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-wfm-supplier-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-wfm-supplier-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this supplier.</p>'}`;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole material quantities and material rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:String(line.unit),qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=true;
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
+}
+function supplierProductionBillAccountState(workerId){const account=settings.supplierProductionBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.supplierProductionBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=(worker.purchases||[]).filter(record=>{const date=new Date(record.date);return date>=start&&date<end&&date.getDay()!==5;}),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{const rawQty=record.atoms??record.items??record.boxes;if(!present(rawQty))throw Error('Invalid/missing received quantity for '+name(record.productName));const qty=Number(rawQty);if(!Number.isFinite(qty)||qty<0)throw Error('Invalid/missing received quantity for '+name(record.productName));if(qty===0)return;
+  const article=(worker.products||[]).find(a=>String(a.id)===String(record.productId));if(!article)throw Error('Missing saved article/material: '+name(record.productName));
+  const productUnit=shoeSoleProductDisplayUnit(article),unit=record.unit==='Custom'?String(record.customUnit||productUnit):String(record.unit||productUnit);if(!unit.trim()||unit==='Unit unavailable')throw Error('Missing saved Unit for '+name(record.productName||article.name));
+  const rawRate=record.ratePerUnit??article.ratePerUnit;if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(record.productName||article.name));if(!present(record.ratePerUnit)&&unit!==productUnit)throw Error('Missing saved rate for received Unit '+unit+' of '+name(record.productName||article.name));
+  add(record,article.id,record.productName||article.name,unit,Number(rawRate),qty);});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:worker.purchases||[],articles:worker.products||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.supplierProductionBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
 }
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker),lines=articles.map(a=>({articleId:a.id,articleName:a.name,unit:shoeSoleProductDisplayUnit(a),rate:Number(a.ratePerUnit),qty:0}));
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.supplierProductionBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="wfm_supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="wfm_supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Material Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-wfm-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-wfm-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved materials assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="wfm_supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="wfm_supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="wfm_supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="wfm_supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="wfm_supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="wfm_supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Material Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-wfm-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-wfm-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="wfm_supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="wfm_supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="wfm_supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="wfm_supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="wfm_supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="wfm_supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-wfm-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.wfmSupplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-wfm-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.wfmSupplierBillEdit)));
   document.querySelectorAll('[data-wfm-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.wfmSupplierBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-wfm-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-wfm-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('wfm_supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('wfm_supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-wfm-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('wfm_supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('wfm_supplierBillOpening').value)*100))/100;document.getElementById('wfm_supplierBillGrand').textContent=upperMoney(grand);document.getElementById('wfm_supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('wfm_supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('wfm_supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-wfm-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
   document.getElementById('wfm_supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('wfm_supplierBillOpening').value);
-  document.getElementById('wfm_supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('wfm_supplierBillOpening').value);
+  document.getElementById('wfm_supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('wfm_supplierBillOpening').value,document.getElementById('wfm_supplierBillPaid').value,received);
   document.getElementById('wfm_supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['wfm_supplierBillOpening','wfm_supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter a quantity for at least one material.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),previous=settings.supplierProductionBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['wfm_supplierBillSaveOpening','wfm_supplierBillCreate','wfm_supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:next};
-  try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Supplier bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['wfm_supplierBillSaveOpening','wfm_supplierBillCreate','wfm_supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='wfm_supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.supplierProductionBilling,existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.supplierProductionBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('wfm_supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('wfm_supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Material Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-wfm-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-wfm-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="wfm_supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="wfm_supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="wfm_supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-wfm-supplier-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-wfm-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-wfm-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('wfm_supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('wfm_supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('wfm_supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('wfm_supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.supplierProductionBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="wfm_supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="wfm_supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="wfm_supplierBillEditSave">Save</button><button class="btn ghost" id="wfm_supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('wfm_supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('wfm_supplierBillEditPaid').value)*100))/100);document.getElementById('wfm_supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('wfm_supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('wfm_supplierBillEditPaid').value);document.getElementById('wfm_supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -5881,42 +5893,34 @@ function showSupplierProductionBill(bill){
   };
   document.getElementById('wfm_supplierBillClose').onclick=()=>{closeModal();render();};
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill materials do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter a quantity for at least one material.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['wfm_supplierBillEditSave','wfm_supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,supplierProductionBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['wfm_supplierBillEditSave','wfm_supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('wfm_supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill history save failed');
+ }catch(error){settings={...settings,supplierProductionBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('wfm_supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.supplierProductionBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">WHOLE FACTORY MATERIALS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Material</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">WHOLE FACTORY MATERIALS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Material</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -5928,7 +5932,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('WHOLE FACTORY MATERIALS WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity '+line.unit,21,'left',String(line.qty));add('Rate Per Unit',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -6235,7 +6239,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('SHOES LABEL MAN WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity ATOMS',21,'left',String(line.qty));add('Rate',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -6442,27 +6446,56 @@ function openSupplierProductionProfile(workerId){
   saveButton.onclick=()=>{if(photoLoading)return;return saveSupplierProductionProfile(worker.id,{name:document.getElementById('supplierProfileName').value,photo:pendingPhoto,assignedIds:[...document.querySelectorAll('[data-supplier-profile-assign]:checked')].map(el=>el.dataset.supplierProfileAssign),defaultIds:[...document.querySelectorAll('[data-supplier-profile-default]:checked')].map(el=>el.dataset.supplierProfileDefault)});};
   document.getElementById('supplierProfileCancel').onclick=()=>{if(!supplierProductionProfileSaving)closeModal();};
 }
+function supplierProductionBillAccountState(workerId){const account=settings.supplierProductionBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.supplierProductionBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=upperWeeklyRecords().filter(record=>String(record.workerId)===String(worker.id)),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{(record.lines||[]).forEach(saved=>{
+   const snapshot=saved.laminationUnit===true||saved.unit==='ATOMS'||saved.unit==='SET',hasEntered=present(saved.enteredReceivedQty),hasRaw=present(saved.receivedQty),unit=typeof saved.unit==='string'&&saved.unit.trim()?saved.unit:upperLineDisplay(saved).unit;
+   if(!hasEntered&&!hasRaw){if(Number(saved.qty)>0||Number(saved.enteredQty)>0)return;throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));}
+   if(snapshot&&unit==='SET'&&!hasEntered&&Number(saved.receivedQty)>0)throw Error('Missing saved received quantity in SET for '+name(saved.articleName));
+   const rawQty=snapshot&&hasEntered?saved.enteredReceivedQty:saved.receivedQty;if(!present(rawQty)||!Number.isFinite(Number(rawQty))||Number(rawQty)<0)throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));const qty=Number(rawQty);if(qty===0)return;
+   if(!saved.articleId)throw Error('Missing saved article/material association for '+name(saved.articleName||saved.materialName));
+   const article=(settings.upperArticles||[]).find(a=>String(a.id)===String(saved.articleId));if(!article)throw Error('Missing saved article/material: '+name(saved.articleName));
+   const rawRate=article?article.rate:(snapshot?saved.rateSnapshot:saved.rate);if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(saved.articleName||article?.name));
+   if(article&&unit!==upperArticleUnit(article))throw Error('Missing saved rate for received Unit '+unit+' of '+name(saved.articleName||article.name));
+   add(record,saved.articleId,saved.articleName||article?.name,unit,Number(rawRate),qty);
+  });});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(worker.id)),articles:settings.upperArticles||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.supplierProductionBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
+}
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker),lines=articles.map(a=>({articleId:a.id,articleName:a.name,rate:Number(a.rate),qty:0}));
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.supplierProductionBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.supplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.supplierBillEdit)));
   document.querySelectorAll('[data-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.supplierBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('supplierBillOpening').value)*100))/100;document.getElementById('supplierBillGrand').textContent=upperMoney(grand);document.getElementById('supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
   document.getElementById('supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('supplierBillOpening').value);
-  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value);
+  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value,document.getElementById('supplierBillPaid').value,received);
   document.getElementById('supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['supplierBillOpening','supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
 function openUpperArticleModal(id){normalizeUpperFeatureState();const category=upperProductionCategory;if(supplierProductionContextScope()&&!supplierProductionActiveWorker()){toast('Select a Supplier Card first.');return;}let existing=getUpperArticle(id);const articleOnly=workerProductionArticleOnly(existing?(existing.workerCategory||'UPPER MANS'):category);const shoeLamination=workerProductionShoeLamination(existing?.workerCategory||category),supplierAtoms=workerCategoryCompareKey(existing?.workerCategory||category)==='shoes label man';let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} ${esc(upperCategoryLabel(category))} Article</h3>${articleOnly?'':`<label>Article Photo</label><input type="file" id="upperArticlePhoto" accept="image/*"><div id="upperArticlePhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div>`}<label>Article Name</label><input id="upperArticleName" value="${esc(existing?.name||'')}" placeholder="e.g. Formal Black Upper"><label>Unit${supplierAtoms?' <button type="button" class="btn ghost small" id="supplierArticleCustomUnits" style="float:right;">Custom Units</button>':''}</label><select id="upperArticleUnit">${supplierAtoms?supplierProductionArticleUnitOptions(existing):shoeLamination?`<option value="RULE" ${!existing||existing.unit==='RULE'?'selected':''}>RULE</option><option value="__custom__" ${existing&&existing.unit!=='RULE'?'selected':''}>Custom</option>`:`<option value="ATOMS">ATOMS</option><option value="SET" ${existing?.unit==='SET'?'selected':''}>SET</option>`}</select>${supplierAtoms?'<div id="supplierArticleCustomUnitsPanel" hidden style="margin:6px 0;"></div>':''}${shoeLamination&&!supplierAtoms?`<input id="upperArticleCustomUnit" aria-label="Custom unit" placeholder="Enter custom unit" value="${esc(existing?(existing.unit||'ATOMS')!== 'RULE'?(existing.unit||'ATOMS'):'':'')}" ${!existing||existing.unit==='RULE'?'hidden':''}>`:''}<label id="upperArticleRateLabel">Labour Rate Per ${supplierAtoms?esc(existing?.unit||'ATOMS'):shoeLamination?esc(existing?(existing.unit||'ATOMS'):'RULE'):articleOnly?'Item':existing?.unit==='SET'?'Set':'Atom'}</label><input id="upperArticleRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}" placeholder="e.g. 320">${articleOnly||shoeLamination?'':`<label>Stock (Atoms)</label><input id="upperArticleStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 150">`}<div style="font-size:12px;color:var(--muted);margin-top:5px;">${shoeLamination?'':'1 Atom = 12 pairs.'}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperArticle">Save</button><button type="button" class="btn ghost" id="cancelUpperArticle">Cancel</button></div>`);document.getElementById('upperArticlePhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperArticlePhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read '+upperCategoryLabel(category)+' Article photo');}});document.getElementById('upperArticleUnit').onchange=()=>{if(supplierAtoms){document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+document.getElementById('upperArticleUnit').value;return;}if(shoeLamination){const custom=document.getElementById('upperArticleCustomUnit');custom.hidden=document.getElementById('upperArticleUnit').value!=='__custom__';document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(custom.hidden?'RULE':custom.value);return;}document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(articleOnly?'Item':document.getElementById('upperArticleUnit').value==='SET'?'Set':'Atom');};document.getElementById('upperArticleCustomUnit')?.addEventListener('input',()=>document.getElementById('upperArticleUnit').onchange());document.getElementById('cancelUpperArticle').onclick=closeModal;document.getElementById('saveUpperArticle').onclick=async()=>{const button=document.getElementById('saveUpperArticle');if(button.disabled)return;const name=document.getElementById('upperArticleName')?.value.trim()||'';const unit=supplierAtoms?document.getElementById('upperArticleUnit').value:shoeLamination?(document.getElementById('upperArticleUnit').value==='RULE'?'RULE':document.getElementById('upperArticleCustomUnit').value):document.getElementById('upperArticleUnit').value==='SET'?'SET':'ATOMS',rate=Number(document.getElementById('upperArticleRate')?.value);const stock=articleOnly||shoeLamination?(existing?.stock??0):Math.max(0,parseInt(document.getElementById('upperArticleStock')?.value,10)||0);if(shoeLamination&&(!unit.trim()||unit.length>60)){toast('Enter a unit of 1–60 characters');return;}if(!name){toast('Article Name is required');return;}if(!Number.isFinite(rate)||rate<0){toast('Enter a valid Labour Rate Per '+(shoeLamination?unit:unit==='SET'?'Set':'Atom'));return;}const before=captureCloudState();button.disabled=true;settings=JSON.parse(JSON.stringify(before.settings));existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));const now=new Date().toISOString();settings.upperArticles=settings.upperArticles||[];if(existing){existing.name=name;existing.rate=rate;if(shoeLamination&&(existing.unit||'ATOMS')!==unit)existing.laminationUnit=true;existing.unit=unit;if(!articleOnly&&!shoeLamination)existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else {const newArticleId=uid();settings.upperArticles.push({id:newArticleId,workerCategory:category,name,rate,unit,...(shoeLamination?{laminationUnit:true}:{}),stock,photo:pendingPhoto,createdAt:now,updatedAt:now});if(supplierAtoms)settings.supplierProductionArticleSuppliers={...(settings.supplierProductionArticleSuppliers||{}),[newArticleId]:String(supplierProductionActiveWorker().id)};};if(!await saveUpperCategoryConfiguration(before)){existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));button.disabled=false;return;}closeModal();render();toast(upperCategoryLabel(category)+' Article saved');};if(supplierAtoms)bindSupplierProductionCustomUnits(existing);}
 function openWorkerModal(id,initialCategory=''){
@@ -6860,7 +6893,7 @@ function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.supplierProductionBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function upperCategoryLabel(category=upperProductionCategory){return workerCategoryCompareKey(category)==='upper mans'?'Upper Man':String(category||'').trim().replace(/\s+/g,' ');}
 function upperSummaryFilteredRecords(kind,forPrint=false){
@@ -7045,63 +7078,44 @@ function supplierProductionBillHistoryHtml(workerId){
   return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-supplier-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-supplier-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-supplier-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this supplier.</p>'}`;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole ATOMS quantities and article rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:'ATOMS',qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=unit!=='ATOMS'&&unit!=='SET';
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),previous=settings.supplierProductionBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:next};
-  try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Supplier bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.supplierProductionBilling,existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.supplierProductionBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-supplier-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.supplierProductionBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="supplierBillEditSave">Save</button><button class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('supplierBillEditPaid').value)*100))/100);document.getElementById('supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('supplierBillEditPaid').value);document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -7356,36 +7370,28 @@ function supplierProductionHasLinkedData(workerId){
   if(linked(settings)||linked(bills)||linked(transactions))return true;
   return !!settings.supplierProductionReportOpening?.suppliers?.[id]||!!settings.supplierProductionReportOpeningReceived?.suppliers?.[id]||!!settings.supplierProductionBilling?.accounts?.[id];
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,supplierProductionBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill history save failed');
+ }catch(error){settings={...settings,supplierProductionBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES LABEL MAN WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES LABEL MAN WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function setUpperRowSelection(row,kind,id){
   if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
@@ -7742,7 +7748,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('SHOES PRESS MAN VOUCHER',23,'center');add(pressWorkerName(bill.supplierName)+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity '+(line.unit||'ATOMS'),21,'left',String(line.qty));add('Rate',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -7949,35 +7955,56 @@ function openSupplierProductionProfile(workerId){
   saveButton.onclick=()=>{if(photoLoading)return;return saveSupplierProductionProfile(worker.id,{name:document.getElementById('supplierProfileName').value,photo:pendingPhoto,assignedIds:[...document.querySelectorAll('[data-worker-profile-assign]:checked')].map(el=>el.dataset.workerProfileAssign),defaultIds:[...document.querySelectorAll('[data-worker-profile-default]:checked')].map(el=>el.dataset.workerProfileDefault)});};
   document.getElementById('supplierProfileCancel').onclick=()=>{if(!supplierProductionProfileSaving)closeModal();};
 }
+function supplierProductionBillAccountState(workerId){const account=settings.supplierProductionBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.supplierProductionBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=upperWeeklyRecords().filter(record=>String(record.workerId)===String(worker.id)&&record.pressCutting===true),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{(record.lines||[]).forEach(saved=>{
+   const snapshot=saved.laminationUnit===true||saved.unit==='ATOMS'||saved.unit==='SET',hasEntered=present(saved.enteredReceivedQty),hasRaw=present(saved.receivedQty),unit=typeof saved.unit==='string'&&saved.unit.trim()?saved.unit:upperLineDisplay(saved).unit;
+   if(!hasEntered&&!hasRaw){if(Number(saved.qty)>0||Number(saved.enteredQty)>0)return;throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));}
+   if(snapshot&&unit==='SET'&&!hasEntered&&Number(saved.receivedQty)>0)throw Error('Missing saved received quantity in SET for '+name(saved.articleName));
+   const rawQty=snapshot&&hasEntered?saved.enteredReceivedQty:saved.receivedQty;if(!present(rawQty)||!Number.isFinite(Number(rawQty))||Number(rawQty)<0)throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));const qty=Number(rawQty);if(qty===0)return;
+   if(!saved.articleId)throw Error('Missing saved article/material association for '+name(saved.articleName||saved.materialName));
+   const article=(settings.upperArticles||[]).find(a=>String(a.id)===String(saved.articleId));if(!article&&!present(snapshot?saved.rateSnapshot:saved.rate))throw Error('Missing saved article/material or rate: '+name(saved.articleName));
+   const rawRate=article?article.rate:(snapshot?saved.rateSnapshot:saved.rate);if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(saved.articleName||article?.name));
+   if(article&&unit!==upperArticleUnit(article))throw Error('Missing saved rate for received Unit '+unit+' of '+name(saved.articleName||article.name));
+   add(record,saved.articleId,saved.articleName||article?.name,unit,Number(rawRate),qty);
+  });});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No eligible received/cutting records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(worker.id)),articles:settings.upperArticles||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.supplierProductionBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
+}
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Worker Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker),weeklyLines=new Map();
-  articles.forEach(article=>{const unit=upperArticleUnit(article);weeklyLines.set(JSON.stringify([String(article.id),unit]),{articleId:article.id,articleName:article.name,unit,rate:Number(article.rate),qty:0});});
-  upperWeeklyRecords().filter(record=>record.pressCutting===true&&String(record.workerId)===String(worker.id)).forEach(record=>(record.lines||[]).forEach(saved=>{
-    if(!saved.articleId)return;const display=upperLineDisplay(saved);if(!(display.received>0))return;
-    const key=JSON.stringify([String(saved.articleId),display.unit]),article=(settings.upperArticles||[]).find(item=>String(item.id)===String(saved.articleId)),line=weeklyLines.get(key)||{articleId:saved.articleId,articleName:saved.articleName,unit:display.unit,rate:article?Number(article.rate):display.rate,qty:0};
-    line.qty+=display.received;weeklyLines.set(key,line);
-  }));
-  const lines=[...weeklyLines.values()];
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.supplierProductionBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-worker-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-worker-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this worker.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-worker-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-worker-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-worker-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.workerBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-worker-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.workerBillEdit)));
   document.querySelectorAll('[data-worker-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.workerBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-worker-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-worker-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-worker-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('supplierBillOpening').value)*100))/100;document.getElementById('supplierBillGrand').textContent=upperMoney(grand);document.getElementById('supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-worker-bill-qty]').forEach(input=>input.addEventListener('input',update));
-  update();
   document.getElementById('supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('supplierBillOpening').value);
-  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value);
+  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value,document.getElementById('supplierBillPaid').value,received);
   document.getElementById('supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['supplierBillOpening','supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
 function openUpperArticleModal(id){normalizeUpperFeatureState();const category=upperProductionCategory;if(supplierProductionContextScope()&&!supplierProductionActiveWorker()){toast('Select a Worker Card first.');return;}let existing=getUpperArticle(id);const articleOnly=workerProductionArticleOnly(existing?(existing.workerCategory||'UPPER MANS'):category);const shoeLamination=workerProductionShoeLamination(existing?.workerCategory||category),supplierAtoms=workerCategoryCompareKey(existing?.workerCategory||category)==='shoes press man';let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} ${esc(upperCategoryLabel(category))} Article</h3>${articleOnly?'':`<label>Article Photo</label><input type="file" id="upperArticlePhoto" accept="image/*"><div id="upperArticlePhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div>`}<label>Article Name</label><input id="upperArticleName" value="${esc(existing?.name||'')}" placeholder="e.g. Formal Black Upper"><label>Unit${supplierAtoms?' <button type="button" class="btn ghost small" id="supplierArticleCustomUnits" style="float:right;">Custom Units</button>':''}</label><select id="upperArticleUnit">${supplierAtoms?supplierProductionArticleUnitOptions(existing):shoeLamination?`<option value="RULE" ${!existing||existing.unit==='RULE'?'selected':''}>RULE</option><option value="__custom__" ${existing&&existing.unit!=='RULE'?'selected':''}>Custom</option>`:`<option value="ATOMS">ATOMS</option><option value="SET" ${existing?.unit==='SET'?'selected':''}>SET</option>`}</select>${supplierAtoms?'<div id="supplierArticleCustomUnitsPanel" hidden style="margin:6px 0;"></div>':''}${shoeLamination&&!supplierAtoms?`<input id="upperArticleCustomUnit" aria-label="Custom unit" placeholder="Enter custom unit" value="${esc(existing?(existing.unit||'ATOMS')!== 'RULE'?(existing.unit||'ATOMS'):'':'')}" ${!existing||existing.unit==='RULE'?'hidden':''}>`:''}<label id="upperArticleRateLabel">Labour Rate Per ${supplierAtoms?esc(existing?.unit||'ATOMS'):shoeLamination?esc(existing?(existing.unit||'ATOMS'):'RULE'):articleOnly?'Item':existing?.unit==='SET'?'Set':'Atom'}</label><input id="upperArticleRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}" placeholder="e.g. 320">${articleOnly||shoeLamination?'':`<label>Stock (Atoms)</label><input id="upperArticleStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 150">`}<div style="font-size:12px;color:var(--muted);margin-top:5px;">${shoeLamination?'':'1 Atom = 12 pairs.'}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperArticle">Save</button><button type="button" class="btn ghost" id="cancelUpperArticle">Cancel</button></div>`);document.getElementById('upperArticlePhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperArticlePhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read '+upperCategoryLabel(category)+' Article photo');}});document.getElementById('upperArticleUnit').onchange=()=>{if(supplierAtoms){document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+document.getElementById('upperArticleUnit').value;return;}if(shoeLamination){const custom=document.getElementById('upperArticleCustomUnit');custom.hidden=document.getElementById('upperArticleUnit').value!=='__custom__';document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(custom.hidden?'RULE':custom.value);return;}document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(articleOnly?'Item':document.getElementById('upperArticleUnit').value==='SET'?'Set':'Atom');};document.getElementById('upperArticleCustomUnit')?.addEventListener('input',()=>document.getElementById('upperArticleUnit').onchange());document.getElementById('cancelUpperArticle').onclick=closeModal;document.getElementById('saveUpperArticle').onclick=async()=>{const button=document.getElementById('saveUpperArticle');if(button.disabled)return;const name=document.getElementById('upperArticleName')?.value.trim()||'';const unit=supplierAtoms?document.getElementById('upperArticleUnit').value:shoeLamination?(document.getElementById('upperArticleUnit').value==='RULE'?'RULE':document.getElementById('upperArticleCustomUnit').value):document.getElementById('upperArticleUnit').value==='SET'?'SET':'ATOMS',rate=Number(document.getElementById('upperArticleRate')?.value);const stock=articleOnly||shoeLamination?(existing?.stock??0):Math.max(0,parseInt(document.getElementById('upperArticleStock')?.value,10)||0);if(shoeLamination&&(!unit.trim()||unit.length>60)){toast('Enter a unit of 1–60 characters');return;}if(!name){toast('Article Name is required');return;}if(!Number.isFinite(rate)||rate<0){toast('Enter a valid Labour Rate Per '+(shoeLamination?unit:unit==='SET'?'Set':'Atom'));return;}const before=captureCloudState();button.disabled=true;settings=JSON.parse(JSON.stringify(before.settings));existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));const now=new Date().toISOString();settings.upperArticles=settings.upperArticles||[];if(existing){existing.name=name;existing.rate=rate;if(shoeLamination&&(existing.unit||'ATOMS')!==unit)existing.laminationUnit=true;existing.unit=unit;if(!articleOnly&&!shoeLamination)existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else {const newArticleId=uid();settings.upperArticles.push({id:newArticleId,workerCategory:category,name,rate,unit,...(shoeLamination?{laminationUnit:true}:{}),stock,photo:pendingPhoto,createdAt:now,updatedAt:now});if(supplierAtoms)settings.supplierProductionArticleSuppliers={...(settings.supplierProductionArticleSuppliers||{}),[newArticleId]:String(supplierProductionActiveWorker().id)};};if(!await saveUpperCategoryConfiguration(before)){existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));button.disabled=false;return;}closeModal();render();toast(upperCategoryLabel(category)+' Article saved');};if(supplierAtoms)bindSupplierProductionCustomUnits(existing);}
 function openWorkerModal(id,initialCategory=''){
@@ -8371,7 +8398,7 @@ function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.supplierProductionBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function upperCategoryLabel(category=upperProductionCategory){return workerCategoryCompareKey(category)==='upper mans'?'Upper Man':String(category||'').trim().replace(/\s+/g,' ');}
 function upperSummaryFilteredRecords(kind,forPrint=false){
@@ -8532,63 +8559,44 @@ function supplierProductionBillHistoryHtml(workerId){
   return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-worker-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-worker-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-worker-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this worker.</p>'}`;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole article quantities and article rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:line.unit||'ATOMS',qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=unit!=='ATOMS'&&unit!=='SET';
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Worker Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter a quantity for at least one article.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),previous=settings.supplierProductionBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:next};
-  try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Worker bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.supplierProductionBilling,existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.supplierProductionBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Worker Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-worker-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit||'ATOMS')}" style="min-width:80px;"> ${esc(line.unit||'ATOMS')}</td><td>${upperMoney(line.rate)}</td><td data-worker-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-worker-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-worker-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-worker-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.supplierProductionBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="supplierBillEditSave">Save</button><button class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('supplierBillEditPaid').value)*100))/100);document.getElementById('supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('supplierBillEditPaid').value);document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Worker Card first.');return false;}
@@ -8844,36 +8852,28 @@ function supplierProductionHasLinkedData(workerId){
   if(linked(settings)||linked(bills)||linked(transactions))return true;
   return !!settings.supplierProductionReportOpening?.suppliers?.[id]||!!settings.supplierProductionReportOpeningReceived?.suppliers?.[id]||!!settings.supplierProductionBilling?.accounts?.[id];
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Worker Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,supplierProductionBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill history save failed');
+ }catch(error){settings={...settings,supplierProductionBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES PRESS MAN VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(pressWorkerName(bill.supplierName))} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit||'ATOMS')}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES PRESS MAN VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(pressWorkerName(bill.supplierName))} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit||'ATOMS')}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function setUpperRowSelection(row,kind,id){
   if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
@@ -9221,7 +9221,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('Home Laser and Stitch Man WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity ATOMS',21,'left',String(line.qty));add('Rate',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -9428,27 +9428,56 @@ function openSupplierProductionProfile(workerId){
   saveButton.onclick=()=>{if(photoLoading)return;return saveSupplierProductionProfile(worker.id,{name:document.getElementById('supplierProfileName').value,photo:pendingPhoto,assignedIds:[...document.querySelectorAll('[data-supplier-profile-assign]:checked')].map(el=>el.dataset.supplierProfileAssign),defaultIds:[...document.querySelectorAll('[data-supplier-profile-default]:checked')].map(el=>el.dataset.supplierProfileDefault)});};
   document.getElementById('supplierProfileCancel').onclick=()=>{if(!supplierProductionProfileSaving)closeModal();};
 }
+function supplierProductionBillAccountState(workerId){const account=settings.supplierProductionBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.supplierProductionBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=upperWeeklyRecords().filter(record=>String(record.workerId)===String(worker.id)),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{(record.lines||[]).forEach(saved=>{
+   const snapshot=saved.laminationUnit===true||saved.unit==='ATOMS'||saved.unit==='SET',hasEntered=present(saved.enteredReceivedQty),hasRaw=present(saved.receivedQty),unit=typeof saved.unit==='string'&&saved.unit.trim()?saved.unit:upperLineDisplay(saved).unit;
+   if(!hasEntered&&!hasRaw){if(Number(saved.qty)>0||Number(saved.enteredQty)>0)return;throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));}
+   if(snapshot&&unit==='SET'&&!hasEntered&&Number(saved.receivedQty)>0)throw Error('Missing saved received quantity in SET for '+name(saved.articleName));
+   const rawQty=snapshot&&hasEntered?saved.enteredReceivedQty:saved.receivedQty;if(!present(rawQty)||!Number.isFinite(Number(rawQty))||Number(rawQty)<0)throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));const qty=Number(rawQty);if(qty===0)return;
+   if(!saved.articleId)throw Error('Missing saved article/material association for '+name(saved.articleName||saved.materialName));
+   const article=(settings.upperArticles||[]).find(a=>String(a.id)===String(saved.articleId));if(!article)throw Error('Missing saved article/material: '+name(saved.articleName));
+   const rawRate=article?article.rate:(snapshot?saved.rateSnapshot:saved.rate);if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(saved.articleName||article?.name));
+   if(article&&unit!==upperArticleUnit(article))throw Error('Missing saved rate for received Unit '+unit+' of '+name(saved.articleName||article.name));
+   add(record,saved.articleId,saved.articleName||article?.name,unit,Number(rawRate),qty);
+  });});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(worker.id)),articles:settings.upperArticles||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.supplierProductionBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
+}
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker),lines=articles.map(a=>({articleId:a.id,articleName:a.name,rate:Number(a.rate),qty:0}));
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.supplierProductionBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.supplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.supplierBillEdit)));
   document.querySelectorAll('[data-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.supplierBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('supplierBillOpening').value)*100))/100;document.getElementById('supplierBillGrand').textContent=upperMoney(grand);document.getElementById('supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
   document.getElementById('supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('supplierBillOpening').value);
-  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value);
+  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value,document.getElementById('supplierBillPaid').value,received);
   document.getElementById('supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['supplierBillOpening','supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
 function openUpperArticleModal(id){normalizeUpperFeatureState();const category=upperProductionCategory;if(supplierProductionContextScope()&&!supplierProductionActiveWorker()){toast('Select a Supplier Card first.');return;}let existing=getUpperArticle(id);const articleOnly=workerProductionArticleOnly(existing?(existing.workerCategory||'UPPER MANS'):category);const shoeLamination=workerProductionShoeLamination(existing?.workerCategory||category),supplierAtoms=workerCategoryCompareKey(existing?.workerCategory||category)==='home laser and stitch man';let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} ${esc(upperCategoryLabel(category))} Article</h3>${articleOnly?'':`<label>Article Photo</label><input type="file" id="upperArticlePhoto" accept="image/*"><div id="upperArticlePhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div>`}<label>Article Name</label><input id="upperArticleName" value="${esc(existing?.name||'')}" placeholder="e.g. Formal Black Upper"><label>Unit${supplierAtoms?' <button type="button" class="btn ghost small" id="supplierArticleCustomUnits" style="float:right;">Custom Units</button>':''}</label><select id="upperArticleUnit">${supplierAtoms?supplierProductionArticleUnitOptions(existing):shoeLamination?`<option value="RULE" ${!existing||existing.unit==='RULE'?'selected':''}>RULE</option><option value="__custom__" ${existing&&existing.unit!=='RULE'?'selected':''}>Custom</option>`:`<option value="ATOMS">ATOMS</option><option value="SET" ${existing?.unit==='SET'?'selected':''}>SET</option>`}</select>${supplierAtoms?'<div id="supplierArticleCustomUnitsPanel" hidden style="margin:6px 0;"></div>':''}${shoeLamination&&!supplierAtoms?`<input id="upperArticleCustomUnit" aria-label="Custom unit" placeholder="Enter custom unit" value="${esc(existing?(existing.unit||'ATOMS')!== 'RULE'?(existing.unit||'ATOMS'):'':'')}" ${!existing||existing.unit==='RULE'?'hidden':''}>`:''}<label id="upperArticleRateLabel">Labour Rate Per ${supplierAtoms?esc(existing?.unit||'ATOMS'):shoeLamination?esc(existing?(existing.unit||'ATOMS'):'RULE'):articleOnly?'Item':existing?.unit==='SET'?'Set':'Atom'}</label><input id="upperArticleRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}" placeholder="e.g. 320">${articleOnly||shoeLamination?'':`<label>Stock (Atoms)</label><input id="upperArticleStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 150">`}<div style="font-size:12px;color:var(--muted);margin-top:5px;">${shoeLamination?'':'1 Atom = 12 pairs.'}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperArticle">Save</button><button type="button" class="btn ghost" id="cancelUpperArticle">Cancel</button></div>`);document.getElementById('upperArticlePhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperArticlePhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read '+upperCategoryLabel(category)+' Article photo');}});document.getElementById('upperArticleUnit').onchange=()=>{if(supplierAtoms){document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+document.getElementById('upperArticleUnit').value;return;}if(shoeLamination){const custom=document.getElementById('upperArticleCustomUnit');custom.hidden=document.getElementById('upperArticleUnit').value!=='__custom__';document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(custom.hidden?'RULE':custom.value);return;}document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(articleOnly?'Item':document.getElementById('upperArticleUnit').value==='SET'?'Set':'Atom');};document.getElementById('upperArticleCustomUnit')?.addEventListener('input',()=>document.getElementById('upperArticleUnit').onchange());document.getElementById('cancelUpperArticle').onclick=closeModal;document.getElementById('saveUpperArticle').onclick=async()=>{const button=document.getElementById('saveUpperArticle');if(button.disabled)return;const name=document.getElementById('upperArticleName')?.value.trim()||'';const unit=supplierAtoms?document.getElementById('upperArticleUnit').value:shoeLamination?(document.getElementById('upperArticleUnit').value==='RULE'?'RULE':document.getElementById('upperArticleCustomUnit').value):document.getElementById('upperArticleUnit').value==='SET'?'SET':'ATOMS',rate=Number(document.getElementById('upperArticleRate')?.value);const stock=articleOnly||shoeLamination?(existing?.stock??0):Math.max(0,parseInt(document.getElementById('upperArticleStock')?.value,10)||0);if(shoeLamination&&(!unit.trim()||unit.length>60)){toast('Enter a unit of 1–60 characters');return;}if(!name){toast('Article Name is required');return;}if(!Number.isFinite(rate)||rate<0){toast('Enter a valid Labour Rate Per '+(shoeLamination?unit:unit==='SET'?'Set':'Atom'));return;}const before=captureCloudState();button.disabled=true;settings=JSON.parse(JSON.stringify(before.settings));existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));const now=new Date().toISOString();settings.upperArticles=settings.upperArticles||[];if(existing){existing.name=name;existing.rate=rate;if(shoeLamination&&(existing.unit||'ATOMS')!==unit)existing.laminationUnit=true;existing.unit=unit;if(!articleOnly&&!shoeLamination)existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else {const newArticleId=uid();settings.upperArticles.push({id:newArticleId,workerCategory:category,name,rate,unit,...(shoeLamination?{laminationUnit:true}:{}),stock,photo:pendingPhoto,createdAt:now,updatedAt:now});if(supplierAtoms)settings.supplierProductionArticleSuppliers={...(settings.supplierProductionArticleSuppliers||{}),[newArticleId]:String(supplierProductionActiveWorker().id)};};if(!await saveUpperCategoryConfiguration(before)){existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));button.disabled=false;return;}closeModal();render();toast(upperCategoryLabel(category)+' Article saved');};if(supplierAtoms)bindSupplierProductionCustomUnits(existing);}
 function openWorkerModal(id,initialCategory=''){
@@ -9855,7 +9884,7 @@ function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.supplierProductionBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function upperCategoryLabel(category=upperProductionCategory){return workerCategoryCompareKey(category)==='upper mans'?'Upper Man':String(category||'').trim().replace(/\s+/g,' ');}
 function upperSummaryFilteredRecords(kind,forPrint=false){
@@ -10026,63 +10055,44 @@ function supplierProductionBillHistoryHtml(workerId){
   return `<h3>Bill History</h3>${[...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>`<h4>${esc(group.label)}</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Total</th><th></th></tr></thead><tbody>${group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(bill=>`<tr><td>#${esc(String(bill.voucherNo))}<small style="display:block;">${esc(bill.supplierName)}</small></td><td>${esc(bill.date)}<small style="display:block;">${esc(fmtTime(new Date(bill.date)))}</small></td><td>${upperMoney(bill.totalAmount)}</td><td><button type="button" class="btn ghost small" data-supplier-bill-view="${esc(String(bill.id))}">View</button><button type="button" class="btn ghost small" data-supplier-bill-edit="${esc(String(bill.id))}">Edit</button><button type="button" class="btn red small" data-supplier-bill-delete="${esc(String(bill.id))}">Delete</button></td></tr>`).join('')}</tbody></table></div>`).join('')||'<p>No weekly bills saved for this supplier.</p>'}`;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole ATOMS quantities and article rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:'ATOMS',qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=unit!=='ATOMS'&&unit!=='SET';
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),previous=settings.supplierProductionBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:next};
-  try{
-    if(!await saveCriticalCloudState())throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Supplier bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.supplierProductionBilling,existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.supplierProductionBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-supplier-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.supplierProductionBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="supplierBillEditSave">Save</button><button class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('supplierBillEditPaid').value)*100))/100);document.getElementById('supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('supplierBillEditPaid').value);document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -10336,36 +10346,28 @@ function supplierProductionHasLinkedData(workerId){
   if(linked(settings)||linked(bills)||linked(transactions))return true;
   return !!settings.supplierProductionReportOpening?.suppliers?.[id]||!!settings.supplierProductionReportOpeningReceived?.suppliers?.[id]||!!settings.supplierProductionBilling?.accounts?.[id];
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState())throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,supplierProductionBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState())throw Error('Bill history save failed');
+ }catch(error){settings={...settings,supplierProductionBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">Home Laser and Stitch Man WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">Home Laser and Stitch Man WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function setUpperRowSelection(row,kind,id){
   if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
@@ -12130,85 +12132,95 @@ function supplierProductionBillWorker(workerId){
   return workers.find(w=>String(w.id)===String(workerId)&&!w.archived&&workerCategoryCompareKey(w.category)===category)||null;
 }
 function supplierProductionBillAmounts(lines){
-  let totalCents=0;
-  const calculated=lines.map(line=>{
-    const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);
-    if(!Number.isSafeInteger(qty)||qty<0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw new Error('Enter valid whole ATOMS quantities and article rates.');
-    totalCents+=cents;
-    if(!Number.isSafeInteger(totalCents))throw new Error('Bill amount is too large.');
-    return {articleId:String(line.articleId),articleName:String(line.articleName),unit:'ATOMS',qty,rate,amount:cents/100};
-  });
-  return {lines:calculated,totalAmount:totalCents/100};
+ let totalCents=0;
+ const calculated=lines.map(line=>{
+  const qty=Number(line.qty),rate=Number(line.rate),unit=String(line.unit||'ATOMS'),cents=Math.round(qty*rate*100),fractionalAllowed=unit!=='ATOMS'&&unit!=='SET';
+  if(!Number.isFinite(qty)||qty<0||qty>Number.MAX_SAFE_INTEGER||(!fractionalAllowed&&!Number.isSafeInteger(qty)))throw Error('Invalid received quantity for '+String(line.articleName||'article/material')+' ('+unit+').');
+  if(line.rate===undefined||line.rate===null||line.rate===''||!Number.isFinite(rate)||rate<0)throw Error('Missing/invalid saved rate for '+String(line.articleName||'article/material')+'.');
+  if(!Number.isSafeInteger(cents))throw Error('Bill amount is too large.');totalCents+=cents;if(!Number.isSafeInteger(totalCents))throw Error('Bill amount is too large.');
+  return {articleId:String(line.articleId),articleName:String(line.articleName),unit,qty,rate,amount:cents/100};
+ });
+ return {lines:calculated,totalAmount:totalCents/100};
+}
+function supplierProductionBillAccountState(workerId){const account=settings.supplierProductionBilling?.accounts?.[String(workerId)];return account?{exists:true,value:JSON.parse(JSON.stringify(account))}:{exists:false};}
+function supplierProductionReceivedBillData(worker){
+ const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.supplierProductionBilling?.bills||[]).filter(b=>String(b.supplierId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
+ const records=upperWeeklyRecords().filter(record=>String(record.workerId)===String(worker.id)),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
+ const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
+ unbilled.forEach(record=>{(record.lines||[]).forEach(saved=>{
+   const snapshot=saved.laminationUnit===true||saved.unit==='ATOMS'||saved.unit==='SET',hasEntered=present(saved.enteredReceivedQty),hasRaw=present(saved.receivedQty),unit=typeof saved.unit==='string'&&saved.unit.trim()?saved.unit:upperLineDisplay(saved).unit;
+   if(!hasEntered&&!hasRaw){if(Number(saved.qty)>0||Number(saved.enteredQty)>0)return;throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));}
+   if(snapshot&&unit==='SET'&&!hasEntered&&Number(saved.receivedQty)>0)throw Error('Missing saved received quantity in SET for '+name(saved.articleName));
+   const rawQty=snapshot&&hasEntered?saved.enteredReceivedQty:saved.receivedQty;if(!present(rawQty)||!Number.isFinite(Number(rawQty))||Number(rawQty)<0)throw Error('Invalid/missing received quantity for '+name(saved.articleName||saved.materialName));const qty=Number(rawQty);if(qty===0)return;
+   if(!saved.articleId)throw Error('Missing saved article/material association for '+name(saved.articleName||saved.materialName));
+   const article=(settings.upperArticles||[]).find(a=>String(a.id)===String(saved.articleId));if(!article)throw Error('Missing saved article/material: '+name(saved.articleName));
+   const rawRate=article?article.rate:(snapshot?saved.rateSnapshot:saved.rate);if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(saved.articleName||article?.name));
+   if(article&&unit!==upperArticleUnit(article))throw Error('Missing saved rate for received Unit '+unit+' of '+name(saved.articleName||article.name));
+   add(record,saved.articleId,saved.articleName||article?.name,unit,Number(rawRate),qty);
+  });});
+ if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
+ return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
+}
+function supplierProductionBillActivity(worker){return JSON.stringify({records:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(worker.id)),articles:settings.upperArticles||[]});}
+async function supplierProductionBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function supplierProductionBillReversalError(bill,fingerprint){
+ const state=settings.supplierProductionBilling,proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';
+ if(String(state?.bills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';
+ if(fingerprint!==proof.activityFingerprint||JSON.stringify(supplierProductionBillAccountState(bill.supplierId))!==JSON.stringify(proof.afterAccount)||JSON.stringify(state.nextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Received data or account changed after this bill. Exact reversal is blocked to protect newer records.';
+ return '';
 }
 function openSupplierProductionBill(workerId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
   const worker=supplierProductionBillWorker(workerId);if(!worker)return;
-  const articles=supplierProductionAssignedArticles(worker),lines=articles.map(a=>({articleId:a.id,articleName:a.name,rate:Number(a.rate),qty:0}));
+  let received;try{received=supplierProductionReceivedBillData(worker);supplierProductionBillAmounts(received.lines);}catch(error){toast(error.message);received={lines:[],sourceRecordIds:[],emptyReason:error.message};}const lines=received.lines;
   try{supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return;}
   const account=(settings.supplierProductionBilling?.accounts||{})[String(worker.id)];
-  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.openingAmount??0))}"><button type="button" class="btn ghost small" id="supplierBillSaveOpening">Save Opening Amount</button><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="0" data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||'<tr><td colspan="4">No saved articles assigned to this supplier.</td></tr>'}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
+  modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="supplierBillExtra" readonly value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-supplier-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(received.emptyReason||'No received records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
   document.querySelectorAll('[data-supplier-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(button.dataset.supplierBillView)&&String(v.supplierId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
   document.querySelectorAll('[data-supplier-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.supplierBillEdit)));
   document.querySelectorAll('[data-supplier-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.supplierBillDelete)));
-  const collect=()=>lines.map((line,index)=>({...line,qty:Number(document.querySelector(`[data-supplier-bill-qty="${index}"]`)?.value||0)}));
+  const collect=()=>lines.map(line=>({...line}));
   const update=()=>{
-    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillTotal').textContent='Invalid quantity';}
+    try{const calculated=supplierProductionBillAmounts(collect());calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillTotal').textContent=upperMoney(calculated.totalAmount);const grand=(Math.round(calculated.totalAmount*100)+Math.round(Number(document.getElementById('supplierBillOpening').value)*100))/100;document.getElementById('supplierBillGrand').textContent=upperMoney(grand);document.getElementById('supplierBillRemaining').value=upperMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('supplierBillPaid').value)*100))/100);}
+    catch(error){document.getElementById('supplierBillTotal').textContent=error.message;}
   };
   document.querySelectorAll('[data-supplier-bill-qty]').forEach(input=>input.addEventListener('input',update));
   document.getElementById('supplierBillSaveOpening').onclick=()=>saveSupplierProductionBill(worker.id,null,document.getElementById('supplierBillOpening').value);
-  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value);
+  document.getElementById('supplierBillCreate').onclick=()=>saveSupplierProductionBill(worker.id,collect(),document.getElementById('supplierBillOpening').value,document.getElementById('supplierBillPaid').value,received);
   document.getElementById('supplierBillCancel').onclick=()=>{if(!supplierProductionBillSaving)closeModal();};
+  ['supplierBillOpening','supplierBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',update));update();
 }
-async function saveSupplierProductionBill(workerId,lines,openingValue){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
-  const openingAmount=Math.round(Number(openingValue)*100)/100;
-  if(!Number.isFinite(Number(openingValue))||Number(openingValue)<0||!Number.isSafeInteger(Math.round(Number(openingValue)*100))){toast('Enter a valid Opening Amount.');return false;}
-  let calculated=null;
-  if(lines){
-    try{calculated=supplierProductionBillAmounts(lines);}catch(error){toast(error.message);return false;}
-    if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}
-  }
-  const existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),previous=settings.supplierProductionBilling;
-  const state=previous||{accounts:{},bills:[],nextVoucherNo:1001},date=new Date().toISOString(),accounts={...(state.accounts||{}),[String(worker.id)]:{...(state.accounts||{})[String(worker.id)],supplierId:String(worker.id),supplierName:worker.name,openingAmount,updatedAt:date}};
-  let bill=null,next={...state,accounts};
-  if(calculated){
-    const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));
-    bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,...calculated};
-    next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};
-  }
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:next};
-  try{
-    if(!await saveCriticalCloudState('supplierBill'))throw new Error('Bill save failed');
-  }catch(error){
-    if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Supplier bill changes were not saved. Please try again.');return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillSaveOpening','supplierBillCreate','supplierBillCancel']){const button=document.getElementById(id);if(button)button.disabled=id==='supplierBillCreate'&&!lines&& !supplierProductionAssignedArticles(worker).length;}
-  }
-  if(bill){closeModal();showSupplierProductionBill(bill);}else toast('Opening Amount saved');
-  return true;
+async function saveSupplierProductionBill(workerId,lines,openingValue,paidValue=0,received=null){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId);if(!worker||supplierProductionBillSaving)return false;
+ const openingAmount=Math.round(Number(openingValue)*100)/100,paidAmount=Math.round(Number(paidValue)*100)/100;
+ if(![Number(openingValue),Number(paidValue)].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening and Paid Amounts.');return false;}
+ const previous=settings.supplierProductionBilling,existed=Object.prototype.hasOwnProperty.call(settings,'supplierProductionBilling'),state=previous||{accounts:{},bills:[],nextVoucherNo:1001},account=state.accounts?.[String(worker.id)];
+ if(!lines&&account?.startingBalance!=null){toast('Starting Opening Amount is already saved.');return false;}
+ if(lines&&account&&openingAmount!==(account.currentBalance??account.openingAmount??0)){toast('Opening changed. Reopen Create Bill.');return false;}
+ let calculated=null,current=null,remainingBalance=openingAmount;
+ if(lines){try{current=supplierProductionReceivedBillData(worker);if(!received||JSON.stringify(received)!==JSON.stringify(current)||JSON.stringify(lines)!==JSON.stringify(current.lines))throw Error('Received data changed. Reopen Create Bill.');calculated=supplierProductionBillAmounts(current.lines);if(!calculated.lines.some(line=>line.qty>0))throw Error('No unbilled received quantity is available.');remainingBalance=(Math.round(openingAmount*100)+Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0)throw Error('Paid Amount cannot exceed Grand Total.');}catch(error){toast(error.message);return false;}}
+ const stateBefore=JSON.stringify(settings.supplierProductionBilling),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;
+ for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ let bill=null;
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen Create Bill.');
+  const date=new Date().toISOString(),beforeAccount=supplierProductionBillAccountState(worker.id),beforeCounter={exists:!!previous&&Object.prototype.hasOwnProperty.call(previous,'nextVoucherNo'),value:previous?.nextVoucherNo},accounts={...(state.accounts||{}),[String(worker.id)]:{...(account||{}),supplierId:String(worker.id),supplierName:worker.name,startingBalance:account?.startingBalance??openingAmount,openingAmount:remainingBalance,currentBalance:remainingBalance,savedAt:account?.savedAt||date,updatedAt:date}};let next={...state,accounts};
+  if(calculated){const voucherNo=Math.max(1001,Number(state.nextVoucherNo)||1001,...(state.bills||[]).map(v=>(Number(v.voucherNo)||0)+1));bill={id:uid(),supplierId:String(worker.id),supplierName:worker.name,voucherNo,date,createdAt:date,pendingAmount:openingAmount,extraBalanceAmount:0,paidAmount,remainingBalance,...calculated,sourceRecordIds:current.sourceRecordIds,periodFrom:current.periodFrom,periodTo:current.periodTo};accounts[String(worker.id)].lastBillId=bill.id;bill.billReversal={version:1,beforeAccount,beforeCounter,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(accounts[String(worker.id)]))},afterCounter:voucherNo+1,activityFingerprint:fingerprint};next={...next,bills:[...(state.bills||[]),bill],nextVoucherNo:voucherNo+1};}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState('supplierBill'))throw Error('Bill save failed');
+ }catch(error){if(existed)settings={...settings,supplierProductionBilling:previous};else delete settings.supplierProductionBilling;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill was not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['SaveOpening','Create','Cancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ if(bill){closeModal();showSupplierProductionBill(bill);}else{openSupplierProductionBill(worker.id);toast('Opening Amount saved');}return true;
 }
 function openSupplierProductionBillEditor(workerId,billId){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),bill=(settings.supplierProductionBilling?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return;
-  const lines=bill.lines.map(line=>({...line}));
-  modal(`<h3>Edit Weekly Bill #${esc(String(bill.voucherNo))}</h3><p>${esc(bill.supplierName)} — ${esc(bill.date)}</p><div style="overflow-x:auto;"><table><thead><tr><th>Article Name</th><th>Quantity (ATOMS)</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="1" value="${esc(String(line.qty))}" data-supplier-bill-edit-qty="${index}" aria-label="${esc(line.articleName)} quantity ATOMS" style="min-width:80px;"></td><td>${upperMoney(line.rate)}</td><td data-supplier-bill-edit-amount="${index}">${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table></div><div class="rline"><strong>Final Total</strong><strong id="supplierBillEditTotal">${upperMoney(bill.totalAmount)}</strong></div><div class="modal-actions"><button type="button" class="btn brass" id="supplierBillEditSave">Save</button><button type="button" class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>`);
-  const quantities=()=>lines.map((line,index)=>Number(document.querySelector(`[data-supplier-bill-edit-qty="${index}"]`)?.value||0));
-  document.querySelectorAll('[data-supplier-bill-edit-qty]').forEach(input=>input.addEventListener('input',()=>{
-    try{const values=quantities(),calculated=supplierProductionBillAmounts(lines.map((line,index)=>({...line,qty:values[index]})));calculated.lines.forEach((line,index)=>document.querySelector(`[data-supplier-bill-edit-amount="${index}"]`).textContent=upperMoney(line.amount));document.getElementById('supplierBillEditTotal').textContent=upperMoney(calculated.totalAmount);}
-    catch(error){document.getElementById('supplierBillEditTotal').textContent='Invalid quantity';}
-  }));
-  document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(worker.id,bill.id,quantities());
-  document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(worker.id);};
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return;}
+ const bill=(settings.supplierProductionBilling?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!bill||supplierProductionBillSaving)return;
+ modal('<h3>Edit Bill #'+esc(bill.voucherNo)+'</h3><label>Opening Amount</label><input readonly value="'+esc(bill.pendingAmount??0)+'"><label>Extra Balance</label><input readonly value="'+esc(bill.extraBalanceAmount??0)+'"><table><thead><tr><th>Article</th><th>Received Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+(bill.lines||[]).map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><label>Paid Amount</label><input id="supplierBillEditPaid" type="number" min="0" step="0.01" value="'+esc(bill.paidAmount??0)+'"><div class="rline"><strong>Grand Total</strong><strong>'+upperMoney(supplierProductionBillTotals(bill).grandTotal)+'</strong></div><div class="rline"><strong>Remaining Balance</strong><strong id="supplierBillEditRemaining"></strong></div><div class="modal-actions"><button class="btn brass" id="supplierBillEditSave">Save</button><button class="btn ghost" id="supplierBillEditCancel">Cancel</button></div>');
+ const update=()=>document.getElementById('supplierBillEditRemaining').textContent=upperMoney((Math.round(supplierProductionBillTotals(bill).grandTotal*100)-Math.round(Number(document.getElementById('supplierBillEditPaid').value)*100))/100);document.getElementById('supplierBillEditPaid').addEventListener('input',update);update();
+ document.getElementById('supplierBillEditSave').onclick=()=>saveSupplierProductionBillHistory(workerId,billId,bill.lines.map(line=>line.qty),document.getElementById('supplierBillEditPaid').value);document.getElementById('supplierBillEditCancel').onclick=()=>{if(!supplierProductionBillSaving)openSupplierProductionBill(workerId);};
 }
 function deleteSupplierProductionBill(workerId,billId){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -12216,43 +12228,35 @@ function deleteSupplierProductionBill(workerId,billId){
   if(!worker||!bill||supplierProductionBillSaving)return;
   openConfirmModal(`Delete Weekly Bill #${bill.voucherNo}?`,()=>saveSupplierProductionBillHistory(worker.id,bill.id,null));
 }
-async function saveSupplierProductionBillHistory(workerId,billId,quantities){
-  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
-  const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(v=>String(v.id)===String(billId)&&String(v.supplierId)===String(workerId));
-  if(!worker||!bill||supplierProductionBillSaving)return false;
-  let updated=null;
-  if(quantities!==null){
-    if(!Array.isArray(quantities)||quantities.length!==bill.lines.length){toast('Bill articles do not match the saved record.');return false;}
-    try{const calculated=supplierProductionBillAmounts(bill.lines.map((line,index)=>({...line,qty:quantities[index]})));if(!calculated.lines.some(line=>line.qty>0)){toast('Enter an ATOMS quantity for at least one article.');return false;}updated={...bill,lines:calculated.lines.map((line,index)=>({...bill.lines[index],...line})),totalAmount:calculated.totalAmount,updatedAt:new Date().toISOString()};}
-    catch(error){toast(error.message);return false;}
-  }
-  const bills=updated?previous.bills.map(record=>record===bill?updated:record):previous.bills.filter(record=>record!==bill);
-  supplierProductionBillSaving=true;
-  for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=true;}
-  settings={...settings,supplierProductionBilling:{...previous,bills}};
-  try{if(!await saveCriticalCloudState('supplierBill'))throw new Error('Bill history save failed');}
-  catch(error){
-    settings={...settings,supplierProductionBilling:previous};
-    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}
-    toast('Bill changes were not saved. Please try again.');if(quantities===null)openSupplierProductionBill(worker.id);return false;
-  }finally{
-    supplierProductionBillSaving=false;
-    for(const id of ['supplierBillEditSave','supplierBillEditCancel']){const button=document.getElementById(id);if(button)button.disabled=false;}
-  }
-  closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(worker.id);
-  toast(updated?'Weekly bill updated':'Weekly bill deleted');return true;
+async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
+ if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
+ const worker=supplierProductionBillWorker(workerId),previous=settings.supplierProductionBilling,bill=(previous?.bills||[]).find(b=>String(b.id)===String(billId)&&String(b.supplierId)===String(workerId));if(!worker||!bill||supplierProductionBillSaving)return false;
+ if(quantities!==null&&JSON.stringify(quantities)!==JSON.stringify(bill.lines.map(line=>line.qty))){toast('Received quantities cannot be manually changed.');return false;}
+ const paidAmount=Math.round(Number(paidValue)*100)/100,grand=supplierProductionBillTotals(bill).grandTotal,remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;
+ if(quantities!==null&&(!Number.isFinite(Number(paidValue))||Number(paidValue)<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0)){toast('Enter a Paid Amount between zero and Grand Total.');return false;}
+ const stateBefore=JSON.stringify(previous),activity=supplierProductionBillActivity(worker);supplierProductionBillSaving=true;let updated=null;
+ for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=true;}
+ try{
+  const fingerprint=await supplierProductionBillFingerprint(activity);if(stateBefore!==JSON.stringify(settings.supplierProductionBilling)||activity!==supplierProductionBillActivity(worker))throw Error('Bill data changed. Reopen it.');if(quantities===null||bill.billReversal){const error=supplierProductionBillReversalError(bill,fingerprint);if(error)throw Error(error);}
+  const accounts={...(previous.accounts||{})};let next={...previous,accounts};
+  if(quantities===null){const proof=bill.billReversal;if(proof.beforeAccount.exists)accounts[String(workerId)]=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete accounts[String(workerId)];if(proof.beforeCounter.exists)next.nextVoucherNo=proof.beforeCounter.value;else delete next.nextVoucherNo;next.bills=previous.bills.filter(b=>String(b.id)!==String(billId));}
+  else{const updatedAt=new Date().toISOString();updated={...bill,paidAmount,remainingBalance,updatedAt};if(bill.billReversal){const account={...accounts[String(workerId)],openingAmount:remainingBalance,currentBalance:remainingBalance,updatedAt};accounts[String(workerId)]=account;updated.billReversal={...bill.billReversal,afterAccount:{exists:true,value:JSON.parse(JSON.stringify(account))}};}next.bills=previous.bills.map(b=>String(b.id)===String(billId)?updated:b);}
+  settings={...settings,supplierProductionBilling:next};if(!await saveCriticalCloudState('supplierBill'))throw Error('Bill history save failed');
+ }catch(error){settings={...settings,supplierProductionBilling:previous};try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast(error.message||'Bill changes were not saved.');return false;}
+ finally{supplierProductionBillSaving=false;for(const suffix of ['EditSave','EditCancel']){const button=document.getElementById('supplierBill'+suffix);if(button)button.disabled=false;}}
+ closeModal();if(updated)showSupplierProductionBill(updated);else openSupplierProductionBill(workerId);toast(updated?'Bill updated':'Bill reversed; received records are eligible again');return true;
 }
 
 function supplierProductionBillTotals(bill){
   const weeklyCents=(bill.lines||[]).reduce((sum,line)=>sum+Math.round((Number(line.amount)||0)*100),0);
   const opening=settings.supplierProductionBilling?.accounts?.[String(bill.supplierId)]?.openingAmount;
   const pendingCents=Math.round((Number(bill.pendingAmount??opening??0)||0)*100);
-  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,grandTotal:(weeklyCents+pendingCents)/100};
+  return {weeklyTotal:weeklyCents/100,pendingAmount:pendingCents/100,extraBalanceAmount:Number(bill.extraBalanceAmount)||0,grandTotal:(weeklyCents+pendingCents+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100};
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
   const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES, MAGZI DORI &amp; BATAWA SUPPLIERS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOES, MAGZI DORI &amp; BATAWA SUPPLIERS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th>Article</th><th>ATOMS</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
 }
 function showSupplierProductionBill(bill){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(bill?.supplierId)){toast('Select this Supplier Card first.');return;}
@@ -12275,7 +12279,7 @@ function buildSupplierProductionBillCanvas(bill){
   const rule=()=>{items.push({rule:true,y:height+4});height+=12;};
   add('LEATHER RIGHT SHOES BY ABID',31,'center');add('SHOES, MAGZI DORI & BATAWA SUPPLIERS WEEKLY VOUCHER',23,'center');add(bill.supplierName+' | #'+bill.voucherNo,23,'center');add('Date: '+bill.date.slice(0,10),21,'left',fmtTime(new Date(bill.date)));rule();
   bill.lines.forEach(line=>{add(line.articleName);add('Quantity ATOMS',21,'left',String(line.qty));add('Rate',21,'left',upperMoney(line.rate));add('Amount',21,'left',upperMoney(line.amount));rule();});
-  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));rule();add('For Contact Dial 03226574565',20,'center');
+  const totals=supplierProductionBillTotals(bill);add('Weekly Total',25,'left',upperMoney(totals.weeklyTotal));add('Pending Amount',25,'left',upperMoney(totals.pendingAmount));add('Extra Balance',21,'left',upperMoney(totals.extraBalanceAmount));add('Grand Total',25,'left',upperMoney(totals.grandTotal));add('Paid Amount',21,'left',bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount));add('Remaining Balance',25,'left',bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance));rule();add('For Contact Dial 03226574565',20,'center');
   canvas.width=width*3;canvas.height=(height+pad)*3;ctx.scale(3,3);ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height+pad);ctx.fillStyle='#000';ctx.strokeStyle='#000';ctx.textBaseline='top';
   items.forEach(item=>{if(item.rule){ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pad,item.y);ctx.lineTo(width-pad,item.y);ctx.stroke();return;}ctx.font='900 '+item.size+'px monospace';ctx.textAlign=item.align;ctx.fillText(item.text,item.align==='center'?width/2:pad,item.y);if(item.right){ctx.textAlign='right';ctx.fillText(item.right,width-pad,item.y);}});
   return canvas;
@@ -14303,18 +14307,58 @@ function sbAssignRickshawPheraNo(supplier,date){const key=sbBillDateKey(date);if
 function sbRickshawPheraHtml(voucher){return '<div class="rline"><span>Rickshaw Phera No.:</span><span>'+esc(Number.isSafeInteger(voucher?.rickshawPheraNo)?voucher.rickshawPheraNo:'Not saved')+'</span></div>';}
 function sbSupplierBillWeek(base=new Date()){const start=new Date(base);start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+1)%7);const end=new Date(start);end.setDate(end.getDate()+5);return {from:sbBillDateKey(start),to:sbBillDateKey(end)};}
 function sbSupplierBillItems(supplier,from,to){return (supplier.purchases||[]).filter(p=>{const key=sbBillDateKey(p.date);return key&&key>=from&&key<=to;}).reduce((sum,p)=>sum+shoeBoxPurchaseItems(p),0);}
-function sbSupplierBillGrandTotal(bill){return Math.round((Math.round((Number(bill.openingAmount)||0)*100)+Math.round((Number(bill.billTotal)||0)*100)))/100;}
-function sbSupplierBillHtml(bill){const line=(label,value)=>'<div class="rline"><strong>'+label+'</strong><strong>'+value+'</strong></div>';return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOE BOX SUPPLIERS BILL</div><div style="text-align:center;">'+esc(bill.supplierName)+' | #'+esc(bill.voucherNo||bill.id)+'</div>'+line('Date',esc(String(bill.date||'').slice(0,10)))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Period',esc(bill.from)+' to '+esc(bill.to))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Opening Amount',formatMoney(bill.openingAmount))+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px;"><thead><tr><th style="width:30%;text-align:left;overflow-wrap:anywhere;">Description</th><th style="width:20%;text-align:right;overflow-wrap:anywhere;">ATOMS Quantity</th><th style="width:24%;text-align:right;overflow-wrap:anywhere;">Rate Per ATOM</th><th style="width:26%;text-align:right;overflow-wrap:anywhere;">Amount</th></tr></thead><tbody><tr><td style="padding:4px 2px;">Shoe Box Supply</td><td style="text-align:right;padding:4px 2px;">'+esc(bill.totalItems)+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+formatMoney(bill.rate)+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+formatMoney(bill.billTotal)+'</td></tr></tbody></table>'+line('Bill Amount',formatMoney(bill.billTotal))+'<div class="rline" style="border:2px solid #000;padding:7px 6px;margin-top:6px;font-weight:1000;font-size:16px;line-height:1.3;gap:6px;"><strong>Grand Total</strong><strong>'+formatMoney(sbSupplierBillGrandTotal(bill))+'</strong></div>'+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;"><div style="text-align:center;">For Contact Dial 03226574565</div></div>';}
+function sbSupplierBillGrandTotal(bill){return Math.round((Math.round((Number(bill.openingAmount)||0)*100)+Math.round((Number(bill.billTotal)||0)*100)+Math.round((Number(bill.extraBalanceAmount)||0)*100)))/100;}
+function sbSupplierBillHtml(bill){const line=(label,value)=>'<div class="rline"><strong>'+label+'</strong><strong>'+value+'</strong></div>';return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">SHOE BOX SUPPLIERS BILL</div><div style="text-align:center;">'+esc(bill.supplierName)+' | #'+esc(bill.voucherNo||bill.id)+'</div>'+line('Date',esc(String(bill.date||'').slice(0,10)))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Period',esc(bill.from)+' to '+esc(bill.to))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Opening Amount',formatMoney(bill.openingAmount))+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px;"><thead><tr><th style="width:30%;text-align:left;overflow-wrap:anywhere;">Description</th><th style="width:20%;text-align:right;overflow-wrap:anywhere;">ATOMS Quantity</th><th style="width:24%;text-align:right;overflow-wrap:anywhere;">Rate Per ATOM</th><th style="width:26%;text-align:right;overflow-wrap:anywhere;">Amount</th></tr></thead><tbody><tr><td style="padding:4px 2px;">Shoe Box Supply</td><td style="text-align:right;padding:4px 2px;">'+esc(bill.totalItems)+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+formatMoney(bill.rate)+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+formatMoney(bill.billTotal)+'</td></tr></tbody></table>'+line('Bill Amount',formatMoney(bill.billTotal))+line('Extra Balance',formatMoney(bill.extraBalanceAmount||0))+'<div class="rline" style="border:2px solid #000;padding:7px 6px;margin-top:6px;font-weight:1000;font-size:16px;line-height:1.3;gap:6px;"><strong>Grand Total</strong><strong>'+formatMoney(sbSupplierBillGrandTotal(bill))+'</strong></div>'+'<div class="rline" style="font-weight:500;"><span>Paid Amount</span><span>'+(bill.paidAmount==null?'Not saved':formatMoney(bill.paidAmount))+'</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>'+(bill.remainingBalance==null?'Not saved':formatMoney(bill.remainingBalance))+'</strong></div>'+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;"><div style="text-align:center;">For Contact Dial 03226574565</div></div>';}
 function showShoeBoxSupplierBill(index,id,autoPrint=false){const bill=(getShoeBoxSuppliers()[index]?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;modal('<h3>Bill Voucher #'+esc(bill.voucherNo||bill.id)+'</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="sbBillPrintArea" class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;">'+sbSupplierBillHtml(bill)+'</div><div class="modal-actions"><button type="button" class="btn brass" id="sbBillPrint">Print</button><button type="button" class="btn ghost" id="sbBillClose">Close</button></div></div>');document.getElementById('sbBillPrint').onclick=()=>printAggregateThermal(document.getElementById('sbBillPrintArea').outerHTML,'SHOE BOX SUPPLIERS BILL','element');document.getElementById('sbBillClose').onclick=()=>openShoeBoxSupplierBillModal(index);if(autoPrint)document.getElementById('sbBillPrint').onclick();}
 function openShoeBoxSupplierBillModal(index){sbSupplierBillForm(index);}
 function sbSupplierBillHistoryHtml(index){const history=getShoeBoxSuppliers()[index]?.supplierBills||[],groups=new Map();history.forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=b.from||week.from,label=(b.from||week.from)+' to '+(b.to||week.to);if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Amount</th><th>Grand Total</th><th>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+formatMoney(b.billTotal)+'</td><td>'+formatMoney(sbSupplierBillGrandTotal(b))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-sb-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
 function sbBindSupplierBillHistory(index){document.querySelectorAll('[data-sb-bill-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.billId,action=button.getAttribute('data-sb-bill-action');if(action==='View'||action==='Print')showShoeBoxSupplierBill(index,id,action==='Print');else if(action==='Edit')sbSupplierBillEditor(index,id);else sbDeleteSupplierBill(index,id);});}
 async function sbSupplierBillCommit(snapshot){try{return await sbCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.');}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
-function sbDeleteSupplierBill(index,id){const bill=(getShoeBoxSuppliers()[index]?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;openConfirmModal('Delete Bill #'+(bill.voucherNo||bill.id)+'?',async()=>{const snapshot=sbSnapshot();const supplier=getShoeBoxSuppliers()[index];supplier.supplierBills=supplier.supplierBills.filter(b=>String(b.id)!==String(id));if(await sbSupplierBillCommit(snapshot))openShoeBoxSupplierBillModal(index);});}
+function sbDeleteSupplierBill(index,id){
+ let supplier=getShoeBoxSuppliers()[index];const bill=(supplier?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;
+ openConfirmModal('Reverse and delete Bill #'+(bill.voucherNo||bill.id)+'?',async()=>{
+  if(sbSupplierBillSaving)return;sbSupplierBillSaving=true;supplier=settings.shoeBoxSuppliers[index];const history=JSON.stringify(supplier.supplierBills),activity=sbSupplierBillActivity(supplier);try{
+   const fingerprint=await sbSupplierBillFingerprint(activity);supplier=settings.shoeBoxSuppliers[index];if(history!==JSON.stringify(supplier.supplierBills)||activity!==sbSupplierBillActivity(supplier))throw Error('Bill data changed. Reopen it.');const error=sbSupplierBillReversalError(supplier,bill,fingerprint);if(error)throw Error(error);
+   const snapshot=sbSnapshot(),proof=bill.billReversal;if(proof.beforeAccount.exists)supplier.supplierBillAccount=JSON.parse(JSON.stringify(proof.beforeAccount.value));else delete supplier.supplierBillAccount;if(proof.beforeCounter.exists)supplier.supplierBillNextVoucherNo=proof.beforeCounter.value;else delete supplier.supplierBillNextVoucherNo;
+   supplier.supplierBills=supplier.supplierBills.filter(b=>String(b.id)!==String(id));if(await sbSupplierBillCommit(snapshot)){openShoeBoxSupplierBillModal(index);toast('Bill reversed; received records are eligible again');}
+  }catch(error){toast(error.message);}finally{sbSupplierBillSaving=false;}
+ });
+}
 function sbSupplierBillEditor(index,id){const supplier=getShoeBoxSuppliers()[index],bill=(supplier?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;sbSupplierBillForm(index,bill);}
-function sbSupplierBillForm(index,bill=null){const supplier=getShoeBoxSuppliers()[index];if(!supplier||supplier.deletedAt)return;const week=sbSupplierBillWeek(),opening=bill?.openingAmount??supplier.supplierBills?.at(-1)?.openingAmount??0;modal('<h3>'+ (bill?'Edit Bill':'Create Bill')+'</h3><label>Opening Amount</label><input id="sbBillOpening" type="number" min="0" step="0.01" value="'+esc(opening)+'">'+'<div class="row"><div style="min-width:0;"><label>From Date (Saturday)</label><input id="sbBillFrom" type="date" value="'+esc(bill?.from||week.from)+'"></div><div style="min-width:0;"><label>To Date (Thursday)</label><input id="sbBillTo" type="date" value="'+esc(bill?.to||week.to)+'"></div></div><label>Total Items</label><input id="sbBillItems" readonly><label>Rate Per Item</label><input id="sbBillRate" type="number" min="0" step="0.01" value="'+esc(bill?.rate??0)+'">'+'<div class="rline"><strong>Bill Amount</strong><strong id="sbBillTotal"></strong></div><div class="rline"><strong>Grand Total</strong><strong id="sbBillGrandTotal"></strong></div>'+''+'<div class="modal-actions"><button type="button" class="btn brass" id="sbBillSave">'+(bill?'Save Changes':'Create / Save Bill')+'</button><button type="button" class="btn ghost" id="sbBillCancel">Cancel</button></div>'+sbSupplierBillHistoryHtml(index));
-const refresh=()=>{const from=document.getElementById('sbBillFrom').value,to=document.getElementById('sbBillTo').value,quantity=bill&&from===bill.from&&to===bill.to?bill.totalItems:sbSupplierBillItems(supplier,from,to);document.getElementById('sbBillItems').value=quantity;const rate=Number(document.getElementById('sbBillRate').value)||0;const amount=Math.round((quantity*rate+Number.EPSILON)*100)/100;document.getElementById('sbBillTotal').textContent=formatMoney(amount);document.getElementById('sbBillGrandTotal').textContent=formatMoney(sbSupplierBillGrandTotal({openingAmount:Number(document.getElementById('sbBillOpening').value)||0,billTotal:amount}));};['sbBillFrom','sbBillTo','sbBillRate','sbBillOpening'].forEach(id=>document.getElementById(id).addEventListener('input',refresh));refresh();sbBindSupplierBillHistory(index);document.getElementById('sbBillCancel').onclick=()=>bill?openShoeBoxSupplierBillModal(index):closeModal();
-document.getElementById('sbBillSave').onclick=async()=>{const button=document.getElementById('sbBillSave');if(button.disabled)return;const openingAmount=Number(document.getElementById('sbBillOpening').value),rate=Number(document.getElementById('sbBillRate').value);const from=document.getElementById('sbBillFrom').value,to=document.getElementById('sbBillTo').value,totalItems=Number(document.getElementById('sbBillItems').value);if(!from||!to||from>to){toast('Enter a valid date range');return;}const amount=Math.round((totalItems*rate+Number.EPSILON)*100)/100;if(![openingAmount,rate,amount].every(n=>Number.isFinite(n)&&n>=0)){toast('Enter valid Opening Amount and Rate');return;}const snapshot=sbSnapshot(),owner=getShoeBoxSuppliers()[index],history=owner.supplierBills||[],next=Math.max(Number(owner.supplierBillNextVoucherNo)||1,...history.map(b=>(Number(b.voucherNo)||0)+1)),saved={...(bill||{}),id:bill?.id||uid(),date:bill?.date||new Date().toISOString(),voucherNo:bill?.voucherNo||next,supplierName:bill?.supplierName||shoeBoxSupplierDisplayName(supplier,index),openingAmount,from,to,totalItems,rate,billTotal:amount,...(bill?{updatedAt:new Date().toISOString()}:{})};button.disabled=true;try{owner.supplierBills=bill?history.map(b=>String(b.id)===String(bill.id)?saved:b):[...history,saved];if(!bill)owner.supplierBillNextVoucherNo=next+1;if(await sbSupplierBillCommit(snapshot))showShoeBoxSupplierBill(index,saved.id);}finally{const live=document.getElementById('sbBillSave');if(live===button)live.disabled=false;}};}
+let sbSupplierBillSaving=false;
+function sbSupplierBillAccountState(supplier){return supplier.supplierBillAccount?{exists:true,value:JSON.parse(JSON.stringify(supplier.supplierBillAccount))}:{exists:false};}
+function sbSupplierBillReceived(supplier,from,to){
+ const history=supplier.supplierBills||[],closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String));const records=(supplier.purchases||[]).filter(p=>{const date=sbBillDateKey(p.date);return date&&date>=from&&date<=to&&!closed.has(String(p.id))&&shoeBoxPurchaseItems(p)>0;});
+ if(records.some(p=>!p.id))throw Error('A received record has no saved ID. Nothing was billed.');
+ if(records.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&b.from<=to&&b.to>=from))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
+ return {sourceRecordIds:records.map(p=>String(p.id)),totalItems:records.reduce((n,p)=>n+shoeBoxPurchaseItems(p),0)};
+}
+function sbSupplierBillActivity(supplier){return JSON.stringify({purchases:supplier.purchases||[],vouchers:supplier.receiveVouchers||[],products:supplier.products||[]});}
+async function sbSupplierBillFingerprint(activity){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(activity));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');}
+function sbSupplierBillReversalError(supplier,bill,fingerprint){const proof=bill.billReversal;if(!proof||proof.version!==1)return 'This legacy bill has no exact reversal snapshot. Nothing was changed.';if(String(supplier.supplierBills?.at(-1)?.id)!==String(bill.id))return 'Reverse or edit the latest bill first; later bills depend on its balance.';if(fingerprint!==proof.activityFingerprint||JSON.stringify(sbSupplierBillAccountState(supplier))!==JSON.stringify(proof.afterAccount)||JSON.stringify(supplier.supplierBillNextVoucherNo)!==JSON.stringify(proof.afterCounter))return 'Receiving or account changed after this bill. Exact reversal is blocked to protect newer records.';return '';}
+async function sbSaveSupplierBillOpening(index){const supplier=getShoeBoxSuppliers()[index];if(!supplier||supplier.deletedAt||sbSupplierBillSaving)return;if(supplier.supplierBillAccount){toast('Starting Opening Amount is already saved.');return;}const amount=Number(document.getElementById('sbBillOpening').value);if(!Number.isFinite(amount)||amount<0||!Number.isSafeInteger(Math.round(amount*100))){toast('Enter a valid Opening Amount');return;}const snapshot=sbSnapshot();sbSupplierBillSaving=true;try{supplier.supplierBillAccount={startingBalance:Math.round(amount*100)/100,currentBalance:Math.round(amount*100)/100,savedAt:new Date().toISOString(),lastBillId:null};if(await sbSupplierBillCommit(snapshot)){sbSupplierBillForm(index);toast('Opening Amount saved');}}finally{sbSupplierBillSaving=false;}}
+function sbSupplierBillForm(index,bill=null){
+ let supplier=getShoeBoxSuppliers()[index];if(!supplier||supplier.deletedAt)return;const week=sbSupplierBillWeek(),account=supplier.supplierBillAccount,opening=bill?.openingAmount??account?.currentBalance??supplier.supplierBills?.at(-1)?.openingAmount??0;
+ modal('<h3>'+(bill?'Edit Bill':'Create Bill')+'</h3><div class="row"><div><label>Opening Amount</label><input id="sbBillOpening" type="number" min="0" step="0.01" value="'+esc(opening)+'" '+((account||bill)?'readonly':'')+'><button class="btn ghost small" id="sbBillSaveOpening" '+((account||bill)?'disabled':'')+'>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="sbBillExtra" readonly value="'+esc(bill?.extraBalanceAmount??0)+'"></div></div><div class="row"><div><label>From Date (Saturday)</label><input id="sbBillFrom" type="date" value="'+esc(bill?.from||week.from)+'" '+(bill?'readonly':'')+'></div><div><label>To Date (Thursday)</label><input id="sbBillTo" type="date" value="'+esc(bill?.to||week.to)+'" '+(bill?'readonly':'')+'></div></div><div class="row"><div><label>Total Items</label><input id="sbBillItems" readonly></div><div><label>Rate Per Item</label><input id="sbBillRate" type="number" min="0" step="0.01" value="'+esc(bill?.rate??0)+'"></div></div><div class="row"><div><label>Paid Amount</label><input id="sbBillPaid" type="number" min="0" step="0.01" value="'+esc(bill?.paidAmount??0)+'"></div><div><label>Remaining Balance</label><input id="sbBillRemaining" readonly></div></div><div class="rline"><strong>Bill Amount</strong><strong id="sbBillTotal"></strong></div><div class="rline"><strong>Grand Total</strong><strong id="sbBillGrandTotal"></strong></div><div class="modal-actions"><button class="btn brass" id="sbBillSave">'+(bill?'Save Changes':'Create / Save Bill')+'</button><button class="btn ghost" id="sbBillCancel">Cancel</button></div>'+sbSupplierBillHistoryHtml(index));
+ let received=null;
+ const refresh=()=>{try{supplier=settings.shoeBoxSuppliers[index];const from=document.getElementById('sbBillFrom').value,to=document.getElementById('sbBillTo').value;received=bill?{sourceRecordIds:bill.sourceRecordIds,totalItems:bill.totalItems}:sbSupplierBillReceived(supplier,from,to);document.getElementById('sbBillItems').value=received.totalItems;const rate=Number(document.getElementById('sbBillRate').value),amount=Math.round((received.totalItems*rate+Number.EPSILON)*100)/100,grand=sbSupplierBillGrandTotal({openingAmount:Number(document.getElementById('sbBillOpening').value),billTotal:amount,extraBalanceAmount:bill?.extraBalanceAmount??0});document.getElementById('sbBillTotal').textContent=formatMoney(amount);document.getElementById('sbBillGrandTotal').textContent=formatMoney(grand);document.getElementById('sbBillRemaining').value=formatMoney((Math.round(grand*100)-Math.round(Number(document.getElementById('sbBillPaid').value)*100))/100);document.getElementById('sbBillSave').disabled=!received.totalItems;}catch(error){received=null;document.getElementById('sbBillItems').value='';document.getElementById('sbBillTotal').textContent=error.message;document.getElementById('sbBillGrandTotal').textContent='';document.getElementById('sbBillRemaining').value='';document.getElementById('sbBillSave').disabled=true;}};
+ ['sbBillFrom','sbBillTo','sbBillRate','sbBillOpening','sbBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',refresh));refresh();sbBindSupplierBillHistory(index);document.getElementById('sbBillSaveOpening').onclick=()=>sbSaveSupplierBillOpening(index);document.getElementById('sbBillCancel').onclick=()=>{if(!sbSupplierBillSaving)bill?openShoeBoxSupplierBillModal(index):closeModal();};
+ document.getElementById('sbBillSave').onclick=async()=>{
+  const button=document.getElementById('sbBillSave');if(button.disabled||sbSupplierBillSaving)return;supplier=settings.shoeBoxSuppliers[index];const openingAmount=Math.round(Number(document.getElementById('sbBillOpening').value)*100)/100,rate=Number(document.getElementById('sbBillRate').value),paidAmount=Math.round(Number(document.getElementById('sbBillPaid').value)*100)/100,from=document.getElementById('sbBillFrom').value,to=document.getElementById('sbBillTo').value;
+  if(!from||!to||from>to){toast('Enter a valid date range');return;}if(![openingAmount,rate,paidAmount].every(n=>Number.isFinite(n)&&n>=0&&Number.isSafeInteger(Math.round(n*100)))){toast('Enter valid Opening, Rate and Paid Amounts');return;}if(!received||!received.totalItems){toast('No unbilled received quantity');return;}
+  const amount=Math.round((received.totalItems*rate+Number.EPSILON)*100)/100,extraBalanceAmount=bill?.extraBalanceAmount??0,grand=sbSupplierBillGrandTotal({openingAmount,billTotal:amount,extraBalanceAmount}),remainingBalance=(Math.round(grand*100)-Math.round(paidAmount*100))/100;if(!Number.isSafeInteger(Math.round(remainingBalance*100))||remainingBalance<0){toast('Paid Amount cannot exceed Grand Total');return;}
+  const historyBefore=JSON.stringify(supplier.supplierBills||[]),accountBefore=JSON.stringify(sbSupplierBillAccountState(supplier)),activity=sbSupplierBillActivity(supplier);button.disabled=true;sbSupplierBillSaving=true;
+  try{
+   const fingerprint=await sbSupplierBillFingerprint(activity);supplier=settings.shoeBoxSuppliers[index];if(historyBefore!==JSON.stringify(supplier.supplierBills||[])||accountBefore!==JSON.stringify(sbSupplierBillAccountState(supplier))||activity!==sbSupplierBillActivity(supplier))throw Error('Bill data changed. Reopen Create Bill.');
+   if(bill){const live=(supplier.supplierBills||[]).find(b=>String(b.id)===String(bill.id));if(!live||JSON.stringify(live)!==JSON.stringify(bill))throw Error('Bill changed. Reopen it.');if(bill.billReversal){const error=sbSupplierBillReversalError(supplier,bill,fingerprint);if(error)throw Error(error);}if(from!==bill.from||to!==bill.to||openingAmount!==bill.openingAmount)throw Error('Saved period and opening cannot change.');}
+   else{if(JSON.stringify(received)!==JSON.stringify(sbSupplierBillReceived(supplier,from,to)))throw Error('Received quantity changed. Reopen Create Bill.');if(supplier.supplierBillAccount&&openingAmount!==supplier.supplierBillAccount.currentBalance)throw Error('Opening changed. Reopen Create Bill.');}
+   const snapshot=sbSnapshot(),history=supplier.supplierBills||[],next=Math.max(Number(supplier.supplierBillNextVoucherNo)||1,...history.map(b=>(Number(b.voucherNo)||0)+1)),now=new Date().toISOString(),beforeAccount=sbSupplierBillAccountState(supplier),beforeCounter={exists:Object.prototype.hasOwnProperty.call(supplier,'supplierBillNextVoucherNo'),value:supplier.supplierBillNextVoucherNo};
+   const saved={...(bill||{}),id:bill?.id||uid(),date:bill?.date||now,voucherNo:bill?.voucherNo||next,supplierName:bill?.supplierName||shoeBoxSupplierDisplayName(supplier,index),openingAmount,from,to,totalItems:received.totalItems,rate,billTotal:amount,extraBalanceAmount,paidAmount,remainingBalance,sourceRecordIds:received.sourceRecordIds,...(bill?{updatedAt:now}:{})};
+   if(!bill||bill.billReversal)supplier.supplierBillAccount={...(supplier.supplierBillAccount||{startingBalance:openingAmount,savedAt:now}),currentBalance:remainingBalance,lastBillId:saved.id};if(!bill)supplier.supplierBillNextVoucherNo=next+1;
+   if(!bill||bill.billReversal)saved.billReversal=bill?{...bill.billReversal,afterAccount:sbSupplierBillAccountState(supplier)}:{version:1,beforeAccount,beforeCounter,afterAccount:sbSupplierBillAccountState(supplier),afterCounter:supplier.supplierBillNextVoucherNo,activityFingerprint:fingerprint};supplier.supplierBills=bill?history.map(b=>String(b.id)===String(bill.id)?saved:b):[...history,saved];if(await sbSupplierBillCommit(snapshot))showShoeBoxSupplierBill(index,saved.id);
+  }catch(error){toast(error.message);}finally{sbSupplierBillSaving=false;const live=document.getElementById('sbBillSave');if(live===button)live.disabled=false;}
+ };
+}
 
 function sbWholeAtoms(value){const n=Number(value);return Number.isInteger(n)&&n>0?n:null;}
 function sbSnapshot(){return {settings:JSON.stringify(settings),auditLog:JSON.stringify(auditLog)};}
@@ -17208,17 +17252,101 @@ function openTodayGasHistoryModal(){
 
 function gasWorkerCalendarDays(voucher,previewMode=false,allAtCreation=false){if(!previewMode&&Number.isSafeInteger(voucher?.workerTotalGasDaysSnapshot))return voucher.workerTotalGasDaysSnapshot;const worker=workers.find(w=>String(w.id)===String(voucher?.workerRecordId||''))||workers.find(w=>String(w.name||'').trim().toLowerCase()===String(voucher?.workerName||'').trim().toLowerCase()),name=String(worker?.name||voucher?.workerName||'').trim().toLowerCase(),id=String(voucher?.workerRecordId||''),cutoff=new Date(voucher?.date||0).getTime(),included=(gasVouchers||[]).filter(v=>!v.voided&&!v.deletedAt&&(allAtCreation||new Date(v.date||0).getTime()<=cutoff)&&((id&&String(v.workerRecordId||'')===id)||String(v.workerName||'').trim().toLowerCase()===name));if(previewMode&&Number(voucher?.qtyKg)>0)included.push(voucher);const days=included.map(v=>new Date(v.date)).filter(d=>Number.isFinite(+d)).map(d=>Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/86400000);return days.length?Math.max(...days)-Math.min(...days)+1:0;}
 function gasSupplierBillGrandTotal(bill){if(bill.gasAmount==null)return null;return (Math.round((Number(bill.openingAmount)||0)*100)+Math.round((Number(bill.gasAmount)||0)*100)+Math.round((Number(bill.extraBalanceAmount)||0)*100))/100;}
-function gasSupplierBillHtml(bill){const line=(label,value)=>'<div class="rline"><strong>'+label+'</strong><strong>'+value+'</strong></div>';return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">GAS SUPPLIER BILL</div><div style="text-align:center;">'+esc(bill.supplierName)+' | #'+esc(bill.voucherNo||bill.id)+'</div>'+line('Date',esc(String(bill.date||'').slice(0,10)))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Opening Amount',formatMoney(bill.openingAmount))+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px;"><thead><tr><th style="width:30%;text-align:left;overflow-wrap:anywhere;">Description</th><th style="width:20%;text-align:right;overflow-wrap:anywhere;">KG Quantity</th><th style="width:24%;text-align:right;overflow-wrap:anywhere;">Rate Per KG</th><th style="width:26%;text-align:right;overflow-wrap:anywhere;">Amount</th></tr></thead><tbody><tr><td style="padding:4px 2px;">Total Gas</td><td style="text-align:right;padding:4px 2px;">'+esc(bill.totalGasKg)+' KG</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+(bill.pricePerKg==null?'Not saved':formatMoney(bill.pricePerKg))+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+(bill.gasAmount==null?'Not saved':formatMoney(bill.gasAmount))+'</td></tr></tbody></table>'+line('Extra Balance',formatMoney(bill.extraBalanceAmount))+'<div class="rline" style="border:2px solid #000;padding:7px 6px;margin-top:6px;font-weight:1000;font-size:16px;line-height:1.3;gap:6px;"><strong>Grand Total</strong><strong>'+(gasSupplierBillGrandTotal(bill)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(bill)))+'</strong></div>'+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;"><div style="text-align:center;">For Contact Dial 03226574565</div></div>';}
+function gasSupplierBillHtml(bill){const line=(label,value)=>'<div class="rline"><strong>'+label+'</strong><strong>'+value+'</strong></div>';return '<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">GAS SUPPLIER BILL</div><div style="text-align:center;">'+esc(bill.supplierName)+' | #'+esc(bill.voucherNo||bill.id)+'</div>'+line('Date',esc(String(bill.date||'').slice(0,10)))+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;">'+line('Opening Amount',formatMoney(bill.openingAmount))+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px;"><thead><tr><th style="width:30%;text-align:left;overflow-wrap:anywhere;">Description</th><th style="width:20%;text-align:right;overflow-wrap:anywhere;">KG Quantity</th><th style="width:24%;text-align:right;overflow-wrap:anywhere;">Rate Per KG</th><th style="width:26%;text-align:right;overflow-wrap:anywhere;">Amount</th></tr></thead><tbody><tr><td style="padding:4px 2px;">Total Gas</td><td style="text-align:right;padding:4px 2px;">'+esc(bill.totalGasKg)+' KG</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+(bill.pricePerKg==null?'Not saved':formatMoney(bill.pricePerKg))+'</td><td style="text-align:right;padding:4px 2px;overflow-wrap:anywhere;">'+(bill.gasAmount==null?'Not saved':formatMoney(bill.gasAmount))+'</td></tr></tbody></table>'+line('Extra Balance',formatMoney(bill.extraBalanceAmount))+'<div class="rline" style="border:2px solid #000;padding:7px 6px;margin-top:6px;font-weight:1000;font-size:16px;line-height:1.3;gap:6px;"><strong>Grand Total</strong><strong>'+(gasSupplierBillGrandTotal(bill)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(bill)))+'</strong></div>'+'<div class="rline" style="font-weight:500;padding:4px 0;gap:6px;"><span>Paid Amount</span><span style="text-align:right;">'+(bill.paidAmount==null?'Not saved':formatMoney(bill.paidAmount))+'</span></div>'+'<div class="rline" style="font-weight:900;font-size:14px;padding:4px 0;gap:6px;"><strong>Remaining Balance</strong><strong style="text-align:right;">'+(bill.remainingBalance==null?'Not saved':formatMoney(bill.remainingBalance))+'</strong></div>'+'<hr style="border:0;border-top:2px solid #000;margin:4px 0;"><div style="text-align:center;">For Contact Dial 03226574565</div></div>';}
 function showGasSupplierBill(id,autoPrint=false){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;modal('<h3>Bill Voucher #'+esc(bill.voucherNo||bill.id)+'</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="gasBillPrintArea" class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;">'+gasSupplierBillHtml(bill)+'</div><div class="modal-actions"><button type="button" class="btn brass" id="gasBillPrint">Print</button><button type="button" class="btn ghost" id="gasBillClose">Close</button></div></div>');document.getElementById('gasBillPrint').onclick=()=>printAggregateThermal(document.getElementById('gasBillPrintArea').outerHTML,'GAS SUPPLIER BILL','element');document.getElementById('gasBillClose').onclick=()=>openGasSupplierBillModal();if(autoPrint)document.getElementById('gasBillPrint').onclick();}
 function openGasSupplierBillModal(){gasSupplierBillForm();}
 function gasSupplierBillHistoryHtml(){const history=settings.gasSupplierBills||[],groups=new Map();history.forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=week.from,label=week.from+' to '+week.to;if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th>Bill</th><th>Date / Time</th><th>Amount</th><th>Grand Total</th><th>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+(b.gasAmount==null?'Not saved':formatMoney(b.gasAmount))+'</td><td>'+(gasSupplierBillGrandTotal(b)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(b)))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-gas-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
 function gasBindSupplierBillHistory(){document.querySelectorAll('[data-gas-bill-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.billId,action=button.getAttribute('data-gas-bill-action');if(action==='View'||action==='Print')showGasSupplierBill(id,action==='Print');else if(action==='Edit')gasSupplierBillEditor(id);else gasDeleteSupplierBill(id);});}
 async function gasSupplierBillCommit(snapshot){try{return await gasCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.');}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);gasVouchers=JSON.parse(snapshot.gasVouchers);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
-function gasDeleteSupplierBill(id){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;openConfirmModal('Delete Bill #'+(bill.voucherNo||bill.id)+'?',async()=>{const snapshot=gasDeepSnapshot();settings.gasSupplierBills=settings.gasSupplierBills.filter(b=>String(b.id)!==String(id));if(await gasSupplierBillCommit(snapshot))openGasSupplierBillModal();});}
+// Gas billing account belongs to the existing single Gas supplier slot.
+// Kept outside supplier details so editing its name/photo cannot drop balances.
+function gasBillAccountOpening(){
+  const account=settings.gasSupplierBillAccount;
+  return account&&Number.isFinite(account.currentBalance)?account.currentBalance:0;
+}
+function gasBillEffectState(){
+  const result={};
+  for(const key of ['gasSupplierBillAccount','gasSupplierWeeks','gasSupplierBilledExtraBalanceIds','gasSupplierBillNextVoucherNo'])result[key]={exists:Object.prototype.hasOwnProperty.call(settings,key),...(Object.prototype.hasOwnProperty.call(settings,key)?{value:JSON.parse(JSON.stringify(settings[key]))}:{})};
+  return result;
+}
+function gasBillRestoreEffectState(state){
+  for(const key of ['gasSupplierBillAccount','gasSupplierWeeks','gasSupplierBilledExtraBalanceIds','gasSupplierBillNextVoucherNo']){
+    if(state[key].exists)settings[key]=JSON.parse(JSON.stringify(state[key].value));else delete settings[key];
+  }
+}
+async function gasBillActivityFingerprint(){
+  const data=JSON.stringify({vouchers:gasVouchers,payments:settings.gasPayments||[],extras:settings.gasExtraBalances||[]});
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
+}
+function gasBillReversalError(bill,fingerprint){
+  const history=settings.gasSupplierBills||[],proof=bill.gasBillReversal;
+  if(!proof||proof.version!==1)return 'This older bill has no before-state snapshot. Exact reversal is unavailable; nothing was changed.';
+  if(String(history.at(-1)?.id)!==String(bill.id))return 'Only the latest Gas bill can be reversed; later bills depend on its balance.';
+  if(proof.activityFingerprint!==fingerprint||JSON.stringify(gasBillEffectState())!==JSON.stringify(proof.afterState))return 'Gas activity changed after this bill. Exact reversal is blocked to protect newer records.';
+  return '';
+}
+async function gasSaveSupplierOpeningAmount(){
+  const button=document.getElementById('gasBillSaveOpening');if(button.disabled)return;
+  if(settings.gasSupplierBillAccount){toast('Starting Opening Amount is already saved. Future bills use the current account balance.');return;}
+  const amount=Number(document.getElementById('gasBillOpening').value);
+  if(!Number.isFinite(amount)||amount<0||!Number.isSafeInteger(Math.round(amount*100))){toast('Enter a valid Opening Amount');return;}
+  const snapshot=gasDeepSnapshot();button.disabled=true;
+  try{
+    settings.gasSupplierBillAccount={startingBalance:Math.round(amount*100)/100,currentBalance:Math.round(amount*100)/100,savedAt:new Date().toISOString(),lastBillId:null};
+    if(await gasSupplierBillCommit(snapshot)){openGasSupplierBillModal();toast('Gas supplier Opening Amount saved');}
+  }finally{const live=document.getElementById('gasBillSaveOpening');if(live===button)live.disabled=false;}
+}
+function gasDeleteSupplierBill(id){
+  const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;
+  openConfirmModal('Reverse and delete Bill #'+(bill.voucherNo||bill.id)+'? Gas quantity and billed extra balances will become eligible again.',async()=>{
+    const effectBefore=JSON.stringify(gasBillEffectState()),historyBefore=JSON.stringify(settings.gasSupplierBills||[]);
+    const fingerprint=await gasBillActivityFingerprint();
+    const live=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));
+    if(!live||effectBefore!==JSON.stringify(gasBillEffectState())||historyBefore!==JSON.stringify(settings.gasSupplierBills||[])){toast('Gas state changed. Reopen the bill and try again.');return;}
+    const error=gasBillReversalError(live,fingerprint);if(error){toast(error);return;}
+    const snapshot=gasDeepSnapshot();
+    gasBillRestoreEffectState(live.gasBillReversal.beforeState);
+    settings.gasSupplierBills=settings.gasSupplierBills.filter(b=>String(b.id)!==String(id));
+    if(await gasSupplierBillCommit(snapshot)){render();openGasSupplierBillModal();toast('Bill reversed; Gas quantity and extra balances restored');}
+  });
+}
 function gasSupplierBillEditor(id){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;gasSupplierBillForm(bill);}
-function gasSupplierBillForm(bill=null){const week=ensureCurrentGasWeek(),opening=bill?.openingAmount??0,kg=bill?.totalGasKg??gasWeekKg(week,'remainingKg'),extra=bill?.extraBalanceAmount??gasExtraBalanceTotal();modal('<h3>'+ (bill?'Edit Bill':'Create Bill')+'</h3><label>Opening Amount</label><input id="gasBillOpening" type="number" min="0" step="0.01" value="'+esc(opening)+'">'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label>Total Gas (KG)</label><input id="gasBillKg" readonly value="'+esc(kg)+'"></div><div><label>Price Per KG</label><input id="gasBillRate" type="number" min="0" step="0.01" value="'+esc(bill?.pricePerKg??0)+'"></div></div>'+'<div class="rline"><strong>Gas Amount</strong><strong id="gasBillTotal"></strong></div>'+'<label>Extra Balance</label><input id="gasBillExtra" readonly value="'+esc(extra)+'"><div class="rline"><strong>Grand Total</strong><strong id="gasBillGrandTotal"></strong></div>'+'<div class="modal-actions"><button type="button" class="btn brass" id="gasBillSave">'+(bill?'Save Changes':'Create / Save Bill')+'</button><button type="button" class="btn ghost" id="gasBillCancel">Cancel</button></div>'+gasSupplierBillHistoryHtml());
-const refresh=()=>{const quantity=kg;const rate=Number(document.getElementById('gasBillRate').value)||0;const amount=Math.round((quantity*rate+Number.EPSILON)*100)/100;document.getElementById('gasBillTotal').textContent=formatMoney(amount);document.getElementById('gasBillGrandTotal').textContent=formatMoney(gasSupplierBillGrandTotal({openingAmount:Number(document.getElementById('gasBillOpening').value)||0,gasAmount:amount,extraBalanceAmount:extra}));};['gasBillRate','gasBillOpening'].forEach(id=>document.getElementById(id).addEventListener('input',refresh));refresh();gasBindSupplierBillHistory();document.getElementById('gasBillCancel').onclick=()=>bill?openGasSupplierBillModal():closeModal();
-document.getElementById('gasBillSave').onclick=async()=>{const button=document.getElementById('gasBillSave');if(button.disabled)return;const openingAmount=Number(document.getElementById('gasBillOpening').value),rate=Number(document.getElementById('gasBillRate').value);const amount=Math.round((kg*rate+Number.EPSILON)*100)/100;if(![openingAmount,rate,amount].every(n=>Number.isFinite(n)&&n>=0)){toast('Enter valid Opening Amount and Rate');return;}const snapshot=gasDeepSnapshot(),owner=settings,history=owner.gasSupplierBills||[],next=Math.max(Number(owner.gasSupplierBillNextVoucherNo)||1,...history.map(b=>(Number(b.voucherNo)||0)+1)),saved={...(bill||{}),id:bill?.id||uid(),date:bill?.date||new Date().toISOString(),voucherNo:bill?.voucherNo||next,supplierName:bill?.supplierName||settings.gasSupplier?.name||'Gas Supplier',openingAmount,totalGasKg:kg,pricePerKg:rate,gasAmount:amount,extraBalanceAmount:extra,...(bill?{updatedAt:new Date().toISOString()}:{})};button.disabled=true;try{owner.gasSupplierBills=bill?history.map(b=>String(b.id)===String(bill.id)?saved:b):[...history,saved];if(!bill){owner.gasSupplierBillNextVoucherNo=next+1;const currentWeek=ensureCurrentGasWeek();currentWeek.openingKg=0;currentWeek.newGasKg=0;currentWeek.remainingKg=0;owner.gasSupplierBilledExtraBalanceIds=[...new Set([...(owner.gasSupplierBilledExtraBalanceIds||[]).map(String),...(owner.gasExtraBalances||[]).map(entry=>String(entry.id))])];}if(await gasSupplierBillCommit(snapshot)){if(!bill)render();showGasSupplierBill(saved.id);}}finally{const live=document.getElementById('gasBillSave');if(live===button)live.disabled=false;}};}
+function gasSupplierBillForm(bill=null){const week=ensureCurrentGasWeek(),opening=bill?.openingAmount??gasBillAccountOpening(),kg=bill?.totalGasKg??gasWeekKg(week,'remainingKg'),extra=bill?.extraBalanceAmount??gasExtraBalanceTotal();modal('<h3>'+ (bill?'Edit Bill':'Create Bill')+'</h3>'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label>Opening Amount</label><input id="gasBillOpening" type="number" min="0" step="0.01" value="'+esc(opening)+'" '+((settings.gasSupplierBillAccount||bill?.gasBillReversal)?'readonly':'')+'><button type="button" class="btn ghost small" id="gasBillSaveOpening" '+((settings.gasSupplierBillAccount||bill)?'disabled':'')+'>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="gasBillExtra" readonly value="'+esc(extra)+'"></div></div>'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label>Total Gas (KG)</label><input id="gasBillKg" readonly value="'+esc(kg)+'"></div><div><label>Price Per KG</label><input id="gasBillRate" type="number" min="0" step="0.01" value="'+esc(bill?.pricePerKg??0)+'"></div></div>'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label>Paid Amount</label><input id="gasBillPaid" type="number" min="0" step="0.01" value="'+esc(bill?.paidAmount??0)+'"></div><div><label>Remaining Balance</label><input id="gasBillRemaining" readonly></div></div>'+'<div class="rline"><strong>Gas Amount</strong><strong id="gasBillTotal"></strong></div>'+'<div class="rline"><strong>Grand Total</strong><strong id="gasBillGrandTotal"></strong></div>'+'<div class="modal-actions"><button type="button" class="btn brass" id="gasBillSave">'+(bill?'Save Changes':'Create / Save Bill')+'</button><button type="button" class="btn ghost" id="gasBillCancel">Cancel</button></div>'+gasSupplierBillHistoryHtml());
+const refresh=()=>{const quantity=kg;const rate=Number(document.getElementById('gasBillRate').value)||0;const amount=Math.round((quantity*rate+Number.EPSILON)*100)/100;document.getElementById('gasBillTotal').textContent=formatMoney(amount);const grandTotal=gasSupplierBillGrandTotal({openingAmount:Number(document.getElementById('gasBillOpening').value)||0,gasAmount:amount,extraBalanceAmount:extra});document.getElementById('gasBillGrandTotal').textContent=formatMoney(grandTotal);const paidAmount=Number(document.getElementById('gasBillPaid').value)||0;document.getElementById('gasBillRemaining').value=formatMoney((Math.round(grandTotal*100)-Math.round(paidAmount*100))/100);};['gasBillRate','gasBillOpening','gasBillPaid'].forEach(id=>document.getElementById(id).addEventListener('input',refresh));refresh();gasBindSupplierBillHistory();document.getElementById('gasBillSaveOpening').onclick=gasSaveSupplierOpeningAmount;document.getElementById('gasBillCancel').onclick=()=>bill?openGasSupplierBillModal():closeModal();
+document.getElementById('gasBillSave').onclick=async()=>{
+  const button=document.getElementById('gasBillSave');if(button.disabled)return;
+  const openingAmount=Number(document.getElementById('gasBillOpening').value),rate=Number(document.getElementById('gasBillRate').value),paidAmount=Number(document.getElementById('gasBillPaid').value);
+  const amount=Math.round((kg*rate+Number.EPSILON)*100)/100;
+  if(![openingAmount,rate,amount,paidAmount].every(n=>Number.isFinite(n)&&n>=0)){toast('Enter valid Opening Amount, Rate and Paid Amount');return;}
+  const remainingBalance=(Math.round(gasSupplierBillGrandTotal({openingAmount,gasAmount:amount,extraBalanceAmount:extra})*100)-Math.round(paidAmount*100))/100;
+  if(!Number.isSafeInteger(Math.round(remainingBalance*100))){toast('Bill balance is too large');return;}
+  if(remainingBalance<0){toast('Paid Amount cannot exceed Grand Total');return;}
+  if(!bill&&settings.gasSupplierBillAccount&&openingAmount!==gasBillAccountOpening()){toast('Opening changed. Reopen Create Bill.');return;}
+  const effectBefore=JSON.stringify(gasBillEffectState()),historyBefore=JSON.stringify(settings.gasSupplierBills||[]);
+  button.disabled=true;
+  try{
+    const activityFingerprint=await gasBillActivityFingerprint();
+    if(effectBefore!==JSON.stringify(gasBillEffectState())||historyBefore!==JSON.stringify(settings.gasSupplierBills||[])){toast('Gas state changed. Reopen Create Bill.');return;}
+    if(bill&&bill.gasBillReversal){const live=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(bill.id));if(!live||JSON.stringify(live)!==JSON.stringify(bill)){toast('Bill changed. Reopen it.');return;}const error=gasBillReversalError(live,activityFingerprint);if(error){toast(error);return;}if(openingAmount!==bill.openingAmount){toast('Saved opening is locked for reversible bills.');return;}}
+    if(!bill&&(gasWeekKg(ensureCurrentGasWeek(),'remainingKg')!==kg||gasExtraBalanceTotal()!==extra)){toast('Gas quantity or Extra Balance changed. Reopen Create Bill.');return;}
+    const snapshot=gasDeepSnapshot(),owner=settings,history=owner.gasSupplierBills||[],next=Math.max(Number(owner.gasSupplierBillNextVoucherNo)||1,...history.map(b=>(Number(b.voucherNo)||0)+1));
+    const beforeState=gasBillEffectState();
+    const saved={...(bill||{}),id:bill?.id||uid(),date:bill?.date||new Date().toISOString(),voucherNo:bill?.voucherNo||next,supplierName:bill?.supplierName||settings.gasSupplier?.name||'Gas Supplier',openingAmount,totalGasKg:kg,pricePerKg:rate,gasAmount:amount,extraBalanceAmount:extra,paidAmount,remainingBalance,...(bill?{updatedAt:new Date().toISOString()}:{})};
+    owner.gasSupplierBills=bill?history.map(b=>String(b.id)===String(bill.id)?saved:b):[...history,saved];
+    if(!bill){
+      owner.gasSupplierBillNextVoucherNo=next+1;
+      const currentWeek=ensureCurrentGasWeek();currentWeek.openingKg=0;currentWeek.newGasKg=0;currentWeek.remainingKg=0;
+      owner.gasSupplierBilledExtraBalanceIds=[...new Set([...(owner.gasSupplierBilledExtraBalanceIds||[]).map(String),...(owner.gasExtraBalances||[]).map(entry=>String(entry.id))])];
+      owner.gasSupplierBillAccount={...(owner.gasSupplierBillAccount||{startingBalance:openingAmount,savedAt:new Date().toISOString()}),currentBalance:remainingBalance,lastBillId:saved.id};
+      saved.gasBillReversal={version:1,beforeState,afterState:gasBillEffectState(),activityFingerprint};
+    }else if(bill.gasBillReversal){
+      owner.gasSupplierBillAccount={...owner.gasSupplierBillAccount,currentBalance:remainingBalance,lastBillId:saved.id};
+      saved.gasBillReversal={...bill.gasBillReversal,afterState:gasBillEffectState()};
+    }
+    if(await gasSupplierBillCommit(snapshot)){if(!bill)render();showGasSupplierBill(saved.id);}
+  }finally{const live=document.getElementById('gasBillSave');if(live===button)live.disabled=false;}
+};}
 
 function gasExtraBalanceTotal(){
   const billedIds=new Set((settings.gasSupplierBilledExtraBalanceIds||[]).map(String));
