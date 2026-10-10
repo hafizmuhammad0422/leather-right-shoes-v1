@@ -1603,13 +1603,14 @@ let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
 let cloudSyncQueued = false;
 const CLOUD_API = './api/state';
+const RUNTIME_CLOUD_API = CLOUD_API+'?mode=runtime';
+const BACKUP_CLOUD_API = CLOUD_API+'?mode=backups';
 
-function getCurrentState(){
-  return {
-    settings, materials, workers, transactions, stockMovements,
-    articles, shopkeepers, bills, auditLog, gasVouchers,
-    backups: backupVersions
-  };
+function getCurrentState(includeBackups=true){
+  const state={settings, materials, workers, transactions, stockMovements,
+    articles, shopkeepers, bills, auditLog, gasVouchers};
+  if(includeBackups) state.backups=backupVersions;
+  return state;
 }
 
 function applyCloudState(state){
@@ -1684,13 +1685,13 @@ function hasUnsavedCloudChanges(){
 function captureCloudState(serialized=false){
   // Freeze the exact state that belongs to this save. Later UI mutations cannot
   // leak into an older queued request. Keep object snapshots for rollback callers.
-  const snapshot=JSON.stringify(getCurrentState());
+  const snapshot=JSON.stringify(getCurrentState(false));
   return serialized ? snapshot : JSON.parse(snapshot);
 }
 
 async function performCloudWrite(snapshot){
   if(!cloudReady) return false;
-  const res=await fetch(CLOUD_API,{
+  const res=await fetch(RUNTIME_CLOUD_API,{
     method:'PUT',
     headers:{'Content-Type':'application/json'},
     body:typeof snapshot==='string' ? snapshot : JSON.stringify(snapshot)
@@ -1846,7 +1847,7 @@ window.addEventListener('beforeunload',(e)=>{
 function isCompleteCloudState(state){
   if(!state || typeof state!=='object' || Array.isArray(state)) return false;
   if(!state.settings || typeof state.settings!=='object' || Array.isArray(state.settings)) return false;
-  const arrayDatasets=['materials','workers','transactions','stockMovements','articles','shopkeepers','bills','auditLog','gasVouchers','backups'];
+  const arrayDatasets=['materials','workers','transactions','stockMovements','articles','shopkeepers','bills','auditLog','gasVouchers'];
   return arrayDatasets.every(name=>Array.isArray(state[name]));
 }
 
@@ -1854,7 +1855,7 @@ async function hydrateCloud(startupLocalSignature){
   let cloudStateApplied=false;
   let cloudConnectionVerified=false;
   try{
-    const res=await fetch(CLOUD_API,{cache:'no-store'});
+    const res=await fetch(RUNTIME_CLOUD_API,{cache:'no-store'});
     if(!res.ok) throw new Error('Cloud load failed: '+res.status);
     const payload=await res.json();
 
@@ -1863,7 +1864,7 @@ async function hydrateCloud(startupLocalSignature){
         throw new Error('Cloud response contains an incomplete or invalid application state.');
       }
 
-      const localChangedDuringCloudLoad = JSON.stringify(getCurrentState()) !== startupLocalSignature;
+      const localChangedDuringCloudLoad = JSON.stringify(getCurrentState(false)) !== startupLocalSignature;
       if(localChangedDuringCloudLoad){
         console.warn('A local change occurred before D1 finished loading. D1 remains authoritative; the startup-local change was not uploaded.');
       }
@@ -1977,6 +1978,8 @@ async function deleteR2ImageUrl(url){
   return res.ok;
 }
 function cleanupReplacedR2ImagesAfterSave(){
+  // Unknown backup references must never cause an R2 deletion.
+  if(!authoritativeBackupsLoaded)return;
   if(!r2RefsBeforePendingUpload)return;
   const before=r2RefsBeforePendingUpload;r2RefsBeforePendingUpload=null;
   const current=collectR2ImageUrls(getCurrentState());
@@ -2414,7 +2417,11 @@ if(localStorage.getItem('fac_owner_pin_default_v2')!=='1'){
   settings.ownerPin = settings.ownerPin || '1234';
 }
 settings.nextBillNo = Number(settings.nextBillNo)||1001;
-let backupVersions = loadDB(DB_KEYS.backups, []);
+// Backup versions are read explicitly from authoritative D1, never at startup.
+let backupVersions = [];
+let authoritativeBackupsLoaded = false;
+let backupLoadPromise = null;
+let backupLoadError = false;
 let materials = loadDB(DB_KEYS.materials, []);
 let workers = loadDB(DB_KEYS.workers, []);
 let workerCategoryFilter = null;
@@ -15532,7 +15539,11 @@ function pageArchive(){
 
 /* ============ BACKUP ============ */
 function pageBackup(){
-  const versions = loadDB(DB_KEYS.backups, []).slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
+  if(cloudReady && !authoritativeBackupsLoaded && !backupLoadPromise && !backupLoadError){
+    loadAuthoritativeBackups().then(()=>{if(currentPage==='backup')render();})
+      .catch(()=>{if(currentPage==='backup')render();});
+  }
+  const versions = backupVersions.slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
   return `
     <h2 class="page-title">Backup</h2>
     <div class="card">
@@ -15548,9 +15559,9 @@ function pageBackup(){
       <h3 style="margin-top:0;">Versioned Backups (Automatic)</h3>
       <p style="font-size:13px;color:var(--muted);">A version is saved automatically once per day, and also right before any restore — so you can always step back.</p>
       <button class="btn ghost" id="btnSaveVersionNow" style="margin-bottom:12px;">Save a Version Now</button>
-      ${versions.length? `<table><thead><tr><th>Saved At</th><th>Action</th></tr></thead><tbody>
+      ${authoritativeBackupsLoaded && versions.length? `<table><thead><tr><th>Saved At</th><th>Action</th></tr></thead><tbody>
         ${versions.map(v=>`<tr><td>${fmtDate(v.timestamp)}</td><td class="actions-cell"><button class="btn ghost small" data-restoreversion="${v.id}">Restore</button></td></tr>`).join('')}
-      </tbody></table>` : `<div class="empty">No versions saved yet.</div>`}
+      </tbody></table>` : `<div class="empty">${authoritativeBackupsLoaded ? 'No versions saved yet.' : backupLoadError ? 'Backups could not be loaded.' : 'Loading backup versions...'}</div>`}
     </div>
   `;
 }
@@ -15579,20 +15590,23 @@ function doExport(){
 
 function doImport(file){
   const reader = new FileReader();
-  reader.onload = (e)=>{
+  reader.onload = async(e)=>{
+    if(!cloudReady)return;
+    setCriticalUiLock(true);
     try{
       const data = JSON.parse(e.target.result);
       if(!data.settings || !data.materials || !data.workers || !data.transactions) throw new Error('bad file');
-      saveBackupVersion(); // safety snapshot of current state before importing
+      if(!await saveBackupVersion().catch(()=>false)){toast('Safety backup could not be saved. Import cancelled.');return;}
+      const before=captureCloudState(); // rollback if runtime save fails
       settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials; workers = data.workers;
       transactions = data.transactions; stockMovements = data.stockMovements || []; articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
        articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
-      persistAll();
+      if(!await saveCriticalCloudState()){applyCloudState(before);await reconcileCloudAfterCriticalRollback();render();toast('Restore could not be saved to D1.');return;}
       toast('Backup restored successfully');
       render();
     }catch(err){
       toast('This is not a valid backup file');
-    }
+    }finally{setCriticalUiLock(false);}
   };
   reader.readAsText(file);
 }
@@ -21765,8 +21779,11 @@ function attachPageHandlers(){
     if(!f){ toast('Please select a file first'); return; }
     if(confirm('This will replace all current data. Continue?')) doImport(f);
   });
-  document.getElementById('btnSaveVersionNow')?.addEventListener('click', ()=>{
-    saveBackupVersion(); render(); toast('Version saved');
+  document.getElementById('btnSaveVersionNow')?.addEventListener('click', async(e)=>{
+    e.currentTarget.disabled=true;
+    try{await saveBackupVersion();render();toast('Version saved');}
+    catch(err){toast('Version could not be saved to D1.');}
+    finally{e.target.disabled=false;}
   });
   document.querySelectorAll('[data-restoreversion]').forEach(b=>b.addEventListener('click', ()=>restoreBackupVersion(b.dataset.restoreversion)));
 
@@ -21782,29 +21799,75 @@ function attachPageHandlers(){
 }
 
 /* ============ VERSIONED BACKUPS (in addition to manual Export/Import) ============ */
-function saveBackupVersion(){
-  const data = {settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
-  backupVersions.push({id:uid(), timestamp:data.savedAt, data});
-  if(backupVersions.length>10) backupVersions = backupVersions.slice(backupVersions.length-10);
-  saveDB(DB_KEYS.backups, backupVersions);
+async function loadAuthoritativeBackups(force=false){
+  if(force && backupLoadPromise){await backupLoadPromise;}
+  if(backupLoadPromise)return backupLoadPromise;
+  if(authoritativeBackupsLoaded && !force)return backupVersions;
+  authoritativeBackupsLoaded=false;
+  backupLoadError=false;
+  backupLoadPromise=(async()=>{
+    try{
+      if(!cloudReady)throw new Error('D1 is not ready.');
+      const res=await fetch(BACKUP_CLOUD_API,{cache:'no-store'});
+      if(!res.ok)throw new Error('Backup load failed: '+res.status);
+      const payload=await res.json();
+      if(!Array.isArray(payload.backups))throw new Error('Invalid backups response.');
+      backupVersions=payload.backups;
+      authoritativeBackupsLoaded=true;
+      return backupVersions;
+    }catch(err){backupLoadError=true;throw err;}
+    finally{backupLoadPromise=null;}
+  })();
+  return backupLoadPromise;
 }
-function maybeAutoSnapshot(){
-  const todayStr = new Date().toISOString().slice(0,10);
-  const hasToday = backupVersions.some(v=>v.timestamp.slice(0,10)===todayStr);
-  if(!hasToday) saveBackupVersion();
+async function saveBackupVersion(automaticDay=null){
+  if(!cloudReady)throw new Error('D1 is not ready.');
+  const data={settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
+  const version=JSON.parse(JSON.stringify({id:uid(), timestamp:data.savedAt, data}));
+  authoritativeBackupsLoaded=false; // append makes cached references incomplete
+  const res=await fetch(BACKUP_CLOUD_API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,automaticDay})});
+  if(!res.ok)throw new Error('Backup save failed: '+res.status);
+  const payload=await res.json();
+  if(payload.ok!==true || typeof payload.saved!=='boolean')throw new Error('Invalid backup save response.');
+  if(payload.saved){
+    // A concurrent backup read may predate this append; refresh explicitly.
+    authoritativeBackupsLoaded=false;
+    backupLoadError=false;
+    if(currentPage==='backup')await loadAuthoritativeBackups(true);
+  }
+  return true;
 }
-function restoreBackupVersion(versionId){
-  if(!confirm('Restore this version? Your current data will first be saved as a new backup version so nothing is lost.')) return;
-  saveBackupVersion();
-  const v = backupVersions.find(x=>x.id===versionId);
-  if(!v){ toast('Version not found'); return; }
-  settings = v.data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = v.data.materials || []; workers = v.data.workers || [];
-  transactions = v.data.transactions || []; stockMovements = v.data.stockMovements || [];
-  articles = v.data.articles || []; shopkeepers = v.data.shopkeepers || []; bills = v.data.bills || []; auditLog = v.data.auditLog || [];
-  persistAll();
-  audit('Backup Version Restored','Version '+versionId+' restored');
-  toast('Backup version restored');
-  render();
+async function maybeAutoSnapshot(){
+  if(!cloudReady)return;
+  const todayStr=new Date().toISOString().slice(0,10);
+  const res=await fetch(BACKUP_CLOUD_API+'&day='+todayStr,{cache:'no-store'});
+  if(!res.ok)throw new Error('Backup metadata load failed: '+res.status);
+  const payload=await res.json();
+  if(typeof payload.hasDay!=='boolean')throw new Error('Invalid backup metadata response.');
+  if(!payload.hasDay)await saveBackupVersion(todayStr);
+}
+async function restoreBackupVersion(versionId){
+  if(!confirm('Restore this version? Your current data will first be saved as a new backup version so nothing is lost.'))return;
+  if(!cloudReady)return;
+  setCriticalUiLock(true);
+  try{
+    let data;
+    try{
+      const versions=await loadAuthoritativeBackups(true);
+      const version=versions.find(x=>x.id===versionId);
+      if(!version){toast('Version not found');return;}
+      data=JSON.parse(JSON.stringify(version.data));
+      await saveBackupVersion();
+    }catch(err){toast('Backups could not be read or the safety backup could not be saved. Restore cancelled.');return;}
+    const before=captureCloudState();
+    settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials || []; workers = data.workers || [];
+    transactions = data.transactions || []; stockMovements = data.stockMovements || [];
+    articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
+    audit('Backup Version Restored','Version '+versionId+' restored');
+    if(!await saveCriticalCloudState()){applyCloudState(before);await reconcileCloudAfterCriticalRollback();render();toast('Restore could not be saved to D1.');return;}
+    toast('Backup version restored');
+    render();
+  }finally{setCriticalUiLock(false);}
 }
 
 /* ============ INIT ============ */
@@ -21831,20 +21894,21 @@ document.getElementById('topLogoInput')?.addEventListener('change', async(e)=>{
 async function initApp(){
   // D1 is authoritative. Render immediately for fast startup, but temporarily
   // block mutations until the initial D1 hydration has completed.
-  const startupLocalSignature = JSON.stringify(getCurrentState());
+  const startupLocalSignature = JSON.stringify(getCurrentState(false));
   render();
   const app=document.getElementById('appBody');
   if(app){app.setAttribute('inert','');app.setAttribute('aria-busy','true');}
 
   try{
     const cloudStateApplied = await hydrateCloud(startupLocalSignature);
-    try{ maybeAutoSnapshot(); }catch(e){ console.error('Auto-snapshot skipped:', e); }
     if(cloudStateApplied) render();
   }finally{
     const currentApp=document.getElementById('appBody');
     if(currentApp && cloudReady){
       currentApp.removeAttribute('inert');
       currentApp.removeAttribute('aria-busy');
+      // Backup metadata/creation runs separately and never holds startup locked.
+      maybeAutoSnapshot().catch(e=>console.error('Auto-snapshot skipped:',e));
     }else if(currentApp){
       // Fail closed: if authoritative D1 could not be verified, do not allow
       // business-data edits that could exist only in RAM and disappear on close.
