@@ -1603,14 +1603,13 @@ let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
 let cloudSyncQueued = false;
 const CLOUD_API = './api/state';
-const RUNTIME_CLOUD_API = CLOUD_API+'?mode=runtime';
-const BACKUP_CLOUD_API = CLOUD_API+'?mode=backups';
 
-function getCurrentState(includeBackups=true){
-  const state={settings, materials, workers, transactions, stockMovements,
-    articles, shopkeepers, bills, auditLog, gasVouchers};
-  if(includeBackups) state.backups=backupVersions;
-  return state;
+function getCurrentState(){
+  return {
+    settings, materials, workers, transactions, stockMovements,
+    articles, shopkeepers, bills, auditLog, gasVouchers,
+    backups: backupVersions
+  };
 }
 
 function applyCloudState(state){
@@ -1682,19 +1681,18 @@ function hasUnsavedCloudChanges(){
   return cloudSavedRevision < cloudChangeRevision;
 }
 
-function captureCloudState(serialized=false){
+function captureCloudState(){
   // Freeze the exact state that belongs to this save. Later UI mutations cannot
-  // leak into an older queued request. Keep object snapshots for rollback callers.
-  const snapshot=JSON.stringify(getCurrentState(false));
-  return serialized ? snapshot : JSON.parse(snapshot);
+  // leak into an older queued request.
+  return JSON.parse(JSON.stringify(getCurrentState()));
 }
 
 async function performCloudWrite(snapshot){
   if(!cloudReady) return false;
-  const res=await fetch(RUNTIME_CLOUD_API,{
+  const res=await fetch(CLOUD_API,{
     method:'PUT',
     headers:{'Content-Type':'application/json'},
-    body:typeof snapshot==='string' ? snapshot : JSON.stringify(snapshot)
+    body:JSON.stringify(snapshot)
   });
   if(!res.ok) throw new Error('Cloud save failed: '+res.status);
   return true;
@@ -1779,7 +1777,7 @@ async function saveCriticalCloudState(){
   setCriticalUiLock(true);
 
   const revision=++cloudChangeRevision;
-  const snapshot=captureCloudState(true);
+  const snapshot=captureCloudState();
   let ok=false;
   try{
     await enqueueCloudWrite(snapshot);
@@ -1847,7 +1845,7 @@ window.addEventListener('beforeunload',(e)=>{
 function isCompleteCloudState(state){
   if(!state || typeof state!=='object' || Array.isArray(state)) return false;
   if(!state.settings || typeof state.settings!=='object' || Array.isArray(state.settings)) return false;
-  const arrayDatasets=['materials','workers','transactions','stockMovements','articles','shopkeepers','bills','auditLog','gasVouchers'];
+  const arrayDatasets=['materials','workers','transactions','stockMovements','articles','shopkeepers','bills','auditLog','gasVouchers','backups'];
   return arrayDatasets.every(name=>Array.isArray(state[name]));
 }
 
@@ -1855,7 +1853,7 @@ async function hydrateCloud(startupLocalSignature){
   let cloudStateApplied=false;
   let cloudConnectionVerified=false;
   try{
-    const res=await fetch(RUNTIME_CLOUD_API,{cache:'no-store'});
+    const res=await fetch(CLOUD_API,{cache:'no-store'});
     if(!res.ok) throw new Error('Cloud load failed: '+res.status);
     const payload=await res.json();
 
@@ -1864,7 +1862,7 @@ async function hydrateCloud(startupLocalSignature){
         throw new Error('Cloud response contains an incomplete or invalid application state.');
       }
 
-      const localChangedDuringCloudLoad = JSON.stringify(getCurrentState(false)) !== startupLocalSignature;
+      const localChangedDuringCloudLoad = JSON.stringify(getCurrentState()) !== startupLocalSignature;
       if(localChangedDuringCloudLoad){
         console.warn('A local change occurred before D1 finished loading. D1 remains authoritative; the startup-local change was not uploaded.');
       }
@@ -1978,8 +1976,6 @@ async function deleteR2ImageUrl(url){
   return res.ok;
 }
 function cleanupReplacedR2ImagesAfterSave(){
-  // Unknown backup references must never cause an R2 deletion.
-  if(!authoritativeBackupsLoaded)return;
   if(!r2RefsBeforePendingUpload)return;
   const before=r2RefsBeforePendingUpload;r2RefsBeforePendingUpload=null;
   const current=collectR2ImageUrls(getCurrentState());
@@ -2417,11 +2413,7 @@ if(localStorage.getItem('fac_owner_pin_default_v2')!=='1'){
   settings.ownerPin = settings.ownerPin || '1234';
 }
 settings.nextBillNo = Number(settings.nextBillNo)||1001;
-// Backup versions are read explicitly from authoritative D1, never at startup.
-let backupVersions = [];
-let authoritativeBackupsLoaded = false;
-let backupLoadPromise = null;
-let backupLoadError = false;
+let backupVersions = loadDB(DB_KEYS.backups, []);
 let materials = loadDB(DB_KEYS.materials, []);
 let workers = loadDB(DB_KEYS.workers, []);
 let workerCategoryFilter = null;
@@ -13787,7 +13779,7 @@ function setUpperWorkerSelection(workerId){
 function getUpperSelectedWorkerId(){return upperSelWorker||'';}
 function setUpperRowSelection(row,kind,id){
   if(kind==='article'&&row.dataset.productionDefaultId&&row.dataset.productionDefaultId!==String(id))detachProductionDefaultRow(row);
-  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials().filter(m=>workerMaterialAllowed(workers.find(w=>String(w.id)===String(getUpperSelectedWorkerId())),'upper',m.id));
+  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials();
   const item=list.find(x=>String(x.id)===String(id));
   const input=row.querySelector(kind==='article'?'.upper-article-search':'.upper-material-search');
   const results=row.querySelector(kind==='article'?'.upper-article-results':'.upper-material-results');
@@ -13798,7 +13790,7 @@ function setUpperRowSelection(row,kind,id){
   updateUpperDistributionRow(row);
 }
 function renderUpperRowResults(row,kind,query){
-  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials().filter(m=>workerMaterialAllowed(workers.find(w=>String(w.id)===String(getUpperSelectedWorkerId())),'upper',m.id));
+  const list=kind==='article'?upperCategoryArticles():upperCategoryMaterials();
   const input=row.querySelector(kind==='article'?'.upper-article-search':'.upper-material-search');
   const results=row.querySelector(kind==='article'?'.upper-article-results':'.upper-material-results'); if(!input||!results)return;
   const q=String(query||'').trim().toLowerCase();
@@ -13960,15 +13952,15 @@ function collectUpperDistributionDraft(){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const defaultMaterial=shoeLamination?null:upperDefaultMaterial(worker);
-  if(!workerEditorDefaultModules(worker).includes('upper')&&!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
-  const backgroundMaterial=document.querySelector('.upper-distribution-row .upper-material-search');if(backgroundMaterial&&!shoeLamination&&!workerEditorDefaultModules(worker).includes('upper'))backgroundMaterial.dataset.selectedId=String(defaultMaterial?.id||'');
+  if(!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
+  const backgroundMaterial=document.querySelector('.upper-distribution-row .upper-material-search');if(backgroundMaterial&&!shoeLamination)backgroundMaterial.dataset.selectedId=String(defaultMaterial?.id||'');
   document.querySelectorAll('.upper-distribution-row').forEach(row=>{
-    const articleId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',materialId=articleOnly||shoeLamination?'':row.querySelector('.upper-material-search')?.dataset.selectedId||'',article=upperCategoryArticles().find(a=>String(a.id)===String(articleId)),material=shoeLamination?null:upperCategoryMaterials().find(m=>String(m.id)===String(materialId)&&workerMaterialAllowed(worker,'upper',m.id)),enteredQty=Number(row.querySelector('.upper-qty')?.value||0),enteredReceivedQty=Number(row.querySelector('.upper-received-qty')?.value||0),unit=upperArticleUnit(article),snapshot=upperUnitSnapshot(unit,enteredQty,enteredReceivedQty,workerArticleLabourRate(worker,'upper',article),shoeLamination&&article?.laminationUnit===true),qty=snapshot.internalAtomsQty,receivedQty=snapshot.internalReceivedAtomsQty,labourExpense=Number(row.querySelector('.upper-labour-expense')?.value||0);
+    const articleId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',materialId=articleOnly||shoeLamination?'':row.querySelector('.upper-material-search')?.dataset.selectedId||'',article=upperCategoryArticles().find(a=>String(a.id)===String(articleId)),material=shoeLamination?null:upperCategoryMaterials().find(m=>String(m.id)===String(materialId)),enteredQty=Number(row.querySelector('.upper-qty')?.value||0),enteredReceivedQty=Number(row.querySelector('.upper-received-qty')?.value||0),unit=upperArticleUnit(article),snapshot=upperUnitSnapshot(unit,enteredQty,enteredReceivedQty,Number(article?.rate)||0,shoeLamination&&article?.laminationUnit===true),qty=snapshot.internalAtomsQty,receivedQty=snapshot.internalReceivedAtomsQty,labourExpense=Number(row.querySelector('.upper-labour-expense')?.value||0);
     if((articleId&&!article)||(materialId&&!material)){invalid=true;return;}
     if(!qty&&!receivedQty&&!labourExpense)return;
     if(!Number.isSafeInteger(enteredQty)||!Number.isSafeInteger(enteredReceivedQty)||!Number.isSafeInteger(receivedQty)||!Number.isSafeInteger(qty)||qty<0||!Number.isInteger(receivedQty)||receivedQty<0||!Number.isFinite(labourExpense)||labourExpense<0||(!article&&!material)||(receivedQty>0&&!article)){invalid=true;return;}
     if(article&&!articleOnly&&!shoeLamination)articleNeed[article.id]=(articleNeed[article.id]||0)+qty;if(material)materialNeed[material.id]=(materialNeed[material.id]||0)+qty;
-    lines.push({articleId:article?.id||'',articleName:article?.name||'',articleStockBefore:Number(article?.stock)||0,materialId:material?.id||'',materialName:material?.name||'',materialStockBefore:Number(material?.stock)||0,...snapshot,qty,receivedQty,rate:workerArticleLabourRate(worker,'upper',article),labourExpense,lineTotal:labourExpense});
+    lines.push({articleId:article?.id||'',articleName:article?.name||'',articleStockBefore:Number(article?.stock)||0,materialId:material?.id||'',materialName:material?.name||'',materialStockBefore:Number(material?.stock)||0,...snapshot,qty,receivedQty,rate:Number(article?.rate)||0,labourExpense,lineTotal:labourExpense});
   });
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   if(invalid||!lines.length){toast('Enter whole non-negative Issued/Received quantities and select an Article for received work.');return null;}
@@ -14771,21 +14763,16 @@ function productionArticleChoice(worker,module){if(!worker)return null;const key
 function rememberProductionArticleChoice(workerId,module,id){const worker=workers.find(w=>String(w.id)===String(workerId));if(worker)productionArticleChoices.set(productionArticleChoiceKey(worker,module),String(id||''))}
 function workerDefaultArticleCard(worker,module){const name=(module==='upper'?upperProductionDefaultArticles(worker):workerDefaultArticles(worker,module)).map(a=>a.name).join(', ')||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Article: '+esc(name)+'">Default Article: '+esc(name)+'</div>'}
 const upperMaterialChoices=new Map();
-function upperDefaultMaterial(worker){if(workerProductionArticleOnly(worker?.category))return null;const id=workerDefaultMaterialIds(worker,'upper')[0];return id?upperCategoryMaterials(worker?.category).find(m=>String(m.id)===String(id))||null:null}
+function upperDefaultMaterial(worker){if(workerProductionArticleOnly(worker?.category))return null;const id=worker?.upperDefaultMaterialId;return id?upperCategoryMaterials(worker?.category).find(m=>String(m.id)===String(id))||null:null}
 function upperMaterialChoice(worker){if(!worker||workerProductionArticleOnly(worker.category))return null;const key=productionArticleChoiceKey(worker,'upper-material');return upperMaterialChoices.has(key)?upperCategoryMaterials(worker?.category).find(m=>String(m.id)===upperMaterialChoices.get(key))||null:upperDefaultMaterial(worker)}
 function rememberUpperMaterialChoice(id){const worker=workers.find(w=>String(w.id)===String(upperSelWorker));if(worker)upperMaterialChoices.set(productionArticleChoiceKey(worker,'upper-material'),String(id||''))}
-function upperDefaultMaterialCard(worker){const name=workerSelectedDefaultMaterials(worker,'upper').map(m=>m.name).join(', ')||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
+function upperDefaultMaterialCard(worker){const name=upperDefaultMaterial(worker)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
 const bfMaterialChoices=new Map();
 function bfMaterialList(module){return settings[module+'MansProductionMaterials']||[]}
-function bfDefaultMaterial(worker,module){const id=workerDefaultMaterialIds(worker,module)[0];return id?bfMaterialList(module).find(m=>String(m.id)===String(id))||null:null}
+function bfDefaultMaterial(worker,module){const id=worker?.[module+'DefaultMaterialId'];return id?bfMaterialList(module).find(m=>String(m.id)===String(id))||null:null}
 function bfMaterialChoice(worker,module){if(!worker)return null;const key=productionArticleChoiceKey(worker,module+'-material');return bfMaterialChoices.has(key)?bfMaterialList(module).find(m=>String(m.id)===bfMaterialChoices.get(key))||null:bfDefaultMaterial(worker,module)}
-function bfDefaultMaterialCard(worker,module){const name=workerSelectedDefaultMaterials(worker,module).map(m=>m.name).join(', ')||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
-function bindBfMaterialChoice(module,prefix,selectedId){const input=document.getElementById(prefix+'DistMaterial'),workerInput=document.getElementById(prefix+'DistWorker');const workerId=()=>workerInput?.value||selectedId;workerInput?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.delete(productionArticleChoiceKey(w,module+'-material'));if(input){input.innerHTML='<option value="">Select Material</option>'+bfMaterialList(module).filter(m=>workerMaterialAllowed(w,module,m.id)).map(m=>'<option value="'+esc(m.id)+'">'+esc(m.name)+' &mdash; Stock '+(Number(m.stock)||0)+' Atoms</option>').join('');input.value=bfDefaultMaterial(w,module)?.id||'';}});input?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.set(productionArticleChoiceKey(w,module+'-material'),input.value);});}
-function workerArticleLabourRate(worker,module,article){const rate=worker?.articleLabourRates?.[module]?.[String(article?.id)];return workerEditorDefaultModules(worker).includes(module)&&rate!==undefined&&rate!==null&&rate!==''&&Number.isFinite(Number(rate))&&Number(rate)>=0?Number(rate):Number(article?.rate)||0;}
-function workerDefaultMaterialIds(worker,module){const ids=worker?.defaultMaterialLists?.[module];return Array.isArray(ids)?[...new Set(ids.map(String))]:(worker?.[module+'DefaultMaterialId']?[String(worker[module+'DefaultMaterialId'])]:[]);}
-function workerSelectedDefaultMaterials(worker,module){const list=module==='upper'?upperCategoryMaterials(worker?.category):bfMaterialList(module);return workerDefaultMaterialIds(worker,module).map(id=>list.find(m=>String(m.id)===id)).filter(Boolean);}
-function workerMaterialAllowed(worker,module,id){return !workerEditorDefaultModules(worker).includes(module)||workerDefaultMaterialIds(worker,module).includes(String(id));}
-function workerMaterialDefaultsMarkup(worker,module,ids){const list=module==='upper'?upperCategoryMaterials(worker?.category):bfMaterialList(module),options=[...list,...ids.filter(id=>!list.some(m=>String(m.id)===id)).map(id=>({id,name:'Unavailable material'}))];return '<fieldset data-worker-material-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Materials ('+module+')</legend>'+options.map(m=>'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" style="width:auto;" value="'+esc(m.id)+'" '+(ids.includes(String(m.id))?'checked':'')+'> '+esc(m.name||'')+'</label>').join('')+'<div style="font-size:12px;color:var(--muted);">Optional; vouchers can be saved without materials.</div></fieldset>';}
+function bfDefaultMaterialCard(worker,module){const name=bfDefaultMaterial(worker,module)?.name||'\u2014';return '<div style="font-size:8px;line-height:1.15;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Default Material: '+esc(name)+'">Default Material: '+esc(name)+'</div>'}
+function bindBfMaterialChoice(module,prefix,selectedId){const input=document.getElementById(prefix+'DistMaterial'),workerInput=document.getElementById(prefix+'DistWorker');const workerId=()=>workerInput?.value||selectedId;workerInput?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.delete(productionArticleChoiceKey(w,module+'-material'));if(input)input.value=bfDefaultMaterial(w,module)?.id||'';});input?.addEventListener('change',()=>{const w=workers.find(w=>String(w.id)===String(workerId()));if(w)bfMaterialChoices.set(productionArticleChoiceKey(w,module+'-material'),input.value);});}
 function openWorkerModal(id,initialCategory=''){
   const w = id? workers.find(x=>x.id===id): null;
   let pendingPhoto = w? (w.photo||'') : '';
@@ -14821,18 +14808,14 @@ function openWorkerModal(id,initialCategory=''){
       <button class="btn ghost" id="wCancel">Cancel</button>
     </div>
   `);
-  const pendingMaterialLists=Object.fromEntries(['upper','batam','finished'].map(module=>[module,workerDefaultMaterialIds(w,module)]));
-  const refreshSelectedMaterials=category=>{document.querySelectorAll('[data-worker-material-module]').forEach(group=>pendingMaterialLists[group.dataset.workerMaterialModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value));const worker={...w,category},modules=workerEditorDefaultModules(worker);if(!modules.length)return false;document.getElementById('workerDefaultMaterial').innerHTML=modules.map(module=>workerMaterialDefaultsMarkup(worker,module,pendingMaterialLists[module])).join('');return true;};
   let pendingMaterial=String(w?.upperDefaultMaterialId||'');
-  const refreshWorkerMaterial=()=>{if(refreshSelectedMaterials(document.getElementById('wCategory')?.value??w?.category??initialCategory))return;const current=document.getElementById('wDefaultMaterial');if(current)pendingMaterial=current.value;const category=document.getElementById('wCategory')?.value??w?.category??'',list=upperCategoryMaterials(category),missing=pendingMaterial&&!list.some(m=>String(m.id)===pendingMaterial);document.getElementById('workerDefaultMaterial').innerHTML=!workerProductionArticleOnly(category)&&upperWorkerEditorModules({...w,category}).includes('upper')?'<label>Default Material</label><select id="wDefaultMaterial"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(pendingMaterial)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===pendingMaterial?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>':'';};
+  const refreshWorkerMaterial=()=>{const current=document.getElementById('wDefaultMaterial');if(current)pendingMaterial=current.value;const category=document.getElementById('wCategory')?.value??w?.category??'',list=upperCategoryMaterials(category),missing=pendingMaterial&&!list.some(m=>String(m.id)===pendingMaterial);document.getElementById('workerDefaultMaterial').innerHTML=!workerProductionArticleOnly(category)&&upperWorkerEditorModules({...w,category}).includes('upper')?'<label>Default Material</label><select id="wDefaultMaterial"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(pendingMaterial)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===pendingMaterial?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>':'';};
   refreshWorkerMaterial();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerMaterial);
   const pendingBfMaterials={batam:String(w?.batamDefaultMaterialId||''),finished:String(w?.finishedDefaultMaterialId||'')};
-  const refreshBfMaterials=()=>{if(workerEditorDefaultModules({...w,category:document.getElementById('wCategory')?.value??w?.category??initialCategory}).length){document.getElementById('workerBfDefaultMaterials').innerHTML='';return;}document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerProductionArticleOnly(category)?[]:workerEditorDefaultModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
+  const refreshBfMaterials=()=>{document.querySelectorAll('[data-bf-default-material]').forEach(el=>pendingBfMaterials[el.dataset.bfDefaultMaterial]=el.value);const category=document.getElementById('wCategory')?.value??w?.category??'',modules=workerProductionArticleOnly(category)?[]:workerEditorDefaultModules({...w,category}).filter(m=>m==='batam'||m==='finished');document.getElementById('workerBfDefaultMaterials').innerHTML=modules.map(module=>{const list=bfMaterialList(module),id=pendingBfMaterials[module],missing=id&&!list.some(m=>String(m.id)===id);return '<label>Default Material'+(modules.length>1?' ('+module+')':'')+'</label><select data-bf-default-material="'+module+'"><option value="">No default material</option>'+(missing?'<option selected value="'+esc(id)+'">Unavailable material</option>':'')+list.map(m=>'<option value="'+esc(m.id)+'" '+(String(m.id)===id?'selected':'')+'>'+esc(m.name||'')+'</option>').join('')+'</select>';}).join('');};
   refreshBfMaterials();document.getElementById('wCategory')?.addEventListener('change',refreshBfMaterials);
-  const pendingRates=JSON.parse(JSON.stringify(w?.articleLabourRates||{}));
   const pendingDefaults=Object.fromEntries(['upper','batam','finished'].map(module=>[module,workerDefaultArticleIds(w,module)]));
-  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-article-rate]').forEach(el=>{const module=el.dataset.workerRateModule;pendingRates[module]={...(pendingRates[module]||{}),[el.dataset.workerArticleRate]:el.value};});document.querySelectorAll('[data-worker-default-module]').forEach(group=>{pendingDefaults[group.dataset.workerDefaultModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value);});const category=document.getElementById('wCategory')?.value??w?.category??'',modules=upperWorkerEditorModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=module==='upper'?upperCategoryArticles(category):workerDefaultArticleList(module),ids=pendingDefaults[module],options=[...list,...ids.filter(id=>!list.some(a=>String(a.id)===id)).map(id=>({id,name:'Unavailable article'}))];return '<fieldset data-worker-default-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Articles'+(modules.length>1?' ('+module+')':'')+'</legend>'+options.map(a=>(workerEditorDefaultModules({...w,category}).includes(module)?'<span style="display:inline-flex;align-items:center;flex-wrap:wrap;">':'')+'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" data-worker-article-check style="width:auto;" value="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>'+(workerEditorDefaultModules({...w,category}).includes(module)?'<label data-worker-rate-label="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'':'hidden')+' style="display:'+(ids.includes(String(a.id))?'inline-flex':'none')+';gap:5px;align-items:center;margin-right:10px;">Labour Rate <input data-worker-article-rate="'+esc(a.id)+'" data-worker-rate-module="'+module+'" type="number" min="0" step="0.01" style="width:100px;display:inline-block;" value="'+esc(pendingRates[module]?.[String(a.id)]??workerArticleLabourRate({...w,category},module,a))+'"></label>':'')+(workerEditorDefaultModules({...w,category}).includes(module)?'</span>':'')).join('')+'</fieldset>';}).join('');};
-  document.getElementById('workerDefaultArticles').addEventListener('change',event=>{if(!event.target.matches('[data-worker-article-check]'))return;const group=event.target.closest('[data-worker-default-module]');group.querySelectorAll('[data-worker-rate-label]').forEach(label=>{if(label.dataset.workerRateLabel===event.target.value){label.hidden=!event.target.checked;label.style.display=event.target.checked?'inline-flex':'none';}});});
+  const refreshWorkerDefaults=()=>{document.querySelectorAll('[data-worker-default-module]').forEach(group=>{pendingDefaults[group.dataset.workerDefaultModule]=[...group.querySelectorAll('input:checked')].map(el=>el.value);});const category=document.getElementById('wCategory')?.value??w?.category??'',modules=upperWorkerEditorModules({...w,category});document.getElementById('workerDefaultArticles').innerHTML=modules.map(module=>{const list=module==='upper'?upperCategoryArticles(category):workerDefaultArticleList(module),ids=pendingDefaults[module],options=[...list,...ids.filter(id=>!list.some(a=>String(a.id)===id)).map(id=>({id,name:'Unavailable article'}))];return '<fieldset data-worker-default-module="'+module+'" style="border:1px solid var(--line);margin:6px 0;"><legend>Default Articles'+(modules.length>1?' ('+module+')':'')+'</legend>'+options.map(a=>'<label style="display:inline-flex;gap:5px;align-items:center;margin:4px 10px 4px 0;"><input type="checkbox" style="width:auto;" value="'+esc(a.id)+'" '+(ids.includes(String(a.id))?'checked':'')+'> '+esc(a.name||'')+'</label>').join('')+'</fieldset>';}).join('');};
   refreshWorkerDefaults();document.getElementById('wCategory')?.addEventListener('change',refreshWorkerDefaults);
   const applyWorkerCrop=async cropped=>{if(!cropped)return;try{pendingPhoto=await compressImageDataUrl(cropped,700,.78);const pv=document.getElementById('wPhotoPreviewWrap');if(pv)pv.innerHTML=`<img src="${pendingPhoto}" class="settings-logo-preview zoomable" style="margin-top:8px;max-width:140px;max-height:140px;object-fit:cover;">`;const cb=document.getElementById('wCropPhoto');if(cb)cb.style.display='inline-flex';toast('Worker image cropped and uploaded');}catch(err){console.error('Worker photo R2 upload failed:',err);toast('Could not upload worker image');}};
   const cropWorkerPhoto=()=>{if(pendingPhoto)openImageCropper(pendingPhoto,applyWorkerCrop);else{const file=document.getElementById('wPhoto').files?.[0];if(file)openImageCropper(file,applyWorkerCrop);else toast('پہلے Worker کی تصویر منتخب کریں');}};
@@ -14878,20 +14861,15 @@ function openWorkerModal(id,initialCategory=''){
     const phoneEl=document.getElementById('wPhone');
     const whatsappEl=document.getElementById('wWhatsapp');
     const category=categoryEl ? categoryEl.value : (w?.category||initialCategory);
-    const phone=phoneEl ? phoneEl.value.trim() : (workerEditorDefaultModules({...w,category}).length?w?.phone||'':'');
-    const whatsapp=whatsappEl ? whatsappEl.value.trim() : (workerEditorDefaultModules({...w,category}).length?w?.whatsapp||'':'');
+    const phone=phoneEl ? phoneEl.value.trim() : '';
+    const whatsapp=whatsappEl ? whatsappEl.value.trim() : '';
     if(!name){ toast('Please enter a name'); return; }
-    const customFields = workerEditorDefaultModules({...w,category}).length?{...(w?.customFields||{})}:{};
+    const customFields = {};
     document.querySelectorAll('.wCustomField').forEach(inp=>{ customFields[inp.dataset.colid] = inp.value.trim(); });
     const defaultArticleUpdates={};let invalidDefault=false;document.querySelectorAll('[data-worker-default-module]').forEach(group=>{const module=group.dataset.workerDefaultModule,ids=[...group.querySelectorAll('input:checked')].map(el=>el.value),old=workerDefaultArticleIds(w,module);if(ids.some(id=>!old.includes(id)&&!workerDefaultArticleList(module).some(a=>String(a.id)===id)))invalidDefault=true;if(ids.length!==old.length||ids.some(id=>!old.includes(id)))defaultArticleUpdates[module]=ids;});if(invalidDefault){toast('Select valid Default Articles');return;}
     const materialSelect=document.getElementById('wDefaultMaterial'),materialValue=materialSelect?.value||'',materialChanged=!!materialSelect&&materialValue!==String(w?.upperDefaultMaterialId||'');
     if(materialChanged&&materialValue&&!(settings.upperMaterials||[]).some(m=>String(m.id)===materialValue)){toast('Select a valid Default Material');return;}
     const bfMaterialUpdates={};let invalidBfMaterial=false;document.querySelectorAll('[data-bf-default-material]').forEach(el=>{const module=el.dataset.bfDefaultMaterial,value=el.value,key=module+'DefaultMaterialId';if(value!==String(w?.[key]||'')){if(value&&!bfMaterialList(module).some(m=>String(m.id)===value))invalidBfMaterial=true;else bfMaterialUpdates[key]=value;}});if(invalidBfMaterial){toast('Select a valid Default Material');return;}
-    const rateUpdates=JSON.parse(JSON.stringify(w?.articleLabourRates||{}));let invalidRate=false;
-    document.querySelectorAll('[data-worker-default-module]').forEach(group=>{const module=group.dataset.workerDefaultModule;group.querySelectorAll('[data-worker-article-check]:checked').forEach(box=>{const input=[...group.querySelectorAll('[data-worker-article-rate]')].find(el=>el.dataset.workerArticleRate===box.value);if(!input)return;const rate=Number(input.value);if(!input.value.trim()||!Number.isFinite(rate)||rate<0)invalidRate=true;else rateUpdates[module]={...(rateUpdates[module]||{}),[box.value]:rate};});});
-    if(invalidRate){toast('Enter a non-negative Labour Rate for each selected article');return;}
-    const materialListUpdates={};let invalidMaterialList=false;document.querySelectorAll('[data-worker-material-module]').forEach(group=>{const module=group.dataset.workerMaterialModule,ids=[...group.querySelectorAll('input:checked')].map(el=>el.value),old=workerDefaultMaterialIds(w,module),list=module==='upper'?upperCategoryMaterials(category):bfMaterialList(module);if(ids.some(id=>!old.includes(id)&&!list.some(m=>String(m.id)===id)))invalidMaterialList=true;if(ids.length!==old.length||ids.some(id=>!old.includes(id)))materialListUpdates[module]=ids;});
-    if(invalidMaterialList){toast('Select valid Default Materials');return;}
     const beforeWorkerSave=captureCloudState();
     if(saveBtn) saveBtn.disabled=true;
     if(w){ w.name=name; w.category=category; w.phone=phone; w.whatsapp=whatsapp; w.photo=pendingPhoto; w.customFields=customFields; }
@@ -14899,11 +14877,6 @@ function openWorkerModal(id,initialCategory=''){
     if(Object.keys(defaultArticleUpdates).length){const target=w||workers[workers.length-1];target.defaultArticleLists={...(target.defaultArticleLists||{}),...defaultArticleUpdates};}
     if(materialChanged)(w||workers[workers.length-1]).upperDefaultMaterialId=materialValue;
     Object.assign(w||workers[workers.length-1],bfMaterialUpdates);
-    const defaultsTarget=w||workers[workers.length-1];if(document.querySelector('[data-worker-article-rate]'))defaultsTarget.articleLabourRates=rateUpdates;
-    if(Object.keys(materialListUpdates).length){defaultsTarget.defaultMaterialLists={...(defaultsTarget.defaultMaterialLists||{}),...materialListUpdates};Object.entries(materialListUpdates).forEach(([module,ids])=>{defaultsTarget[module+'DefaultMaterialId']=ids[0]||'';});}
-    // Worker and audit must commit or roll back together, without a second PUT.
-    auditLog.push({id:uid(), date:new Date().toISOString(), action:w?'Worker Updated':'Worker Created', details:String(name||'')});
-    if(auditLog.length>500) auditLog=auditLog.slice(-500);
     const workerSaved=await saveCriticalCloudState();
     if(!workerSaved){
       applyCloudState(beforeWorkerSave);
@@ -14911,8 +14884,8 @@ function openWorkerModal(id,initialCategory=''){
       toast('Worker could not be saved. Please try again.');
       return;
     }
-    const savedWorker=w||workers[workers.length-1];Object.keys(materialListUpdates).forEach(module=>{if(module==='upper')upperMaterialChoices.delete(productionArticleChoiceKey(savedWorker,'upper-material'));else bfMaterialChoices.delete(productionArticleChoiceKey(savedWorker,module+'-material'));});Object.keys(defaultArticleUpdates).forEach(module=>{productionDefaultSelections.delete(productionArticleChoiceKey(savedWorker,module));productionArticleChoices.delete(productionArticleChoiceKey(savedWorker,module));});
-    closeModal(); render(); toast('Saved successfully');
+    const savedWorker=w||workers[workers.length-1];Object.keys(defaultArticleUpdates).forEach(module=>{productionDefaultSelections.delete(productionArticleChoiceKey(savedWorker,module));productionArticleChoices.delete(productionArticleChoiceKey(savedWorker,module));});
+    audit(w?'Worker Updated':'Worker Created',name); closeModal(); render(); toast('Saved successfully');
   };
 }
 
@@ -15539,11 +15512,7 @@ function pageArchive(){
 
 /* ============ BACKUP ============ */
 function pageBackup(){
-  if(cloudReady && !authoritativeBackupsLoaded && !backupLoadPromise && !backupLoadError){
-    loadAuthoritativeBackups().then(()=>{if(currentPage==='backup')render();})
-      .catch(()=>{if(currentPage==='backup')render();});
-  }
-  const versions = backupVersions.slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
+  const versions = loadDB(DB_KEYS.backups, []).slice().sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
   return `
     <h2 class="page-title">Backup</h2>
     <div class="card">
@@ -15559,9 +15528,9 @@ function pageBackup(){
       <h3 style="margin-top:0;">Versioned Backups (Automatic)</h3>
       <p style="font-size:13px;color:var(--muted);">A version is saved automatically once per day, and also right before any restore — so you can always step back.</p>
       <button class="btn ghost" id="btnSaveVersionNow" style="margin-bottom:12px;">Save a Version Now</button>
-      ${authoritativeBackupsLoaded && versions.length? `<table><thead><tr><th>Saved At</th><th>Action</th></tr></thead><tbody>
+      ${versions.length? `<table><thead><tr><th>Saved At</th><th>Action</th></tr></thead><tbody>
         ${versions.map(v=>`<tr><td>${fmtDate(v.timestamp)}</td><td class="actions-cell"><button class="btn ghost small" data-restoreversion="${v.id}">Restore</button></td></tr>`).join('')}
-      </tbody></table>` : `<div class="empty">${authoritativeBackupsLoaded ? 'No versions saved yet.' : backupLoadError ? 'Backups could not be loaded.' : 'Loading backup versions...'}</div>`}
+      </tbody></table>` : `<div class="empty">No versions saved yet.</div>`}
     </div>
   `;
 }
@@ -15590,23 +15559,20 @@ function doExport(){
 
 function doImport(file){
   const reader = new FileReader();
-  reader.onload = async(e)=>{
-    if(!cloudReady)return;
-    setCriticalUiLock(true);
+  reader.onload = (e)=>{
     try{
       const data = JSON.parse(e.target.result);
       if(!data.settings || !data.materials || !data.workers || !data.transactions) throw new Error('bad file');
-      if(!await saveBackupVersion().catch(()=>false)){toast('Safety backup could not be saved. Import cancelled.');return;}
-      const before=captureCloudState(); // rollback if runtime save fails
+      saveBackupVersion(); // safety snapshot of current state before importing
       settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials; workers = data.workers;
       transactions = data.transactions; stockMovements = data.stockMovements || []; articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
        articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
-      if(!await saveCriticalCloudState()){applyCloudState(before);await reconcileCloudAfterCriticalRollback();render();toast('Restore could not be saved to D1.');return;}
+      persistAll();
       toast('Backup restored successfully');
       render();
     }catch(err){
       toast('This is not a valid backup file');
-    }finally{setCriticalUiLock(false);}
+    }
   };
   reader.readAsText(file);
 }
@@ -19671,7 +19637,7 @@ function batamMansProductionWorkers(){
 function getBatamMansProductionArticle(id){normalizeBatamMansState();return settings.batamMansProductionArticles.find(x=>String(x.id)===String(id));}
 function getBatamMansProductionMaterial(id){normalizeBatamMansState();return settings.batamMansProductionMaterials.find(x=>String(x.id)===String(id));}
 function bfArticleUnit(article){return article?.unit==='SET'?'SET':'ATOMS';}
-function bfUnitSnapshot(module,id,workerId=null){const a=(settings[module+'MansProductionArticles']||[]).find(a=>String(a.id)===String(id)),unit=bfArticleUnit(a);return {unit,rateSnapshot:workerArticleLabourRate(workers.find(w=>String(w.id)===String(workerId)),module,a),pairsPerUnit:unit==='SET'?24:12};}
+function bfUnitSnapshot(module,id){const a=(settings[module+'MansProductionArticles']||[]).find(a=>String(a.id)===String(id)),unit=bfArticleUnit(a);return {unit,rateSnapshot:Number(a?.rate)||0,pairsPerUnit:unit==='SET'?24:12};}
 function bfQuantityText(q,record){return String(q??'—')+(q===null||q===undefined?'':' '+bfArticleUnit(record));}
 function bfQuantityTotals(rows,field='reportedQty'){const units=new Map();rows.forEach(r=>{const q=Number(r[field])||0;if(!q)return;const unit=bfArticleUnit(r);units.set(unit,(units.get(unit)||0)+q);});return [...units].map(([unit,q])=>q+' '+unit).join(' + ')||'0 ATOMS';}
 function bfRefreshEntryUnits(module){const prefix=module==='batam'?'bm':'fm',primary=document.getElementById(prefix+'Article')?.closest('.bm-entry-row'),rows=[primary,...document.querySelectorAll('#'+prefix+'ExtraItemRows .'+prefix+'-extra-item-row')].filter(Boolean);rows.forEach(row=>{const select=row.querySelector('#'+prefix+'Article,[data-'+prefix+'-extra-article]'),input=row.querySelector('#'+prefix+'Reported,[data-'+prefix+'-extra-qty]');if(!select||!input)return;const snapshot=bfUnitSnapshot(module,select.value),label=input.parentElement.querySelector('label'),note=input.parentElement.querySelector('[data-bf-pairs]');input.placeholder=snapshot.unit;if(label)label.textContent='Quantity / '+snapshot.unit;if(note)note.textContent=(Math.max(0,Number(input.value)||0)*snapshot.pairsPerUnit)+' PAIR';});}
@@ -19915,8 +19881,8 @@ async function createBatamProductionVoucher(){
  for(const row of extraRows){const articleId=row.querySelector('[data-bm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-bm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole quantities.');return;}voucherDraftItems.push({id:uid(),articleId,reportedQty:qty});}
  if(!voucherDraftItems.length){toast('Select Production Article and enter positive whole quantities.');return;}
  const notes=document.getElementById('bmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('bmExpenseAmount')?.value)||0),pendingQty=Math.max(0,Number(document.getElementById('bmPendingQtyEntry')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=batamMansVoucherNo(),voucherId=uid();if(!Number.isInteger(pendingQty)){toast('Pending must be a positive whole Atom quantity.');return;}
- for(const dm of batamMansDraftMaterials){if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(batamMansSelectedWorker)),'batam',dm.materialId)){toast('Select a Default Material saved for this worker');return;}const mat=getBatamMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
- const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('batam',i.articleId,batamMansSelectedWorker),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
+ for(const dm of batamMansDraftMaterials){const mat=getBatamMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
+ const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('batam',i.articleId),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
  const materials=batamMansDraftMaterials.map(dm=>({id:uid(),materialId:dm.materialId,materialName:getBatamMansProductionMaterial(dm.materialId)?.name||'',qty:Number(dm.qty)}));
  materials.forEach(dm=>{const mat=getBatamMansProductionMaterial(dm.materialId);mat.stock=Number(mat.stock)-dm.qty;});
  const previousWorkerTotal=batamMansVouchers().filter(x=>String(x.workerId)===String(batamMansSelectedWorker)&&!x.deletedAt).reduce((s,x)=>s+(x.items||[]).reduce((q,i)=>q+(Number(i.reportedQty)||0),0),0);
@@ -20036,7 +20002,6 @@ function batamMaterialWorkerAccounts(){
   const a=map.get(id),mid=String(r.materialId),name=getBatamMansProductionMaterial(mid)?.name||'Material',qty=Number(r.qty)||0;
   if(!a.materials.has(mid))a.materials.set(mid,{name,qty:0});a.materials.get(mid).qty+=qty;a.total+=qty;a.rows.push(r);
  });
- (workers||[]).filter(w=>!w.archived&&workerEditorDefaultModules(w).includes('batam')).forEach(w=>{const query=String(batamMaterialSearch||'').trim().toLowerCase(),selected=workerSelectedDefaultMaterials(w,'batam').filter(m=>!query||String(w.name||'').toLowerCase().includes(query)||String(m.name||'').toLowerCase().includes(query));if(!selected.length)return;const id=String(w.id);if(!map.has(id))map.set(id,{workerId:id,workerName:w.name||'',materials:new Map(),total:0,rows:[]});const account=map.get(id);selected.forEach(m=>{if(!account.materials.has(String(m.id)))account.materials.set(String(m.id),{name:m.name,qty:0});});});
  return Array.from(map.values()).sort((a,b)=>a.workerName.localeCompare(b.workerName));
 }
 function openBatamMaterialAccount(workerId){
@@ -20146,7 +20111,7 @@ function pageBatamMansMaterialAccounts(){
  <div class="card bm-material-entry-card">
    <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Batam Man above first</span>'}</div>
    <div class="bm-material-entry-row">
-    <div><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${list.filter(m=>workerMaterialAllowed(selected,'batam',m.id)).map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'batam')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'batam')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
     <div><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"></div>
     <div><label>Notes (Optional)</label><input id="bmDistNotes" placeholder="Notes"></div>
     <button class="btn brass" id="bmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
@@ -20160,12 +20125,11 @@ function pageBatamMansProductionList(){
 function batamMaterialDistributions(){normalizeBatamMansState();return settings.batamMansMaterialDistributions;}
 function pageBatamMansDistributeMaterial(){
  const ws=batamMansProductionWorkers(),ms=settings.batamMansProductionMaterials||[],rows=batamMaterialDistributions().slice().reverse();
- return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="bmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Batam Man</label><select id="bmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option></select><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="bmDistNotes" rows="2"></textarea><button class="btn brass" id="bmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(r.workerId))}</td><td>${esc(getBatamMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
+ return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="bmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Batam Man</label><select id="bmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="bmDistMaterial"><option value="">Select Material</option>${ms.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select><label>Quantity (Atoms)</label><input id="bmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="bmDistNotes" rows="2"></textarea><button class="btn brass" id="bmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(batamMansWorkerName(r.workerId))}</td><td>${esc(getBatamMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
 }
 async function saveBatamMaterialDistribution(){
  const workerId=batamMaterialSelectedWorker||document.getElementById('bmDistWorker')?.value,materialId=document.getElementById('bmDistMaterial')?.value,qty=Number(document.getElementById('bmDistQty')?.value),notes=document.getElementById('bmDistNotes')?.value.trim()||'',m=getBatamMansProductionMaterial(materialId);
  if(!workerId||!m||!Number.isInteger(qty)||qty<=0){toast('Select Employee, Material and enter positive whole Atoms.');return;}
- if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(workerId)),'batam',materialId)){toast('Select a Default Material saved for this worker');return;}
  if(Number(m.stock)<qty){toast('Not enough Production Material stock.');return;}
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
  m.stock=Number(m.stock)-qty;batamMaterialDistributions().push({id:uid(),workerId:String(workerId),materialId:String(materialId),qty,notes,createdAt:now,createdBy:'Admin'});
@@ -20320,7 +20284,7 @@ async function saveBatamMansEntry(){
   const date=document.getElementById('bmDate')?.value,workerId=document.getElementById('bmWorker')?.value,articleId=document.getElementById('bmArticle')?.value,reportedQty=Number(document.getElementById('bmReported')?.value),notes=document.getElementById('bmNotes')?.value.trim()||'';
   if(!date||!workerId||!articleId||!Number.isInteger(reportedQty)||reportedQty<=0){toast('Select Date, Worker, Article and enter positive whole Pairs.');return;}
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
-  batamMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('batam',articleId,workerId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
+  batamMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('batam',articleId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
   audit('Batam Mans Production Reported',`${batamMansWorkerName(workerId)} — ${batamMansArticleName(articleId)} — ${reportedQty} Pairs`);
   if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
   window.__batamMansDate=date;render();toast('Reported production saved as Pending Verification');
@@ -20656,8 +20620,8 @@ async function createFinishedProductionVoucher(){
  for(const row of extraRows){const articleId=row.querySelector('[data-fm-extra-article]')?.value||'',qty=Number(row.querySelector('[data-fm-extra-qty]')?.value);if(!articleId||!Number.isInteger(qty)||qty<=0){toast('Complete every added Production Article row with positive whole quantities.');return;}voucherDraftItems.push({id:uid(),articleId,reportedQty:qty});}
  if(!voucherDraftItems.length){toast('Select Production Article and enter positive whole quantities.');return;}
  const notes=document.getElementById('fmNotes')?.value.trim()||'',expenseAmount=Math.max(0,Number(document.getElementById('fmExpenseAmount')?.value)||0),pendingQty=Math.max(0,Number(document.getElementById('fmPendingQtyEntry')?.value)||0),before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString(),voucherNo=finishedMansVoucherNo(),voucherId=uid();if(!Number.isInteger(pendingQty)){toast('Pending must be a positive whole Atom quantity.');return;}
- for(const dm of finishedMansDraftMaterials){if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(finishedMansSelectedWorker)),'finished',dm.materialId)){toast('Select a Default Material saved for this worker');return;}const mat=getFinishedMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
- const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('finished',i.articleId,finishedMansSelectedWorker),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
+ for(const dm of finishedMansDraftMaterials){const mat=getFinishedMansProductionMaterial(dm.materialId);if(!mat||Number(mat.stock)<Number(dm.qty)){toast(`Not enough stock for ${mat?.name||'Production Material'}.`);return;}}
+ const items=voucherDraftItems.map(i=>({id:uid(),articleId:i.articleId,...bfUnitSnapshot('finished',i.articleId),reportedQty:Number(i.reportedQty),originalReportedQty:Number(i.reportedQty),verifiedQty:null,difference:null,verificationNotes:'',verifiedAt:'',verifiedBy:''}));
  const materials=finishedMansDraftMaterials.map(dm=>({id:uid(),materialId:dm.materialId,materialName:getFinishedMansProductionMaterial(dm.materialId)?.name||'',qty:Number(dm.qty)}));
  materials.forEach(dm=>{const mat=getFinishedMansProductionMaterial(dm.materialId);mat.stock=Number(mat.stock)-dm.qty;});
  const previousWorkerTotal=finishedMansVouchers().filter(x=>String(x.workerId)===String(finishedMansSelectedWorker)&&!x.deletedAt).reduce((s,x)=>s+(x.items||[]).reduce((q,i)=>q+(Number(i.reportedQty)||0),0),0);
@@ -20754,7 +20718,6 @@ function finishedMaterialWorkerAccounts(){
   const a=map.get(id),mid=String(r.materialId),name=getFinishedMansProductionMaterial(mid)?.name||'Material',qty=Number(r.qty)||0;
   if(!a.materials.has(mid))a.materials.set(mid,{name,qty:0});a.materials.get(mid).qty+=qty;a.total+=qty;a.rows.push(r);
  });
- (workers||[]).filter(w=>!w.archived&&workerEditorDefaultModules(w).includes('finished')).forEach(w=>{const query=String(finishedMaterialSearch||'').trim().toLowerCase(),selected=workerSelectedDefaultMaterials(w,'finished').filter(m=>!query||String(w.name||'').toLowerCase().includes(query)||String(m.name||'').toLowerCase().includes(query));if(!selected.length)return;const id=String(w.id);if(!map.has(id))map.set(id,{workerId:id,workerName:w.name||'',materials:new Map(),total:0,rows:[]});const account=map.get(id);selected.forEach(m=>{if(!account.materials.has(String(m.id)))account.materials.set(String(m.id),{name:m.name,qty:0});});});
  return Array.from(map.values()).sort((a,b)=>a.workerName.localeCompare(b.workerName));
 }
 function openFinishedMaterialAccount(workerId){
@@ -20864,7 +20827,7 @@ function pageFinishedMansMaterialAccounts(){
  <div class="card bm-material-entry-card">
    <div class="bm-entry-head"><h3>Enter Material Details</h3>${selected?`<span>Worker: <strong>${esc(selected.name||'')}</strong></span>`:'<span>Select Finished Man above first</span>'}</div>
    <div class="bm-material-entry-row">
-    <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.filter(m=>workerMaterialAllowed(selected,'finished',m.id)).map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'finished')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
+    <div><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${list.map(m=>`<option value="${esc(m.id)}" ${String(bfMaterialChoice(selected,'finished')?.id||'')===String(m.id)?'selected':''}>${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select></div>
     <div><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"></div>
     <div><label>Notes (Optional)</label><input id="fmDistNotes" placeholder="Notes"></div>
     <button class="btn brass" id="fmSaveMaterialDist" ${selected?'':'disabled'}>Save</button>
@@ -20878,12 +20841,11 @@ function pageFinishedMansProductionList(){
 function finishedMaterialDistributions(){normalizeFinishedMansState();return settings.finishedMansMaterialDistributions;}
 function pageFinishedMansDistributeMaterial(){
  const ws=finishedMansProductionWorkers(),ms=settings.finishedMansProductionMaterials||[],rows=finishedMaterialDistributions().slice().reverse();
- return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="fmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Finished Man</label><select id="fmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option></select><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="fmDistNotes" rows="2"></textarea><button class="btn brass" id="fmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(r.workerId))}</td><td>${esc(getFinishedMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
+ return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;"><button class="btn ghost" id="fmBackMaterialDist">← Back</button><h2 class="page-title" style="margin:0;">Distribute Material</h2></div><div class="card"><label>Employee / Finished Man</label><select id="fmDistWorker"><option value="">Select Employee</option>${ws.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('')}</select><label>Production Material</label><select id="fmDistMaterial"><option value="">Select Material</option>${ms.map(m=>`<option value="${esc(m.id)}">${esc(m.name)} — Stock ${Number(m.stock)||0} Atoms</option>`).join('')}</select><label>Quantity (Atoms)</label><input id="fmDistQty" type="number" min="1" step="1"><label>Notes (Optional)</label><textarea id="fmDistNotes" rows="2"></textarea><button class="btn brass" id="fmSaveMaterialDist" style="width:100%;margin-top:10px;">Distribute Material</button></div><div class="card"><h3 style="margin-top:0;">Recent Material Distribution</h3><div style="overflow:auto;"><table><thead><tr><th>Date/Time</th><th>Employee</th><th>Material</th><th>Atoms</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(new Date(r.createdAt).toLocaleString())}</td><td>${esc(finishedMansWorkerName(r.workerId))}</td><td>${esc(getFinishedMansProductionMaterial(r.materialId)?.name||'Material')}</td><td>${r.qty}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No material distribution yet.</td></tr>'}</tbody></table></div></div>`;
 }
 async function saveFinishedMaterialDistribution(){
  const workerId=finishedMaterialSelectedWorker||document.getElementById('fmDistWorker')?.value,materialId=document.getElementById('fmDistMaterial')?.value,qty=Number(document.getElementById('fmDistQty')?.value),notes=document.getElementById('fmDistNotes')?.value.trim()||'',m=getFinishedMansProductionMaterial(materialId);
  if(!workerId||!m||!Number.isInteger(qty)||qty<=0){toast('Select Employee, Material and enter positive whole Atoms.');return;}
- if(!workerMaterialAllowed(workers.find(w=>String(w.id)===String(workerId)),'finished',materialId)){toast('Select a Default Material saved for this worker');return;}
  if(Number(m.stock)<qty){toast('Not enough Production Material stock.');return;}
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
  m.stock=Number(m.stock)-qty;finishedMaterialDistributions().push({id:uid(),workerId:String(workerId),materialId:String(materialId),qty,notes,createdAt:now,createdBy:'Admin'});
@@ -21038,7 +21000,7 @@ async function saveFinishedMansEntry(){
   const date=document.getElementById('fmDate')?.value,workerId=document.getElementById('fmWorker')?.value,articleId=document.getElementById('fmArticle')?.value,reportedQty=Number(document.getElementById('fmReported')?.value),notes=document.getElementById('fmNotes')?.value.trim()||'';
   if(!date||!workerId||!articleId||!Number.isInteger(reportedQty)||reportedQty<=0){toast('Select Date, Worker, Article and enter positive whole Pairs.');return;}
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),now=new Date().toISOString();
-  finishedMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('finished',articleId,workerId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
+  finishedMansEntries().push({id:uid(),date,workerId,articleId,...bfUnitSnapshot('finished',articleId),reportedQty,originalReportedQty:reportedQty,notes,verifiedQty:null,difference:null,status:'Pending Verification',createdAt:now,createdBy:'Admin',verificationAt:'',verifiedBy:'',verificationNotes:'',slipId:''});
   audit('Finished Mans Production Reported',`${finishedMansWorkerName(workerId)} — ${finishedMansArticleName(articleId)} — ${reportedQty} Pairs`);
   if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Reported production was not saved to D1. No entry was kept.');return;}
   window.__finishedMansDate=date;render();toast('Reported production saved as Pending Verification');
@@ -21779,11 +21741,8 @@ function attachPageHandlers(){
     if(!f){ toast('Please select a file first'); return; }
     if(confirm('This will replace all current data. Continue?')) doImport(f);
   });
-  document.getElementById('btnSaveVersionNow')?.addEventListener('click', async(e)=>{
-    e.currentTarget.disabled=true;
-    try{await saveBackupVersion();render();toast('Version saved');}
-    catch(err){toast('Version could not be saved to D1.');}
-    finally{e.target.disabled=false;}
+  document.getElementById('btnSaveVersionNow')?.addEventListener('click', ()=>{
+    saveBackupVersion(); render(); toast('Version saved');
   });
   document.querySelectorAll('[data-restoreversion]').forEach(b=>b.addEventListener('click', ()=>restoreBackupVersion(b.dataset.restoreversion)));
 
@@ -21799,75 +21758,29 @@ function attachPageHandlers(){
 }
 
 /* ============ VERSIONED BACKUPS (in addition to manual Export/Import) ============ */
-async function loadAuthoritativeBackups(force=false){
-  if(force && backupLoadPromise){await backupLoadPromise;}
-  if(backupLoadPromise)return backupLoadPromise;
-  if(authoritativeBackupsLoaded && !force)return backupVersions;
-  authoritativeBackupsLoaded=false;
-  backupLoadError=false;
-  backupLoadPromise=(async()=>{
-    try{
-      if(!cloudReady)throw new Error('D1 is not ready.');
-      const res=await fetch(BACKUP_CLOUD_API,{cache:'no-store'});
-      if(!res.ok)throw new Error('Backup load failed: '+res.status);
-      const payload=await res.json();
-      if(!Array.isArray(payload.backups))throw new Error('Invalid backups response.');
-      backupVersions=payload.backups;
-      authoritativeBackupsLoaded=true;
-      return backupVersions;
-    }catch(err){backupLoadError=true;throw err;}
-    finally{backupLoadPromise=null;}
-  })();
-  return backupLoadPromise;
+function saveBackupVersion(){
+  const data = {settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
+  backupVersions.push({id:uid(), timestamp:data.savedAt, data});
+  if(backupVersions.length>10) backupVersions = backupVersions.slice(backupVersions.length-10);
+  saveDB(DB_KEYS.backups, backupVersions);
 }
-async function saveBackupVersion(automaticDay=null){
-  if(!cloudReady)throw new Error('D1 is not ready.');
-  const data={settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
-  const version=JSON.parse(JSON.stringify({id:uid(), timestamp:data.savedAt, data}));
-  authoritativeBackupsLoaded=false; // append makes cached references incomplete
-  const res=await fetch(BACKUP_CLOUD_API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,automaticDay})});
-  if(!res.ok)throw new Error('Backup save failed: '+res.status);
-  const payload=await res.json();
-  if(payload.ok!==true || typeof payload.saved!=='boolean')throw new Error('Invalid backup save response.');
-  if(payload.saved){
-    // A concurrent backup read may predate this append; refresh explicitly.
-    authoritativeBackupsLoaded=false;
-    backupLoadError=false;
-    if(currentPage==='backup')await loadAuthoritativeBackups(true);
-  }
-  return true;
+function maybeAutoSnapshot(){
+  const todayStr = new Date().toISOString().slice(0,10);
+  const hasToday = backupVersions.some(v=>v.timestamp.slice(0,10)===todayStr);
+  if(!hasToday) saveBackupVersion();
 }
-async function maybeAutoSnapshot(){
-  if(!cloudReady)return;
-  const todayStr=new Date().toISOString().slice(0,10);
-  const res=await fetch(BACKUP_CLOUD_API+'&day='+todayStr,{cache:'no-store'});
-  if(!res.ok)throw new Error('Backup metadata load failed: '+res.status);
-  const payload=await res.json();
-  if(typeof payload.hasDay!=='boolean')throw new Error('Invalid backup metadata response.');
-  if(!payload.hasDay)await saveBackupVersion(todayStr);
-}
-async function restoreBackupVersion(versionId){
-  if(!confirm('Restore this version? Your current data will first be saved as a new backup version so nothing is lost.'))return;
-  if(!cloudReady)return;
-  setCriticalUiLock(true);
-  try{
-    let data;
-    try{
-      const versions=await loadAuthoritativeBackups(true);
-      const version=versions.find(x=>x.id===versionId);
-      if(!version){toast('Version not found');return;}
-      data=JSON.parse(JSON.stringify(version.data));
-      await saveBackupVersion();
-    }catch(err){toast('Backups could not be read or the safety backup could not be saved. Restore cancelled.');return;}
-    const before=captureCloudState();
-    settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials || []; workers = data.workers || [];
-    transactions = data.transactions || []; stockMovements = data.stockMovements || [];
-    articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
-    audit('Backup Version Restored','Version '+versionId+' restored');
-    if(!await saveCriticalCloudState()){applyCloudState(before);await reconcileCloudAfterCriticalRollback();render();toast('Restore could not be saved to D1.');return;}
-    toast('Backup version restored');
-    render();
-  }finally{setCriticalUiLock(false);}
+function restoreBackupVersion(versionId){
+  if(!confirm('Restore this version? Your current data will first be saved as a new backup version so nothing is lost.')) return;
+  saveBackupVersion();
+  const v = backupVersions.find(x=>x.id===versionId);
+  if(!v){ toast('Version not found'); return; }
+  settings = v.data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = v.data.materials || []; workers = v.data.workers || [];
+  transactions = v.data.transactions || []; stockMovements = v.data.stockMovements || [];
+  articles = v.data.articles || []; shopkeepers = v.data.shopkeepers || []; bills = v.data.bills || []; auditLog = v.data.auditLog || [];
+  persistAll();
+  audit('Backup Version Restored','Version '+versionId+' restored');
+  toast('Backup version restored');
+  render();
 }
 
 /* ============ INIT ============ */
@@ -21894,21 +21807,20 @@ document.getElementById('topLogoInput')?.addEventListener('change', async(e)=>{
 async function initApp(){
   // D1 is authoritative. Render immediately for fast startup, but temporarily
   // block mutations until the initial D1 hydration has completed.
-  const startupLocalSignature = JSON.stringify(getCurrentState(false));
+  const startupLocalSignature = JSON.stringify(getCurrentState());
   render();
   const app=document.getElementById('appBody');
   if(app){app.setAttribute('inert','');app.setAttribute('aria-busy','true');}
 
   try{
     const cloudStateApplied = await hydrateCloud(startupLocalSignature);
+    try{ maybeAutoSnapshot(); }catch(e){ console.error('Auto-snapshot skipped:', e); }
     if(cloudStateApplied) render();
   }finally{
     const currentApp=document.getElementById('appBody');
     if(currentApp && cloudReady){
       currentApp.removeAttribute('inert');
       currentApp.removeAttribute('aria-busy');
-      // Backup metadata/creation runs separately and never holds startup locked.
-      maybeAutoSnapshot().catch(e=>console.error('Auto-snapshot skipped:',e));
     }else if(currentApp){
       // Fail closed: if authoritative D1 could not be verified, do not allow
       // business-data edits that could exist only in RAM and disappear on close.
