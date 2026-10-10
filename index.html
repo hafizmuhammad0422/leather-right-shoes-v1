@@ -14894,6 +14894,9 @@ function openWorkerModal(id,initialCategory=''){
     Object.assign(w||workers[workers.length-1],bfMaterialUpdates);
     const defaultsTarget=w||workers[workers.length-1];if(document.querySelector('[data-worker-article-rate]'))defaultsTarget.articleLabourRates=rateUpdates;
     if(Object.keys(materialListUpdates).length){defaultsTarget.defaultMaterialLists={...(defaultsTarget.defaultMaterialLists||{}),...materialListUpdates};Object.entries(materialListUpdates).forEach(([module,ids])=>{defaultsTarget[module+'DefaultMaterialId']=ids[0]||'';});}
+    // Worker and audit must commit or roll back together, without a second PUT.
+    auditLog.push({id:uid(), date:new Date().toISOString(), action:w?'Worker Updated':'Worker Created', details:String(name||'')});
+    if(auditLog.length>500) auditLog=auditLog.slice(-500);
     const workerSaved=await saveCriticalCloudState();
     if(!workerSaved){
       applyCloudState(beforeWorkerSave);
@@ -14902,7 +14905,7 @@ function openWorkerModal(id,initialCategory=''){
       return;
     }
     const savedWorker=w||workers[workers.length-1];Object.keys(materialListUpdates).forEach(module=>{if(module==='upper')upperMaterialChoices.delete(productionArticleChoiceKey(savedWorker,'upper-material'));else bfMaterialChoices.delete(productionArticleChoiceKey(savedWorker,module+'-material'));});Object.keys(defaultArticleUpdates).forEach(module=>{productionDefaultSelections.delete(productionArticleChoiceKey(savedWorker,module));productionArticleChoices.delete(productionArticleChoiceKey(savedWorker,module));});
-    audit(w?'Worker Updated':'Worker Created',name); closeModal(); render(); toast('Saved successfully');
+    closeModal(); render(); toast('Saved successfully');
   };
 }
 
