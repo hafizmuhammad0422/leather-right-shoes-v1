@@ -10589,6 +10589,14 @@ function homeLaserAndStitchManRoute(page){return homeLaserAndStitchManModule.rou
 function homeLaserAndStitchManRender(){const route=homeLaserAndStitchManRoute(currentPage);updateTopbar();applyWallpaper();renderNav();document.getElementById("mainArea").innerHTML=homeLaserAndStitchManModule.renderPage(currentPage);attachPageHandlers();wireDashboardSearch();document.body.classList.toggle("upper-mans-production-active",route?.view==="distributeUpper");}
 function homeLaserAndStitchManBind(){homeLaserAndStitchManModule.bind();}
 /* End Home Laser and Stitch Man isolated copy. */
+function factorySaleRoute(page){return typeof factorySaleModule!=='undefined'?factorySaleModule.route(page):['factorySale','factorySaleToday','factorySaleShopkeeperDetail','factorySaleDispatchDetail','factorySaleShopkeeper1','factorySaleShopkeeper2','factorySaleDispatch1','factorySaleDispatch2'].includes(page);}
+function factorySaleRender(){
+ if(typeof factorySaleModule==='undefined'){
+  if(document.querySelector('script[data-factory-sale-loader]'))return;
+  const script=document.createElement('script');script.src='./factory-sale.js';script.dataset.factorySaleLoader='true';script.onload=()=>{if(typeof factorySaleModule!=='undefined')render();};script.onerror=()=>{script.remove();console.error('Factory Sale module could not be loaded.');};document.head.appendChild(script);return;
+ }
+ updateTopbar();applyWallpaper();renderNav();document.getElementById('mainArea').innerHTML=factorySaleModule.renderPage(currentPage);attachPageHandlers();wireDashboardSearch();document.body.classList.remove('upper-mans-production-active');
+}
 function render(){
   if(factorySaleRoute(currentPage)){factorySaleRender();return;}
   if(wholeFactoryMaterialsRoute(currentPage)){wholeFactoryMaterialsRender();return;}
