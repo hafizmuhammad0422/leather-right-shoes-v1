@@ -107,7 +107,7 @@ function shoeSoleProductAtomBalanceForSupplier(shopkeeper,product){
 }
 function shoeSoleQuantityDisplay(value){if(typeof value==='string'&&!Number.isFinite(Number(value)))return value;const n=Number(value)||0;return Number.isInteger(n)?String(n):String(Math.round(n*100)/100);}
 function openShoeSoleProductAtomOpeningModal(supplierIndex,articleId){
-  const shopkeeper=getShoeSoleSuppliers()[supplierIndex],product=shopkeeper?.articles?.find(p=>String(p.id)===String(articleId)); if(!shopkeeper||!product)return;
+  const shopkeeper=getShoeSoleSuppliers()[supplierIndex],product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(articleId)); if(!shopkeeper||!product)return;
   const b=shoeSoleProductAtomBalanceForSupplier(shopkeeper,product);
   modal(`<h3>${esc(product.name)} — Opening Atoms</h3><label>Opening Atoms</label><input id="fs_ssAtomOpeningOnly" type="number" min="0" step="any" value="${b.opening}"><div style="font-size:12px;color:var(--muted);margin-top:8px;">یہ quantity صرف اسی Article کے Opening Atoms کو تبدیل کرے گی۔</div><div class="modal-actions"><button type="button" class="btn brass" id="fs_ssAtomOpeningSave">Save</button><button type="button" class="btn ghost" id="fs_ssAtomOpeningCancel">Cancel</button></div>`);
   document.getElementById('fs_ssAtomOpeningCancel').onclick=closeModal;
@@ -115,7 +115,7 @@ function openShoeSoleProductAtomOpeningModal(supplierIndex,articleId){
 }
 function openShoeSoleProductAtomPayModal(supplierIndex,articleId){
   const shopkeeper=getShoeSoleSuppliers()[supplierIndex];
-  const product=shopkeeper?.articles?.find(p=>String(p.id)===String(articleId));
+  const product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(articleId));
   if(!shopkeeper||!product)return;
   const b=shoeSoleProductAtomBalanceForSupplier(shopkeeper,product);
   const payable=Math.max(0,b.opening+b.newAtom);
@@ -177,7 +177,12 @@ function openShoeSoleProductAtomPayModal(supplierIndex,articleId){
   };
   setTimeout(()=>input.focus(),50);
 }
-function factorySaleRowUnit(row,shopkeeper){const product=(shopkeeper?.articles||getShoeSoleSuppliers().flatMap(s=>s.articles||[])).find(p=>String(p.id)===String(row.articleId));return row.unit==='Custom'?String(row.customUnit||shoeSoleProductDisplayUnit(product)):String(row.unit||shoeSoleProductDisplayUnit(product));}
+
+function factorySaleArticles(){const catalog=new Map();(settings.articles||[]).forEach(article=>catalog.set(String(article.id),article));getShoeSoleSuppliers().forEach(shopkeeper=>(shopkeeper.articles||[]).forEach(article=>{if(!catalog.has(String(article.id)))catalog.set(String(article.id),article);}));return [...catalog.values()];}
+function factorySaleShopArticles(shopkeeper){return factorySaleArticles().map(article=>{const own=(shopkeeper?.articles||[]).find(a=>String(a.id)===String(article.id));if(own===article)return own;const sent=(shopkeeper?.dispatches||[]).filter(row=>String(row.articleId)===String(article.id)).reduce((sum,row)=>sum+(Number(row.atoms??row.items??row.boxes)||0),0);return {...article,stockItems:sent,stockBoxes:sent};});}
+function factorySaleGlobalArticleModal(articleId=''){const original=factorySaleArticles().find(article=>String(article.id)===String(articleId));let saving=false;modal('<h3>'+ (original?'Edit Global Article':'Add Global Article')+'</h3><label>Article Name<input id="fsGlobalArticleName" value="'+esc(original?.name||'')+'"></label><label>Saved Unit<input id="fsGlobalArticleUnit" value="'+esc(original?shoeSoleProductDisplayUnit(original):'Piece')+'"></label><label>Saved Rate<input id="fsGlobalArticleRate" type="number" min="0" step="any" value="'+esc(original?.ratePerUnit??0)+'"></label><div class="modal-actions"><button class="btn brass" id="fsGlobalArticleSave">Save Article</button><button class="btn ghost" id="fsGlobalArticleCancel">Cancel</button></div>');document.getElementById('fsGlobalArticleCancel').onclick=closeModal;document.getElementById('fsGlobalArticleSave').onclick=async()=>{if(saving)return;const name=document.getElementById('fsGlobalArticleName').value.trim(),unit=document.getElementById('fsGlobalArticleUnit').value.trim(),raw=document.getElementById('fsGlobalArticleRate').value,ratePerUnit=Number(raw);if(!name||!unit||raw===''||!Number.isFinite(ratePerUnit)||ratePerUnit<0){toast('Enter Article Name, saved Unit and valid Rate.');return;}if(factorySaleArticles().some(a=>String(a.id)!==String(original?.id)&&a.name.trim().toLowerCase()===name.toLowerCase()&&shoeSoleProductDisplayUnit(a).toLowerCase()===unit.toLowerCase())){toast('This Article and Unit already exist.');return;}const previous=settings.articles,existed=Object.prototype.hasOwnProperty.call(settings,'articles'),article={...original,id:original?.id||uid(),name,unit:unit==='Custom'?'Custom':unit,customUnit:unit==='Custom'?unit:'',ratePerUnit};saving=true;document.getElementById('fsGlobalArticleSave').disabled=true;settings.articles=original?(previous||[]).filter(a=>String(a.id)!==String(original.id)).concat(article):[...(previous||[]),article];try{if(!await saveCriticalCloudState())throw Error('Save failed');}catch(error){if(existed)settings.articles=previous;else delete settings.articles;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}saving=false;document.getElementById('fsGlobalArticleSave')?.removeAttribute('disabled');toast('Global Article was not saved.');return;}closeModal();render();toast('Global Article saved.');};}
+
+function factorySaleRowUnit(row,shopkeeper){const product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(row.articleId));return row.unit==='Custom'?String(row.customUnit||shoeSoleProductDisplayUnit(product)):String(row.unit||shoeSoleProductDisplayUnit(product));}
 function factorySaleQuantity(row,shopkeeper){return shoeSoleQuantityDisplay(row.atoms??row.items??row.boxes)+' '+factorySaleRowUnit(row,shopkeeper);}
 function factorySaleTotals(rows,shopkeeper){const totals=new Map();rows.forEach(row=>{const unit=factorySaleRowUnit(row,shopkeeper);totals.set(unit,(totals.get(unit)||0)+(Number(row.atoms??row.items??row.boxes)||0));});return [...totals].map(([unit,qty])=>shoeSoleQuantityDisplay(qty)+' '+unit).join(' / ')||'0';}
 function shoeSoleDateKey(value){
@@ -210,16 +215,16 @@ function pageShoeSoleSuppliers(){
   const shopkeepers=getShoeSoleSuppliers(),index=shoeSoleSelectedIndex(),selected=shopkeepers[index];
   const now=new Date(),supplierCards=shopkeepers.map((shopkeeper,i)=>({shopkeeper,i,rows:shoeSoleTodayRows(shopkeeper,now)})).sort((a,b)=>Number(b.rows.length>0)-Number(a.rows.length>0)||a.i-b.i),todayTotal=factorySaleTotals(shopkeepers.flatMap(s=>shoeSoleTodayRows(s,now)));
   return `<div class="fs_sole-shopkeeper-page">
-    <div class="card fs_sole-shopkeeper-actions"><button class="btn ghost small" id="fs_soleBack">Back</button><button class="btn ghost small" id="fs_soleDashboard">Back to Dashboard</button><button class="btn brass small" id="fs_soleAddSupplier">+ Add Shopkeeper</button><button class="btn brass small" id="fs_soleAddArticle" ${selected?'':'disabled'}>+ Add Articles</button><button class="btn ghost small" id="fs_soleToday">Today Dispatch Articles <strong>${esc(todayTotal)}</strong></button></div>
+    <div class="card fs_sole-shopkeeper-actions"><button class="btn ghost small" id="fs_soleBack">Back</button><button class="btn ghost small" id="fs_soleDashboard">Back to Dashboard</button><button class="btn brass small" id="fs_soleAddSupplier">+ Add Shopkeeper</button><button class="btn brass small" id="fs_soleAddArticle">+ Add Article</button><button class="btn ghost small" id="fs_soleToday">Today Dispatch Articles <strong>${esc(todayTotal)}</strong></button><button type="button" class="btn brass small" id="fsManualCreate">Manual Create Bill</button><button type="button" class="btn ghost small" id="fsManualBills">Manual Bill History</button></div>
     <div class="card"><h3>Select Shopkeeper</h3><div class="fs_sole-shopkeeper-grid">${shopkeepers.length?supplierCards.map(({shopkeeper,i,rows})=>{const qty=factorySaleTotals(rows,shopkeeper);return `<div style="min-width:0;display:flex;flex-direction:column;gap:4px;"><button type="button" class="fs_sole-shopkeeper-card ${i===index?'selected':''}" data-fs_sole-select="${esc(shopkeeper.id)}" aria-pressed="${i===index}"><strong title="${esc(shoeSoleSupplierDisplayName(shopkeeper,i))}">${esc(shoeSoleSupplierDisplayName(shopkeeper,i))}</strong><span>Today: ${esc(qty)}</span>${rows.length?'<span class="fs_sole-shopkeeper-completed">Completed</span>':''}</button><button type="button" class="btn ghost small" data-fs_sole-create-bill="${esc(shopkeeper.id)}">Create Bill</button></div>`;}).join(''):'<div class="empty">Add a Shopkeeper to begin.</div>'}</div></div>
-    ${selected?`<div class="card"><div class="fs_sole-entry-heading"><h3>Dispatch Articles - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="fs_soleShopkeeperDetails">Shopkeeper Details / History</button></div><div class="fs_sole-dispatch-entry"><div><label for="fs_soleReceiveDate">Date</label><input id="fs_soleReceiveDate" type="date" value="${shoeSoleReportDateKey()}"></div><div><label for="fs_soleArticle">Select Article</label><select id="fs_soleArticle"><option value="">Select Article</option>${(selected.articles||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ${esc(shoeSoleProductDisplayUnit(p))} sent</option>`).join('')}</select></div><div><label for="fs_soleQuantity" id="fs_soleReceiveUnitLabel">Quantity / saved unit</label><input id="fs_soleQuantity" type="number" min="0" step="any" placeholder="Quantity"></div><button class="btn brass" id="fs_soleReceive">Dispatch / Save</button></div>${(selected.articles||[]).length?'':'<div class="fs_sole-entry-hint">Add Articles for this shopkeeper before dispatch.</div>'}</div>`:'<div class="card empty">Select a shopkeeper to dispatch fs_soles.</div>'}
+    ${selected?`<div class="card"><div class="fs_sole-entry-heading"><h3>Dispatch Articles - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="fs_soleShopkeeperDetails">Shopkeeper Details / History</button></div><div class="fs_sole-dispatch-entry"><div><label for="fs_soleReceiveDate">Date</label><input id="fs_soleReceiveDate" type="date" value="${shoeSoleReportDateKey()}"></div><div><label for="fs_soleArticle">Select Article</label><select id="fs_soleArticle"><option value="">Select Article</option>${factorySaleShopArticles(selected).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ${esc(shoeSoleProductDisplayUnit(p))} sent</option>`).join('')}</select></div><div><label for="fs_soleQuantity" id="fs_soleReceiveUnitLabel">Quantity / saved unit</label><input id="fs_soleQuantity" type="number" min="0" step="any" placeholder="Quantity"></div><button class="btn brass" id="fs_soleReceive">Dispatch / Save</button></div>${factorySaleShopArticles(selected).length?'':'<div class="fs_sole-entry-hint">Add Global Articles before dispatch.</div>'}</div>`:'<div class="card empty">Select a shopkeeper to dispatch fs_soles.</div>'}
   </div>`;
 }
 let shoeSoleReportRange=null;
 function shoeSoleReportDateKey(date=new Date()){return String(date.getFullYear()).padStart(4,'0')+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0')}
 function shoeSoleReportDay(value){if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;const [y,m,d]=value.split('-').map(Number),date=new Date(y,m-1,d);return shoeSoleReportDateKey(date)===value?date:null}
 function shoeSoleReportRows(shopkeepers,from,to){const start=shoeSoleReportDay(from),last=shoeSoleReportDay(to);if(!start||!last||start>last)return null;const end=new Date(last);end.setDate(end.getDate()+1);return shopkeepers.flatMap((shopkeeper,index)=>(shopkeeper.dispatches||[]).filter(p=>{const date=new Date(p.date),qty=Number(p.atoms??p.items??p.boxes);return p.id&&p.articleId&&p.deleted!==true&&!p.deletedAt&&!p.voided&&Number.isFinite(qty)&&qty>0&&date>=start&&date<end;}).map(p=>({shopkeeper,index,p}))).sort((a,b)=>new Date(b.p.date)-new Date(a.p.date))}
-function shoeSoleReportTable(rows,total,actions=false){const supplierNumbers=new Map(),supplierNumber=(shopkeeper,index)=>{const key=shopkeeper.id!==undefined&&shopkeeper.id!==null&&String(shopkeeper.id)!==''?'id:'+String(shopkeeper.id):'index:'+String(index);if(!supplierNumbers.has(key))supplierNumbers.set(key,supplierNumbers.size+1);return supplierNumbers.get(key)};const table='<table style="width:100%;table-layout:fixed;border-collapse:collapse"><colgroup><col style="width:34%"><col style="width:41%"><col style="width:25%"></colgroup><thead><tr><th style="text-align:left">Shopkeeper Name</th><th style="text-align:center">Article</th><th style="text-align:center">Quantity</th></tr></thead><tbody>'+ (rows.length?rows.map(({shopkeeper,index,p})=>'<tr><td style="overflow-wrap:anywhere;text-align:left">'+supplierNumber(shopkeeper,index)+'. '+esc(shoeSoleSupplierDisplayName(shopkeeper,index))+'</td><td style="overflow-wrap:anywhere;text-align:center">'+esc(p.articleName||(shopkeeper.articles||[]).find(a=>String(a.id)===String(p.articleId))?.name||'Article')+(actions?'<div><button class="btn ghost small" data-fs_sole-view="'+esc(p.id)+'" data-fs_sole-shopkeeper="'+esc(shopkeeper.id)+'">View</button> <button class="btn red small" data-fs_sole-delete="'+esc(p.id)+'" data-fs_sole-shopkeeper="'+esc(shopkeeper.id)+'">Delete</button></div>':'')+'</td><td style="text-align:center">'+esc(factorySaleQuantity(p,shopkeeper))+'</td></tr>').join(''):'<tr><td colspan="3">No dispatches in this range.</td></tr>')+'</tbody></table>';if(actions)return table.replace('</tbody></table>','</tbody><tfoot><tr><th colspan="2" style="text-align:left">Total Quantity</th><th style="text-align:center">'+esc(total)+'</th></tr></tfoot></table>');return table.replace('>Shopkeeper Name</th>','>SUPPLIER</th>').replace('>Article</th>','>ARTICLE</th>').replace('>Quantity</th>','>QUANTITY</th>')+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;margin-top:5px;"><colgroup><col style="width:60%"><col style="width:40%"></colgroup><tbody><tr style="font-weight:900;"><th style="text-align:left;">TOTAL QUANTITY</th><th style="text-align:center;">'+shoeSoleQuantityDisplay(total)+' ATOMS</th></tr></tbody></table>'}
+function shoeSoleReportTable(rows,total,actions=false){const supplierNumbers=new Map(),supplierNumber=(shopkeeper,index)=>{const key=shopkeeper.id!==undefined&&shopkeeper.id!==null&&String(shopkeeper.id)!==''?'id:'+String(shopkeeper.id):'index:'+String(index);if(!supplierNumbers.has(key))supplierNumbers.set(key,supplierNumbers.size+1);return supplierNumbers.get(key)};const table='<table style="width:100%;table-layout:fixed;border-collapse:collapse"><colgroup><col style="width:34%"><col style="width:41%"><col style="width:25%"></colgroup><thead><tr><th style="text-align:left">Shopkeeper Name</th><th style="text-align:center">Article</th><th style="text-align:center">Quantity</th></tr></thead><tbody>'+ (rows.length?rows.map(({shopkeeper,index,p})=>'<tr><td style="overflow-wrap:anywhere;text-align:left">'+supplierNumber(shopkeeper,index)+'. '+esc(shoeSoleSupplierDisplayName(shopkeeper,index))+'</td><td style="overflow-wrap:anywhere;text-align:center">'+esc(p.articleName||factorySaleShopArticles(shopkeeper).find(a=>String(a.id)===String(p.articleId))?.name||'Article')+(actions?'<div><button class="btn ghost small" data-fs_sole-view="'+esc(p.id)+'" data-fs_sole-shopkeeper="'+esc(shopkeeper.id)+'">View</button> <button class="btn red small" data-fs_sole-delete="'+esc(p.id)+'" data-fs_sole-shopkeeper="'+esc(shopkeeper.id)+'">Delete</button></div>':'')+'</td><td style="text-align:center">'+esc(factorySaleQuantity(p,shopkeeper))+'</td></tr>').join(''):'<tr><td colspan="3">No dispatches in this range.</td></tr>')+'</tbody></table>';if(actions)return table.replace('</tbody></table>','</tbody><tfoot><tr><th colspan="2" style="text-align:left">Total Quantity</th><th style="text-align:center">'+esc(total)+'</th></tr></tfoot></table>');return table.replace('>Shopkeeper Name</th>','>SUPPLIER</th>').replace('>Article</th>','>ARTICLE</th>').replace('>Quantity</th>','>QUANTITY</th>')+'<table style="width:100%;table-layout:fixed;border-collapse:collapse;margin-top:5px;"><colgroup><col style="width:60%"><col style="width:40%"></colgroup><tbody><tr style="font-weight:900;"><th style="text-align:left;">TOTAL QUANTITY</th><th style="text-align:center;">'+shoeSoleQuantityDisplay(total)+' ATOMS</th></tr></tbody></table>'}
 function shoeSoleReportPeriod(mode,now=new Date()){
   const start=new Date(now.getFullYear(),now.getMonth(),now.getDate()),end=new Date(start);
   if(mode==='week'){start.setDate(start.getDate()-(start.getDay()+1)%7);end.setTime(start.getTime());end.setDate(end.getDate()+5);}
@@ -233,7 +238,7 @@ function pageShoeSoleToday(){
 }
 async function saveShoeSoleReceiving(shopkeeperId,articleId,atoms,date,notes='',time=date,request={}){
   if(request.saved||request.saving||window.__soleReceiveSaving)return null;
-  const shopkeeper=getShoeSoleSuppliers().find(s=>String(s.id)===String(shopkeeperId)),product=shopkeeper?.articles?.find(p=>String(p.id)===String(articleId));
+  const shopkeeper=getShoeSoleSuppliers().find(s=>String(s.id)===String(shopkeeperId)),product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(articleId));
   if(!product||!Number.isFinite(atoms)||atoms<=0||!Number.isFinite(new Date(date).getTime())){toast('Select an article and enter a valid positive quantity.');return null;}
   request.saving=true;window.__soleReceiveSaving=true;
   const before=JSON.stringify(settings);
@@ -257,7 +262,7 @@ function bindShoeSoleLanding(){
   document.getElementById('fs_soleBack')?.addEventListener('click',()=>goBack());
   document.getElementById('fs_soleDashboard')?.addEventListener('click',()=>goto('dashboard'));
   document.getElementById('fs_soleAddSupplier')?.addEventListener('click',()=>openShoeSoleSupplierModal());
-  document.getElementById('fs_soleAddArticle')?.addEventListener('click',()=>{const i=shoeSoleSelectedIndex();if(i>=0)openShoeSoleProductModal(i,null);});
+  document.getElementById('fs_soleAddArticle')?.addEventListener('click',()=>factorySaleGlobalArticleModal());
   document.getElementById('fs_soleToday')?.addEventListener('click',()=>{shoeSoleReportRange=null;goto('factorySaleToday');});
   document.getElementById('fs_soleTodayBack')?.addEventListener('click',()=>{shoeSoleReportRange=null;goto('factorySale');});
   document.getElementById('fs_soleReportToday')?.addEventListener('click',()=>{shoeSoleReportRange=shoeSoleReportPeriod('today');render();});
@@ -268,7 +273,7 @@ function bindShoeSoleLanding(){
   document.getElementById('fs_soleShopkeeperDetails')?.addEventListener('click',()=>goto('factorySaleShopkeeperDetail'));
   document.querySelectorAll('[data-fs_sole-select]').forEach(b=>b.addEventListener('click',()=>{window.__soleSelectedId=b.dataset.fs_soleSelect;render();}));
   document.querySelectorAll('[data-fs_sole-create-bill]').forEach(button=>button.addEventListener('click',()=>{window.__soleSelectedId=button.dataset.fs_soleCreateBill;shoeSoleBillingModule.open(button.dataset.fs_soleCreateBill);}));
-  document.getElementById('fs_soleArticle')?.addEventListener('change',()=>{const shopkeeper=getShoeSoleSuppliers()[shoeSoleSelectedIndex()],product=shopkeeper?.articles?.find(p=>String(p.id)===String(document.getElementById('fs_soleArticle').value));document.getElementById('fs_soleReceiveUnitLabel').textContent='Quantity / '+(product?shoeSoleProductDisplayUnit(product):'saved unit');});
+  document.getElementById('fs_soleArticle')?.addEventListener('change',()=>{const shopkeeper=getShoeSoleSuppliers()[shoeSoleSelectedIndex()],product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(document.getElementById('fs_soleArticle').value));document.getElementById('fs_soleReceiveUnitLabel').textContent='Quantity / '+(product?shoeSoleProductDisplayUnit(product):'saved unit');});
   const request={};
   document.getElementById('fs_soleReceive')?.addEventListener('click',async()=>{
     const shopkeeperId=window.__soleSelectedId,articleId=document.getElementById('fs_soleArticle')?.value,atoms=Number(document.getElementById('fs_soleQuantity')?.value),now=new Date().toISOString();
@@ -290,7 +295,7 @@ function pageShoeSoleSupplierDetail(index){
   const shopkeeper=shopkeepers[index];
   if(!shopkeeper) return pageShoeSoleSuppliers();
   const displayName=shoeSoleSupplierDisplayName(shopkeeper,index);
-  const articles=Array.isArray(shopkeeper.articles)?shopkeeper.articles:[];
+  const articles=factorySaleShopArticles(shopkeeper);
   return `<div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
       <div><h2 class="page-title" style="margin-bottom:4px;">📦 ${esc(displayName)}</h2><div style="font-size:12px;color:var(--muted);">Shopkeeper ${index+1} — complete Shopkeeper details, articles and dispatch.</div></div>
@@ -321,7 +326,7 @@ function pageShoeSoleSupplierDetail(index){
         <h3 style="margin:0;font-size:17px;">Article List</h3>
         <div style="display:flex;gap:7px;flex-wrap:wrap;">
           <button class="btn brass small" type="button" data-fs_createssreceive="${index}">＋ Create Dispatch Voucher</button>
-          <button class="btn ghost small" type="button" data-fs_addssproduct="${index}">＋ Add Article</button>
+          <button class="btn ghost small" type="button" data-fs_addssproduct="${index}">＋ Add Global Article</button>
         </div>
       </div>
       ${articles.length?`<div class="fs_sss-product-list" style="display:grid;gap:5px;overflow-x:auto;"><div style="display:grid;grid-template-columns:minmax(145px,1.5fr) 82px 82px 82px 92px 86px minmax(115px,auto);align-items:center;gap:5px;padding:4px 5px;font-size:9px;color:var(--muted);font-weight:800;white-space:nowrap;min-width:750px;"><div>Article</div><div>Opening Atoms</div><div>New Atoms</div><div>Pay Atoms</div><div>Remaining Atoms</div><div>Advance Atoms</div><div>Actions</div></div>${articles.map((product,productIndex)=>{const b=shoeSoleProductAtomBalanceForSupplier(shopkeeper,product);const isFootprint=/footprint/i.test(String(product.name||''));return `<div class="entity-card fs_sss-product-row" data-fs_opensoleproductactions="${index}" data-productid="${esc(product.id)}" style="display:grid;grid-template-columns:minmax(145px,1.5fr) 82px 82px 82px 92px 86px minmax(115px,auto);align-items:center;gap:5px;text-align:left;padding:5px;min-width:750px;cursor:pointer;">
@@ -377,7 +382,7 @@ function shoeSoleReceiveGroupedRows(shopkeeper,rows){
   const map=new Map();
   rows.forEach(p=>{
     const key=String(p.articleId||p.articleName||'');
-    const product=(shopkeeper.articles||[]).find(x=>String(x.id)===String(p.articleId));
+    const product=factorySaleShopArticles(shopkeeper).find(x=>String(x.id)===String(p.articleId));
     const old=map.get(key)||{articleId:p.articleId,articleName:p.articleName||product?.name||'Article',items:0};
     old.items+=shoeSolePurchaseItems(p);
     map.set(key,old);
@@ -573,7 +578,7 @@ function renderShoeSoleVoucherPreview(supplierIndex,dispatchIds,notes=''){
   rows.forEach(p=>{
     const pid=String(p.articleId||'');
     if(summaryByProduct.has(pid))return;
-    const product=(shopkeeper.articles||[]).find(x=>String(x.id)===pid);
+    const product=factorySaleShopArticles(shopkeeper).find(x=>String(x.id)===pid);
     const total=shoeSoleCurrentProductTotalAtoms(shopkeeper,product);
     summaryByProduct.set(pid,{name:p.articleName||product?.name||'Article',total,unit:factorySaleRowUnit(p,shopkeeper)});
   });
@@ -671,7 +676,7 @@ function deleteShoeSoleReceiveVoucher(supplierIndex,voucherId,dispatchIds){
   if(!confirm(`Delete ${voucherNo}?\n\nAtoms: ${shoeSoleQuantityDisplay(totalAtoms)} Atoms\n\nAll stock effects of this voucher will be reversed.`)) return;
   if((settings.billing?.bills||[]).some(b=>String(b.shopkeeperId)===String(shopkeeper.id)&&(b.sourceRecordIds||[]).some(id=>finalIds.includes(String(id))))){toast('Reverse the linked bill before deleting this dispatch.');return;}
   rows.forEach(p=>{
-    const product=(shopkeeper.articles||[]).find(x=>String(x.id)===String(p.articleId));
+    const product=factorySaleShopArticles(shopkeeper).find(x=>String(x.id)===String(p.articleId));
     const atoms=Math.max(0,Number(p.atoms ?? p.items)||0);
     if(product){
       product.stockItems=Math.max(0,shoeSoleProductStockItems(product)-atoms);
@@ -691,7 +696,7 @@ function deleteShoeSoleReceiving(supplierIndex,purchaseId){
   const purchase=dispatches.find(p=>String(p.id)===String(purchaseId));
   if(!purchase){toast('Dispatch entry not found');return;}
   if((settings.billing?.bills||[]).some(b=>String(b.shopkeeperId)===String(shopkeeper.id)&&(b.sourceRecordIds||[]).includes(String(purchaseId)))){toast('Reverse the linked bill before deleting this dispatch.');return;}
-  const product=(shopkeeper.articles||[]).find(p=>String(p.id)===String(purchase.articleId));
+  const product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(purchase.articleId));
   const atoms=Math.max(0,Number(purchase.atoms ?? purchase.items)||0);
   const label=`${purchase.articleName||product?.name||'Article'} — ${shoeSoleQuantityDisplay(atoms)} Atoms`;
   if(!confirm(`Delete this dispatch entry?\n\n${label}\n\nStock and dispatch effects will be reversed.`)) return;
@@ -792,6 +797,7 @@ function openShoeSoleSupplierModal(index=null){
 
 function openShoeSoleProductModal(supplierIndex,articleId){
   const shopkeeper=getShoeSoleSuppliers()[supplierIndex]; if(!shopkeeper) return;
+  return factorySaleGlobalArticleModal(articleId||'');
   const product=articleId ? shopkeeper.articles.find(p=>String(p.id)===String(articleId)) : null;
   let pendingPhoto=product?.photo||'';
   let customUnit=product?.customUnit||'';
@@ -829,7 +835,7 @@ function openShoeSoleProductModal(supplierIndex,articleId){
 }
 function openShoeSoleProductActionModal(supplierIndex,articleId){
   const shopkeeper=getShoeSoleSuppliers()[supplierIndex];
-  const product=shopkeeper?.articles?.find(p=>String(p.id)===String(articleId));
+  const product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(articleId));
   if(!shopkeeper||!product) return;
   const b=shoeSoleProductAtomBalanceForSupplier(shopkeeper,product);
   modal(`<h3>${esc(product.name)} — Article Actions</h3>
@@ -855,6 +861,8 @@ function openShoeSoleProductActionModal(supplierIndex,articleId){
   document.getElementById('ssProductActionReceive').onclick=()=>{closeModal();openShoeSolePurchaseModal(supplierIndex,articleId);};
   document.getElementById('ssProductActionDelete').onclick=()=>{
     if(!confirm(`کیا آپ اس Article کو Delete کرنا چاہتے ہیں؟\n\n${product.name}`)) return;
+    const globalIndex=(settings.articles||[]).findIndex(article=>String(article.id)===String(articleId));
+    if(globalIndex>=0){if(getShoeSoleSuppliers().some(shop=>(shop.articles||[]).some(article=>String(article.id)===String(articleId))||(shop.dispatches||[]).some(row=>String(row.articleId)===String(articleId)))||(settings.manualBills||[]).some(bill=>(bill.lines||[]).some(line=>String(line.articleId)===String(articleId)))){toast('This Global Article has saved sales/bills and cannot be deleted.');return;}settings.articles=settings.articles.filter(article=>String(article.id)!==String(articleId));persistAll();closeModal();render();return;}
     const liveSupplier=getShoeSoleSuppliers()[supplierIndex];
     if(!liveSupplier) return;
     const idx=(Array.isArray(liveSupplier.articles)?liveSupplier.articles:[]).findIndex(p=>String(p.id)===String(articleId));
@@ -868,7 +876,7 @@ function openShoeSoleProductActionModal(supplierIndex,articleId){
 }
 
 function openShoeSoleProductCustomFieldsModal(supplierIndex,articleId){
-  const shopkeeper=getShoeSoleSuppliers()[supplierIndex], product=shopkeeper?.articles.find(p=>String(p.id)===String(articleId)); if(!product)return;
+  const shopkeeper=getShoeSoleSuppliers()[supplierIndex], product=factorySaleArticles().find(p=>String(p.id)===String(articleId)); if(!product)return;
   const fields=Array.isArray(product.customFields)?product.customFields:[];
   modal(`<h3>${esc(product.name)} — Custom Fields</h3><div style="font-size:12px;color:var(--muted);margin-bottom:12px;">Create additional fields for this product.</div><div style="max-height:360px;overflow:auto;">${fields.length?fields.map(f=>`<div class="card" style="padding:10px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;"><div><div style="font-weight:800;">${esc(f.name)}</div><div style="font-size:12px;color:var(--muted);margin-top:3px;white-space:pre-wrap;">${esc(f.value||'—')}</div></div><div style="display:flex;gap:5px;"><button type="button" class="btn blue small" data-editsspcf="${esc(f.id)}">✏️ Edit</button><button type="button" class="btn red small" data-delsspcf="${esc(f.id)}">Delete</button></div></div></div>`).join(''):'<div class="empty">No custom fields added yet.</div>'}</div><div class="modal-actions"><button type="button" class="btn brass" id="fs_sspAddCf">＋ Add Custom Field</button><button type="button" class="btn ghost" id="fs_sspCfClose">Close</button></div>`);
   document.getElementById('fs_sspCfClose').onclick=closeModal;
@@ -877,7 +885,7 @@ function openShoeSoleProductCustomFieldsModal(supplierIndex,articleId){
   document.querySelectorAll('[data-delsspcf]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this product custom field?'))return;product.customFields=product.customFields.filter(f=>String(f.id)!==String(b.dataset.delsspcf));persistAll();openShoeSoleProductCustomFieldsModal(supplierIndex,articleId);});
 }
 function openShoeSoleProductCustomFieldModal(supplierIndex,articleId,fieldId){
-  const shopkeeper=getShoeSoleSuppliers()[supplierIndex], product=shopkeeper?.articles.find(p=>String(p.id)===String(articleId)); if(!product)return;
+  const shopkeeper=getShoeSoleSuppliers()[supplierIndex], product=factorySaleArticles().find(p=>String(p.id)===String(articleId)); if(!product)return;
   const field=fieldId?product.customFields.find(f=>String(f.id)===String(fieldId)):null;
   modal(`<h3>${field?'Edit':'Add'} Article Custom Field</h3><label>Field Name</label><input id="fs_sspcfName" value="${esc(field?.name||'')}" placeholder="e.g. Size"><label>Field Value</label><textarea id="fs_sspcfValue" rows="3">${esc(field?.value||'')}</textarea><div class="modal-actions"><button type="button" class="btn brass" id="fs_sspcfSave">Save</button><button type="button" class="btn ghost" id="fs_sspcfCancel">Cancel</button></div>`);
   document.getElementById('fs_sspcfCancel').onclick=()=>openShoeSoleProductCustomFieldsModal(supplierIndex,articleId);
@@ -886,7 +894,7 @@ function openShoeSoleProductCustomFieldModal(supplierIndex,articleId,fieldId){
 function openShoeSoleReceiveSession(supplierIndex){
   const shopkeeper=getShoeSoleSuppliers()[supplierIndex];
   if(!shopkeeper) return;
-  const articles=Array.isArray(shopkeeper.articles)?shopkeeper.articles:[];
+  const articles=factorySaleShopArticles(shopkeeper);
   if(!articles.length){toast('Add at least one product first');return;}
   const selected={};
   let notes='';
@@ -963,7 +971,7 @@ function openShoeSoleReceiveSession(supplierIndex){
 
 function openShoeSolePurchaseModal(supplierIndex,articleId){
   const shopkeeper=getShoeSoleSuppliers()[supplierIndex];
-  const product=shopkeeper?.articles?.find(p=>String(p.id)===String(articleId));
+  const product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(articleId));
   if(!shopkeeper||!product)return;
 
   modal(`<h3>Dispatch Article — ${esc(product.name)}</h3>
@@ -1077,7 +1085,7 @@ function openShoeSoleCustomFieldModal(index,fieldId){
 let supplierProductionBillSaving=false;
 function supplierProductionActiveWorker(){return getShoeSoleSuppliers().find(s=>String(s.id)===String(window.__soleSelectedId))||null;}
 function supplierProductionBillWorker(id){return getShoeSoleSuppliers().find(s=>String(s.id)===String(id))||null;}
-function supplierProductionAssignedArticles(shopkeeper){return shopkeeper?.articles||[];}
+function supplierProductionAssignedArticles(shopkeeper){return factorySaleShopArticles(shopkeeper);}
 function shoeSoleProductDisplayUnit(product){return product?.unit==='Custom'?String(product.customUnit||'Unit unavailable'):String(product?.unit||'Unit unavailable');}
 function upperMoney(n){ return 'Rs. '+Number(n||0).toLocaleString('en-PK'); }
 function supplierProductionBillHistoryHtml(workerId){
@@ -1106,7 +1114,7 @@ function supplierProductionReceivedBillData(worker){
  const records=(worker.dispatches||[]).filter(record=>{const date=new Date(record.date);return date>=start&&date<end&&date.getDay()!==5;}),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'sent record');
  const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved sent-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
  unbilled.forEach(record=>{const rawQty=record.atoms??record.items??record.boxes;if(!present(rawQty))throw Error('Invalid/missing sent quantity for '+name(record.articleName));const qty=Number(rawQty);if(!Number.isFinite(qty)||qty<0)throw Error('Invalid/missing sent quantity for '+name(record.articleName));if(qty===0)return;
-  const article=(worker.articles||[]).find(a=>String(a.id)===String(record.articleId));if(!article)throw Error('Missing saved article/material: '+name(record.articleName));
+  const article=factorySaleShopArticles(worker).find(a=>String(a.id)===String(record.articleId));if(!article)throw Error('Missing saved article/material: '+name(record.articleName));
   const productUnit=shoeSoleProductDisplayUnit(article),unit=record.unit==='Custom'?String(record.customUnit||productUnit):String(record.unit||productUnit);if(!unit.trim()||unit==='Unit unavailable')throw Error('Missing saved Unit for '+name(record.articleName||article.name));
   const rawRate=record.ratePerUnit??article.ratePerUnit;if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(record.articleName||article.name));if(!present(record.ratePerUnit)&&unit!==productUnit)throw Error('Missing saved rate for sent Unit '+unit+' of '+name(record.articleName||article.name));
   add(record,article.id,record.articleName||article.name,unit,Number(rawRate),qty);});
@@ -1239,6 +1247,8 @@ function buildSupplierProductionBillCanvas(bill){
 
 const shoeSoleBillingModule={open:openSupplierProductionBill};
 function bind(){
+ document.getElementById('fsManualCreate')?.addEventListener('click',()=>factorySaleManualEditor());document.getElementById('fsManualBills')?.addEventListener('click',factorySaleManualHistory);
+
   bindShoeSoleLanding();
   document.querySelectorAll('[data-fs_opensss]').forEach(card=>card.addEventListener('click',()=>{const shopkeeper=getShoeSoleSuppliers()[parseInt(card.dataset.fs_opensss)];if(shopkeeper){window.__soleSelectedId=shopkeeper.id;goto('factorySaleShopkeeperDetail');}}));
   document.querySelectorAll('[data-fs_editsss]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); openShoeSoleSupplierModal(parseInt(b.dataset.fs_editsss)); }));
@@ -1254,12 +1264,12 @@ function bind(){
     const supplierIndex=shoeSoleRouteIndex();
     if(supplierIndex<0) return;
     const shopkeeper=getShoeSoleSuppliers()[supplierIndex];
-    const product=(shopkeeper?.articles||[]).find(p=>String(p.id)===String(el.dataset.fs_sssproductphoto));
+    const product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(el.dataset.fs_sssproductphoto));
     if(product && product.photo) openImageLightbox(product.photo);
   }));
 
-  document.querySelectorAll('[data-fs_addssproduct]').forEach(b=>b.addEventListener('click',()=>openShoeSoleProductModal(parseInt(b.dataset.fs_addssproduct),null)));
-  document.querySelectorAll('[data-fs_editssproduct]').forEach(b=>b.addEventListener('click',()=>openShoeSoleProductModal(parseInt(b.dataset.fs_editssproduct),b.dataset.productid)));
+  document.querySelectorAll('[data-fs_addssproduct]').forEach(b=>b.addEventListener('click',()=>factorySaleGlobalArticleModal()));
+  document.querySelectorAll('[data-fs_editssproduct]').forEach(b=>b.addEventListener('click',()=>factorySaleGlobalArticleModal(b.dataset.productid)));
   document.querySelectorAll('[data-fs_purchasessproduct]').forEach(b=>b.addEventListener('click',()=>openShoeSolePurchaseModal(parseInt(b.dataset.fs_purchasessproduct),b.dataset.productid)));
   document.querySelectorAll('[data-fs_createssreceive]').forEach(b=>b.addEventListener('click',(e)=>{e.stopPropagation();openShoeSoleReceiveSession(parseInt(b.dataset.fs_createssreceive));}));
   document.querySelectorAll('[data-open-fs_sss-dispatch]').forEach(b=>b.addEventListener('click',(e)=>{
@@ -1331,6 +1341,22 @@ function bind(){
 
   document.querySelectorAll('[data-lightboxphoto="shoeSoleSupplier"]').forEach(el=>el.onclick=()=>{const shopkeeper=getShoeSoleSuppliers()[Number(el.dataset.fs_sssindex)];if(shopkeeper?.photo)openImageLightbox(shopkeeper.photo);});
 }
+
+
+let factorySaleManualSaving=false;
+function factorySaleManualArticles(){return factorySaleArticles().map(article=>({key:String(article.id),articleId:String(article.id),articleName:article.name,shopkeeperName:'Global Article',unit:shoeSoleProductDisplayUnit(article),rate:article.ratePerUnit}));}
+function factorySaleManualAmounts(lines){let total=0;const calculated=lines.map(line=>{const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);if(!line.articleName||!line.unit||line.qty===''||line.rate===''||!Number.isFinite(qty)||qty<=0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw Error('Select an Article and enter valid Quantity and Rate.');total+=cents;if(!Number.isSafeInteger(total))throw Error('Bill amount is too large.');return {...line,qty,rate,amount:cents/100};});if(!calculated.length)throw Error('Add at least one Article.');return {lines:calculated,totalAmount:total/100};}
+function factorySaleManualBillHtml(bill){return '<div class="receipt-paper" style="width:100%;font-family:Arial,sans-serif;font-size:11px;color:#000"><h3 style="text-align:center;margin:3px 0">LEATHER RIGHT SHOES BY ABID</h3><div style="text-align:center;font-weight:bold">FACTORY SALE MANUAL BILL</div><div>Shopkeeper: '+esc(bill.shopkeeperName)+'</div><div>Bill #'+esc(bill.voucherNo)+' | Date: '+esc(String(bill.date).slice(0,10))+'</div><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr><th>Article</th><th>Quantity</th><th>Rate</th><th>Amount</th></tr></thead><tbody>'+bill.lines.map(line=>'<tr><td>'+esc(line.articleName)+'</td><td>'+esc(line.qty)+' '+esc(line.unit)+'</td><td>'+upperMoney(line.rate)+'</td><td>'+upperMoney(line.amount)+'</td></tr>').join('')+'</tbody></table><div style="display:flex;justify-content:space-between;font-weight:bold;border-top:1px solid #000;margin-top:5px;padding-top:4px"><span>Grand Total</span><span>'+upperMoney(bill.totalAmount)+'</span></div></div>';}
+function factorySaleManualPrint(bill){const win=globalThis.window.open('','_blank','width=420,height=700');if(!win){toast('Please allow popups to print');return;}win.document.write('<!doctype html><html><head><meta charset="UTF-8"><title>Manual Bill '+esc(bill.voucherNo)+'</title><style>@page{size:80mm auto;margin:0}body{width:80mm;box-sizing:border-box;margin:0;padding:4mm}th,td{text-align:left;padding:2px 1px;overflow-wrap:anywhere}table{table-layout:fixed} @media print{body{padding:4px}}</style></head><body>'+factorySaleManualBillHtml(bill)+'<script>window.onload=function(){window.print();};<\/script></body></html>');win.document.close();}
+function factorySaleManualView(id){const bill=(settings.manualBills||[]).find(b=>b.id===id);if(!bill)return;modal('<h3>Manual Bill #'+esc(bill.voucherNo)+'</h3><div style="width:80mm;max-width:100%;margin:auto">'+factorySaleManualBillHtml(bill)+'</div><div class="modal-actions"><button class="btn brass" id="fsManualPrint">Print</button><button class="btn ghost" id="fsManualBack">Back</button></div>');document.getElementById('fsManualPrint').onclick=()=>factorySaleManualPrint(bill);document.getElementById('fsManualBack').onclick=factorySaleManualHistory;}
+function factorySaleManualHistory(){modal('<h3>Manual Bill History</h3><div style="overflow-x:auto"><table><thead><tr><th>Bill</th><th>Shopkeeper</th><th>Date</th><th>Grand Total</th><th>Actions</th></tr></thead><tbody>'+(settings.manualBills||[]).slice().reverse().map(b=>'<tr><td>#'+esc(b.voucherNo)+'</td><td>'+esc(b.shopkeeperName)+'</td><td>'+esc(String(b.date).slice(0,10))+'</td><td>'+upperMoney(b.totalAmount)+'</td><td>'+['View','Edit','Delete','Print'].map(action=>'<button class="btn ghost small" data-fs-manual-action="'+action+'" data-fs-manual-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button class="btn brass" id="fsManualNew">Manual Create Bill</button><button class="btn ghost" id="fsManualClose">Close</button></div>');document.getElementById('fsManualNew').onclick=()=>factorySaleManualEditor();document.getElementById('fsManualClose').onclick=closeModal;document.querySelectorAll('[data-fs-manual-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.fsManualId,bill=(settings.manualBills||[]).find(b=>b.id===id);if(!bill)return;const action=button.dataset.fsManualAction;if(action==='View')factorySaleManualView(id);else if(action==='Edit')factorySaleManualEditor(id);else if(action==='Print')factorySaleManualPrint(bill);else openConfirmModal('Delete Manual Bill #'+bill.voucherNo+'?',()=>factorySaleManualDelete(id,JSON.stringify(bill)));});}
+async function factorySaleManualStore(next,number){if(factorySaleManualSaving)return false;const previous=settings.manualBills,counter=settings.nextManualBillNo,hadBills=Object.prototype.hasOwnProperty.call(settings,'manualBills'),hadCounter=Object.prototype.hasOwnProperty.call(settings,'nextManualBillNo');factorySaleManualSaving=true;settings.manualBills=next;if(number!==undefined)settings.nextManualBillNo=number;try{if(!await saveCriticalCloudState())throw Error('Save failed');return true;}catch(error){if(hadBills)settings.manualBills=previous;else delete settings.manualBills;if(hadCounter)settings.nextManualBillNo=counter;else delete settings.nextManualBillNo;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}toast('Manual bill was not saved.');return false;}finally{factorySaleManualSaving=false;}}
+async function factorySaleManualDelete(id,expected){if(factorySaleManualSaving)return;const current=(settings.manualBills||[]).find(b=>b.id===id);if(!current||JSON.stringify(current)!==expected){toast('Manual bill changed. Reopen history.');return;}if(await factorySaleManualStore(settings.manualBills.filter(b=>b.id!==id)))factorySaleManualHistory();}
+function factorySaleManualEditor(id=''){const original=(settings.manualBills||[]).find(b=>b.id===id);if(id&&!original)return;const expected=original?JSON.stringify(original):'',articles=factorySaleManualArticles();modal('<h3>'+ (original?'Edit Manual Bill #'+esc(original.voucherNo):'Manual Create Bill')+'</h3><label>Shopkeeper Name<input type="text" id="fsManualName" value="'+esc(original?.shopkeeperName||'')+'"></label><div style="overflow-x:auto"><table><thead><tr><th>Article</th><th>Saved Unit</th><th>Quantity</th><th>Rate</th><th>Line Amount</th><th></th></tr></thead><tbody id="fsManualRows"></tbody></table></div><button class="btn ghost small" id="fsManualAdd">Add Article</button><div class="rline"><strong>Grand Total</strong><strong id="fsManualTotal">0</strong></div><div class="modal-actions"><button class="btn brass" id="fsManualSave">Create Bill</button><button class="btn ghost" id="fsManualHistory">History</button><button class="btn ghost" id="fsManualCancel">Cancel</button></div>');
+ const host=document.getElementById('fsManualRows');const collect=()=>[...host.children].map(row=>({...row.manualLine,qty:row.querySelector('[data-manual-qty]').value,rate:row.querySelector('[data-manual-rate]').value}));
+ const update=()=>{try{const calculated=factorySaleManualAmounts(collect());calculated.lines.forEach((line,i)=>host.children[i].querySelector('[data-manual-amount]').textContent=upperMoney(line.amount));document.getElementById('fsManualTotal').textContent=upperMoney(calculated.totalAmount);}catch(error){document.getElementById('fsManualTotal').textContent=error.message;[...host.children].forEach(row=>{try{row.querySelector('[data-manual-amount]').textContent=upperMoney(factorySaleManualAmounts([{...row.manualLine,qty:row.querySelector('[data-manual-qty]').value,rate:row.querySelector('[data-manual-rate]').value}]).totalAmount);}catch(e){row.querySelector('[data-manual-amount]').textContent='';}});}};
+ const add=(saved={})=>{const row=document.createElement('tr');row.manualLine={...saved};row.innerHTML='<td><select data-manual-article><option value="">Select Article</option>'+articles.map(a=>'<option value="'+esc(a.key)+'">'+esc(a.articleName)+'</option>').join('')+'</select></td><td data-manual-unit>'+esc(saved.unit||'')+'</td><td><input data-manual-qty type="number" min="0" step="any" value="'+esc(saved.qty??'')+'" style="width:85px"></td><td><input data-manual-rate type="number" min="0" step="any" value="'+esc(saved.rate??'')+'" style="width:85px"></td><td data-manual-amount></td><td><button class="btn ghost small" data-manual-remove>Remove</button></td>';const select=row.querySelector('[data-manual-article]');if(saved.articleName){const option=document.createElement('option');option.value='saved';option.textContent=saved.articleName;select.appendChild(option);select.value='saved';}select.onchange=()=>{const article=articles.find(a=>a.key===select.value);row.manualLine=article?{articleKey:article.key,articleId:article.articleId,articleName:article.articleName,unit:article.unit}:{};row.querySelector('[data-manual-unit]').textContent=article?.unit||'';row.querySelector('[data-manual-rate]').value=article?.rate??'';update();};row.querySelectorAll('input').forEach(input=>input.oninput=update);row.querySelector('[data-manual-remove]').onclick=()=>{row.remove();update();};host.appendChild(row);update();};
+ (original?.lines||[{}]).forEach(add);document.getElementById('fsManualAdd').onclick=()=>add();document.getElementById('fsManualHistory').onclick=factorySaleManualHistory;document.getElementById('fsManualCancel').onclick=closeModal;document.getElementById('fsManualSave').onclick=async()=>{if(factorySaleManualSaving)return;const name=document.getElementById('fsManualName').value.trim();if(!name){toast('Enter Shopkeeper Name.');return;}let calculated;try{calculated=factorySaleManualAmounts(collect());}catch(error){toast(error.message);return;}const bills=settings.manualBills||[];if(original&&JSON.stringify(bills.find(b=>b.id===id))!==expected){toast('Manual bill changed. Reopen it.');return;}const number=original?.voucherNo||Math.max(1001,Number(settings.nextManualBillNo)||1001,...bills.map(b=>(Number(b.voucherNo)||0)+1)),bill={...original,id:original?.id||uid(),voucherNo:number,date:original?.date||new Date().toISOString(),...(original?{editedAt:new Date().toISOString()}:{}),shopkeeperName:name,lines:calculated.lines,totalAmount:calculated.totalAmount};const button=document.getElementById('fsManualSave');button.disabled=true;const ok=await factorySaleManualStore(original?bills.map(b=>b.id===id?bill:b):[...bills,bill],original?undefined:number+1);if(ok)factorySaleManualView(bill.id);else if(button.isConnected)button.disabled=false;};}
 
 function route(page){return ['factorySale','factorySaleToday','factorySaleShopkeeperDetail','factorySaleDispatchDetail','factorySaleShopkeeper1','factorySaleShopkeeper2','factorySaleDispatch1','factorySaleDispatch2'].includes(page);}
 function renderPage(page){load();currentPage=page;const index=shoeSoleRouteIndex();let html;if(page==='factorySale')html=pageShoeSoleSuppliers();else if(page==='factorySaleToday')html=pageShoeSoleToday();else if(page.includes('Dispatch'))html='<button class="btn ghost small" id="btnBackShoeSoleSupplierDetail" data-receivesupplier="'+index+'">Back to Shopkeeper</button>'+pageShoeSoleReceiveDetail(index);else html='<button class="btn ghost small" id="btnBackShoeSoleSuppliers">Back to Factory Sale</button>'+pageShoeSoleSupplierDetail(index);return FACTORY_SALE_CSS+html;}
