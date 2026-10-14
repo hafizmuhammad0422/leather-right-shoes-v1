@@ -3696,7 +3696,7 @@ function deleteUpperDistribution(id){
   openConfirmModal(articleOnly||workerProductionShoeLaser(upperProductionRecordCategory(r))?`Delete ${upperVoucherCategoryTitle(r)} Voucher #${r.voucherNo}?`:`Delete Upper Voucher #${r.voucherNo}? This will reverse its related Upper Article and Upper Material stock.`,async()=>{
     const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
     if(!(settings.upperDistributions||[]).includes(r))return;
-    if(!articleOnly&&r.workflowVersion===1&&!upperPendingState(r.workerId,settings.upperDistributions.filter(x=>String(x.id)!==String(id))).valid){toast('This deletion would make Worker Pending negative. Reverse dependent received vouchers first.');return;}
+    if(!articleOnly&&!workerProductionShoeLaser(upperProductionRecordCategory(r))&&r.workflowVersion===1&&!upperPendingState(r.workerId,settings.upperDistributions.filter(x=>String(x.id)!==String(id))).valid){toast('This deletion would make Worker Pending negative. Reverse dependent received vouchers first.');return;}
     if(!articleOnly&&!workerProductionShoeLaser(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
