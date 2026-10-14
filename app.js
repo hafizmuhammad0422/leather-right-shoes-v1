@@ -12102,23 +12102,26 @@ function pageDistributeUpper(pageContext=workerProductionPageContext()){
   const totalBaqi=upperWorkers.reduce((n,w)=>n+(Number(getWorkerSummaryAmount(w,'baqi'))||0),0);
   const backDisabled=navHistory.length?'':'disabled';
   const supplierLayout=supplierProduction?`<style id="supplier-production-entry-layout">
-[data-supplier-production-layout] .upper-main-compact-row{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+[data-supplier-production-layout] .upper-main-compact-row{grid-template-columns:repeat(4,minmax(0,1fr))!important}
 [data-supplier-production-layout] .upper-main-compact-row>button{min-width:0!important;max-width:100%;white-space:normal!important;overflow-wrap:anywhere}
+[data-supplier-production-layout] .bm-worker-box[data-upper-pickworker]{padding:0!important;overflow:hidden!important}
+[data-supplier-production-layout] .bm-worker-box[data-upper-pickworker] .entity-photo{position:absolute;inset:0;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;max-width:none!important;max-height:none!important;margin:0!important;border-radius:inherit!important}
+[data-supplier-production-layout] .bm-worker-box[data-upper-pickworker] .entity-photo img{display:block;width:100%!important;height:100%!important;object-fit:cover!important;border-radius:0!important}
 [data-supplier-production-layout] .supplier-production-details-row{min-width:0;width:100%;box-sizing:border-box}
 [data-supplier-production-layout] .supplier-production-details-row>.card{min-width:0!important;max-width:100%!important;height:auto!important;align-self:stretch;margin-bottom:0!important}
 [data-supplier-production-layout] .bm-entry-head{min-width:0;flex-wrap:wrap;overflow-wrap:anywhere}
 [data-supplier-production-layout] .bm-entry-head>*{min-width:0;max-width:100%}
 [data-supplier-production-layout] .bm-selected-line,[data-supplier-production-layout] [data-production-controls]{min-width:0;max-width:100%;overflow-wrap:anywhere}
 [data-supplier-production-layout] #upperDistributionRows{min-width:0;width:100%;overflow:visible!important}
-[data-supplier-production-layout] .upper-distribution-row{display:grid!important;grid-template-columns:minmax(0,1.8fr) repeat(3,minmax(0,1fr)) minmax(0,.45fr)!important;width:100%;max-width:100%;min-width:0;box-sizing:border-box;gap:4px!important;align-items:end!important;padding:6px!important;margin-bottom:6px;overflow:visible!important}
-[data-supplier-production-layout] .upper-one-row{grid-template-columns:minmax(0,1fr) minmax(0,1.8fr) repeat(4,minmax(0,1fr))!important}
+[data-supplier-production-layout] .upper-distribution-row{display:grid!important;grid-template-columns:minmax(0,1.8fr) repeat(2,minmax(0,1fr)) minmax(0,.45fr)!important;width:100%;max-width:100%;min-width:0;box-sizing:border-box;gap:4px!important;align-items:end!important;padding:6px!important;margin-bottom:6px;overflow:visible!important}
+[data-supplier-production-layout] .upper-one-row{grid-template-columns:minmax(0,1fr) minmax(0,1.8fr) repeat(3,minmax(0,1fr))!important}
 [data-supplier-production-layout] .upper-distribution-row>div{min-width:0;max-width:100%;grid-column:auto!important}
 [data-supplier-production-layout] .upper-distribution-row label{font-size:9px!important;line-height:1.1;overflow-wrap:anywhere;margin-bottom:2px!important}
 [data-supplier-production-layout] #upperDistributionRows .upper-distribution-row input,[data-supplier-production-layout] #upperDistributionRows .upper-distribution-row .btn{width:100%;min-width:0!important;max-width:100%;height:30px!important;min-height:30px!important;box-sizing:border-box;margin-bottom:0!important}
 [data-supplier-production-layout] .upper-distribution-row input{font-size:10px!important;padding:4px 6px!important}
 [data-supplier-production-layout] .upper-distribution-row .btn{font-size:9px!important;padding:3px 5px!important;white-space:normal!important}
 [data-supplier-production-layout] .upper-one-row>.upper-entry-action{grid-column:1/span 3!important;grid-row:2!important}
-[data-supplier-production-layout] .upper-one-row>.upper-entry-action+.upper-entry-action{grid-column:4/span 3!important}
+[data-supplier-production-layout] .upper-one-row>.upper-entry-action+.upper-entry-action{grid-column:4/span 2!important}
 [data-supplier-production-layout] .upper-distribution-row:not(.upper-one-row)>div>label{display:none!important}
 [data-supplier-production-layout] .upper-distribution-row>.upper-row-stock-info{grid-column:1/-1!important;overflow-wrap:anywhere;font-size:10px!important}
 [data-supplier-production-layout] .upper-autocomplete-results{position:absolute;top:100%;left:0;width:100%;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
@@ -12132,7 +12135,7 @@ function pageDistributeUpper(pageContext=workerProductionPageContext()){
       <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayReceivedCard"><span>${upperMan?'Today<br>Received':'Today Received'}</span><strong>${esc(upperShoeQuantityText(upperShoeQuantityGroups(allUpperRecords,'received')))}</strong></button>
       <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard" style="display:flex;flex-direction:column;gap:2px;"><span>${upperMan?'Today<br>Pending':'Today Pending'}</span><strong>${esc(upperShoeQuantityText(upperShoeFilterPending()))}</strong></button>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList"${supplierProduction?' style="min-width:0;max-width:100%;white-space:normal!important;overflow-wrap:anywhere;overflow:hidden;font-size:10px!important;line-height:1.1;padding:3px 4px!important;"':''}>${supplierProduction?'Shoes, Magzi, Dori &amp; Batawa':`👞 ${esc(categoryLabel)} Articles`}</button>
-      <button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>${upperMan?'Weekly<br>Kharcha':'Weekly Kharcha'}</span><strong>${upperMoney(weeklyAmount)}</strong></button>`:articleOnly?`      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>${upperMan?'Today<br>Articles Issued':'Today Articles Issued'}</span><strong>${upperMan?upperManCardQuantityHtml(upperManQuantityGroups(allUpperRecords)):totalArticle+' ATOMS'}</strong></button>
+      ${supplierProduction?'':`<button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>${upperMan?'Weekly<br>Kharcha':'Weekly Kharcha'}</span><strong>${upperMoney(weeklyAmount)}</strong></button>`}`:articleOnly?`      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayArticlesCard"><span>${upperMan?'Today<br>Articles Issued':'Today Articles Issued'}</span><strong>${upperMan?upperManCardQuantityHtml(upperManQuantityGroups(allUpperRecords)):totalArticle+' ATOMS'}</strong></button>
       <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayReceivedCard"><span>${upperMan?'Today<br>Received':'Today Received'}</span><strong>${upperMan?upperManCardQuantityHtml(upperManQuantityGroups(allUpperRecords,'received')):upperMovementRows('received','today',upperNow).reduce((n,r)=>n+r.quantity,0)+' ATOMS'}</strong></button>
       <div class="bm-top-stat"><span>${upperMan?'Today<br>Pending':'Today Pending'}</span><strong>${pendingWorkers}</strong></div>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList">👞 ${esc(categoryLabel)} Articles</button>
@@ -12150,7 +12153,7 @@ function pageDistributeUpper(pageContext=workerProductionPageContext()){
     <div class="card bm-worker-card">
       ${supplierProduction?'':`<div class="bm-worker-heading upper-worker-heading-v16"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${shoeLamination?'':`<h3>Select ${esc(categoryLabel)}</h3><input id="upperWorkerSearch" type="search" aria-label="Search ${esc(categoryLabel)}" placeholder="Search worker" autocomplete="off" style="width:130px;max-width:100%;padding:4px 6px;font-size:12px;">`}</div>${articleOnly||shoeLamination?'':`<div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div>`}<span>${workerCategoryCompareKey(upperProductionCategory)==='upper mans'?'Total Upper Mans':'Total '+esc(categoryLabel)+' Workers'}: <strong>${upperWorkers.length}</strong>${articleOnly?'':` • Pending: <strong>${shoeLamination?esc(upperShoeQuantityText(upperShoeFilterPending())):pendingTotal+' ATOMS'}</strong>`}<small style="display:block;font-size:11px;color:var(--muted);">Completed: ${completedWorkers} &bull; Pending: ${pendingWorkers}</small></span></div>`}
       <div class="bm-worker-grid" id="upperWorkerCards"${supplierProduction?' style="grid-template-columns:repeat(auto-fit,minmax(min(100%,110px),1fr))!important;"':''}>
-        ${upperWorkers.length?upperCards.map(({w,completed})=>{return `${supplierProduction?'<div style="display:flex;flex-direction:column;gap:4px;">':''}<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'upper')}${articleOnly||supplierProduction?'':(shoeLamination?'':upperDefaultMaterialCard(w))+`<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div>`}</button>${supplierProduction?`<button type="button" class="btn ghost small" data-supplier-production-bill="${esc(w.id)}">Create Bill</button></div>`:''}`;}).join(''):'<div class="empty">No active workers in '+esc(categoryLabel)+'.</div>'}
+        ${upperWorkers.length?upperCards.map(({w,completed})=>{return `${supplierProduction?'<div style="display:flex;flex-direction:column;gap:4px;">':''}<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;">${supplierProduction?`<div class="entity-photo ${w.photo?'zoomable':''}" style="margin:0;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:''}</div>`:`<div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'upper')}${articleOnly||supplierProduction?'':(shoeLamination?'':upperDefaultMaterialCard(w))+`<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div>`}`}</button>${supplierProduction?`<button type="button" class="btn ghost small" data-supplier-production-bill="${esc(w.id)}">Create Bill</button></div>`:''}`;}).join(''):'<div class="empty">No active workers in '+esc(categoryLabel)+'.</div>'}
       </div>
       ${selectedWorker?`<div class="bm-selected-line">Selected: <strong>${esc(selectedWorker.name||'')}</strong></div>`:''}
     </div>
@@ -12158,15 +12161,15 @@ function pageDistributeUpper(pageContext=workerProductionPageContext()){
     <div class="card bm-entry-card upper-entry-card">
       <div class="bm-entry-head"><h3>Enter ${esc(categoryLabel)} Production Details</h3>${selectedWorker?`<span>Worker: <strong>${esc(selectedWorker.name||'')}</strong> • Created time automatic</span>`:'<span>Select '+esc(categoryLabel)+' above first</span>'}</div>
       <!-- Upper pending is displayed in the entry row. -->
-      ${productionWorkerControls(selectedWorker,'upper')}
+      ${supplierProduction?supplierProductionEntryControls(selectedWorker):productionWorkerControls(selectedWorker,'upper')}
       <div id="upperDistributionRows" class="upper-compact-rows"${supplierProduction?' style="min-width:0;overflow:visible;"':''}>${articles.length||materials.length?`<div class="upper-distribution-row upper-one-row" data-upper-row>
         <div><label>Work Date</label><input id="upperWorkDate" type="date" value="${workDates.today}" min="${workDates.min}" max="${workDates.today}"></div>
         <div class="upper-search-wrap"><label>${supplierProduction?'Shoes, Magzi, Dori &amp; Batawa Article':esc(categoryLabel)+' Article'}</label><input type="text" class="upper-article-search" data-selected-id="${esc(upperProductionArticleChoice(selectedWorker)?.id||'')}" value="${esc(upperProductionArticleChoice(selectedWorker)?.name||'')}" placeholder="Select article..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>
         ${articleOnly||shoeLamination?'':`<input type="hidden" class="upper-material-search" data-selected-id="${esc(upperDefaultMaterial(selectedWorker)?.id||'')}" value="${esc(upperDefaultMaterial(selectedWorker)?.name||'')}">`}
         <div><label>Issued Quantity</label><input class="upper-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Received Quantity</label><input class="upper-received-qty" type="number" min="0" step="1" placeholder="Atoms"></div>
         ${articleOnly||supplierProduction?'':`<div><label>Worker Pending</label><input id="upperWorkerPending" type="${shoeLamination||upperMan?'text':'number'}" min="0" step="1" value="${upperMan?esc(upperManQuantityText(selectedWorker?upperManPendingState(selectedWorker.id).groups:[])):shoeLamination?esc(upperShoeQuantityText(selectedWorker?upperShoePendingState(selectedWorker.id).groups:[])):selectedWorker?Number(getUpperPendingForWorker(selectedWorker.id)?.qty)||0:0}" ${!selectedWorker?'disabled':upperMan||shoeLamination||getUpperPendingForWorker(selectedWorker.id)?'readonly':''} placeholder="Opening (once)">${workerCategoryCompareKey(pageContext.category)==='upper mans'&&selectedWorker&&workerCategoryCompareKey(selectedWorker.category)==='upper mans'?'<button type="button" class="btn ghost small" id="btnUpperManualPending">Edit/Set</button>':''}</div>`}
-        <div><label>Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div>
-        <div><label>Total Items</label><input id="upperWorkerTotalItems" readonly value="${upperMan?esc(upperManQuantityText(upperManQuantityGroups((settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(selectedWorker?.id)),'received'))):shoeLamination?esc(upperShoeQuantityText(upperShoeQuantityGroups((settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(selectedWorker?.id)),'received'))):productionWorkerCompletedItems('upper',selectedWorker?.id)+' ATOMS'}"></div>
+        ${supplierProduction?'':`<div><label>Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div>`}
+        ${supplierProduction?`<div><label>Latest Production</label><button type="button" class="btn ghost small" id="supplierLatestProduction" ${!selectedWorker?'disabled':''}>Latest Production</button></div>`:`<div><label>Total Items</label><input id="upperWorkerTotalItems" readonly value="${upperMan?esc(upperManQuantityText(upperManQuantityGroups((settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(selectedWorker?.id)),'received'))):shoeLamination?esc(upperShoeQuantityText(upperShoeQuantityGroups((settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(selectedWorker?.id)),'received'))):productionWorkerCompletedItems('upper',selectedWorker?.id)+' ATOMS'}"></div>`}
         <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn ghost small" id="btnAddUpperArticleRow">+ Article</button></div>
         <div class="upper-entry-action"><label>&nbsp;</label><button type="button" class="btn brass" id="btnCreateUpperVoucher" ${selectedWorker?'':'disabled'}>🧾 Create Voucher</button></div>
         <div class="upper-remove-row" style="display:none;"><button type="button" class="btn red small upper-remove">✕</button></div>
@@ -12389,20 +12392,81 @@ function supplierProductionBillHtml(bill){
   const voucher={id:bill.id,workflowVersion:1,workerId:String(bill.supplierId),workerName:bill.supplierName,workerCategory:'Shoes, Magzi Dori & Batawa Suppliers',voucherNo:bill.voucherNo,date:bill.date,createdAt:bill.createdAt||bill.date,workDate:upperLocalDateKey(last),lines:[]};
   const week=upperWeeklyVoucherData(voucher);
   week.days=Array.from({length:6},(_,index)=>{const day=new Date(start);day.setDate(day.getDate()+index);const articles=new Map();source.filter(record=>upperLocalDateKey(upperWorkTimestamp(record))===upperLocalDateKey(day)).forEach(record=>(record.lines||[]).forEach(line=>{const display=upperLineDisplay(line);if(record.workflowVersion!==1||display.received<=0||(!line.articleId&&!line.articleName))return;const key=JSON.stringify([line.articleId||line.articleName,display.unit]),article=articles.get(key)||{name:line.articleName||String(line.articleId),unit:display.unit,received:0};article.received+=display.received;articles.set(key,article);}));return {articles:[...articles.values()]};});
-  const moneyRow=(label,value,remaining=false)=>'<tr'+(remaining?' class="um-remaining"':'')+'><td>'+label+'</td><td>'+esc(value==null?'Not saved':upperMoney(value))+'</td></tr>';
+  const moneyRow=(label,value,remaining=false)=>'<tr'+(remaining?' class="um-remaining"':'')+'><td>'+esc(supplierVoucherLabel(label))+'</td><td>'+esc(value==null?'Not saved':upperMoney(value))+'</td></tr>';
   const moneyHtml='<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody>'+moneyRow('OPENING AMOUNT',totals.pendingAmount)+moneyRow('TOTAL AMOUNT',totals.weeklyTotal)+(totals.extraBalanceAmount>0?moneyRow('EXTRA BALANCE',totals.extraBalanceAmount)+(String(bill.extraBalanceNote||'').trim()?'<tr><td colspan="2" style="height:auto;padding:1mm 2mm;font-size:3mm;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;">'+esc(bill.extraBalanceNote)+'</td></tr>':''):'')+moneyRow('GRAND TOTAL',totals.grandTotal)+moneyRow('PAID AMOUNT',bill.paidAmount)+moneyRow('REMAINING',bill.remainingBalance,true)+'</tbody></table></div>';
   return supplierProductionWeeklyVoucherHtml(voucher,{week,summary:{records:[],grossEarned:totals.weeklyTotal},lines:bill.lines||[],moneyHtml});
 }
+
+function supplierVoucherPrintHtml(html,language){
+  const host=document.createElement('div');host.innerHTML=html;
+  const bill=Array.from(host.querySelectorAll('.um-money tr')).some(row=>row.children[0]?.textContent.trim()==='OPENING AMOUNT');
+  const urdu=language==='ur',labels=urdu?{
+    'TOTAL RECEIVED':'ٹوٹل وصول ایٹمز',[supplierVoucherLabel('PENDING')]:'\u0628\u0642\u0627\u06cc\u0627 \u0622\u0631\u0679\u06cc\u06a9\u0644\u0632','Old Pending':'\u067e\u0631\u0627\u0646\u0627 \u0628\u0642\u0627\u06cc\u0627',
+    'Article':'\u0622\u0631\u0679\u06cc\u06a9\u0644','Received':'وصول','Amount':'\u0631\u0642\u0645',
+    'OPENING AMOUNT':'پچھلی رقم',[supplierVoucherLabel('TOTAL AMOUNT')]:bill?'اس ہفتے کی رقم':'\u0679\u0648\u0679\u0644 \u0631\u0642\u0645','EXTRA BALANCE':'\u0627\u0636\u0627\u0641\u06cc \u0631\u0642\u0645',
+    'GRAND TOTAL':'ٹوٹل رقم','PAID AMOUNT':'ادا رقم','REMAINING':'\u0628\u0627\u0642\u06cc \u0631\u0642\u0645',
+    'Not saved':'\u0645\u062d\u0641\u0648\u0638 \u0646\u06c1\u06cc\u06ba','For Contact Dial 03226574565':'\u0631\u0627\u0628\u0637\u06d2 \u06a9\u06d2 \u0644\u06cc\u06d2 \u0688\u0627\u0626\u0644 \u06a9\u0631\u06cc\u06ba 03226574565'
+  }:{};
+  const replaceLabel=node=>{const text=node.textContent.trim();if(Object.prototype.hasOwnProperty.call(labels,text))node.textContent=labels[text];};
+  host.querySelectorAll('.um-brand,.um-title,.um-received-title,.um-footer,.um-received-row[style] span,.um-frame > .um-total-single:first-child > span:first-child,.supplier-weekly-voucher > .um-total-single > span:first-child').forEach(replaceLabel);
+  host.querySelectorAll('.um-money tr').forEach(row=>{if(row.children.length===2){replaceLabel(row.children[0]);if(row.children[1].textContent.trim()==='Not saved')replaceLabel(row.children[1]);row.children[1].dir='ltr';}});
+  if(!urdu){
+    const weekdays=['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday'];
+    host.querySelectorAll('.um-day-table tbody tr').forEach((row,index)=>{if(row.children[0]){row.children[0].textContent=weekdays[index]||row.children[0].textContent;row.children[0].dir='ltr';}});
+    const dayHeader=host.querySelector('.um-day-table thead th');if(dayHeader){dayHeader.textContent='Day';dayHeader.dir='ltr';}
+    host.querySelectorAll('.um-day-quantity[dir=rtl]').forEach(cell=>{cell.textContent='Holiday';cell.dir='ltr';});
+    return host.innerHTML;
+  }
+  host.className='supplier-voucher-urdu';host.lang='ur';host.dir='rtl';
+  host.querySelectorAll('.um-person span,.um-stamp span,.um-total-single span:last-child,.um-received-row:not([style]) span,.um-day-quantity:not([dir=rtl])').forEach(node=>{node.dir='ltr';node.style.unicodeBidi='isolate';});
+
+  const names={'billa magzi wala':'بلا مغزی والا','pumpi doori':'پمپی ڈوری','pumpy dori':'پمپی ڈوری','btava shoes':'بتاوا شوز','batava shoes':'بتاوا شوز','batawa shoes':'بتاوا شوز'};
+  const words={'ATOMS':'ایٹمز','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑا','PAIRS':'جوڑے','ROLL':'رول','ROLLS':'رول','METER':'میٹر','METERS':'میٹر','Legacy / unknown':'پرانا / نامعلوم','Note':'نوٹ','Voucher':'واؤچر','Date':'تاریخ','Time':'وقت','AM':'صبح','PM':'شام','Jan':'جنوری','Feb':'فروری','Mar':'مارچ','Apr':'اپریل','May':'مئی','Jun':'جون','Jul':'جولائی','Aug':'اگست','Sep':'ستمبر','Oct':'اکتوبر','Nov':'نومبر','Dec':'دسمبر'};
+  host.querySelectorAll('.um-person span+span').forEach(node=>{node.textContent='واؤچر نمبر '+node.textContent;});
+  const walker=document.createTreeWalker(host,4);let textNode;
+  while((textNode=walker.nextNode())){
+    if(textNode.parentElement?.closest('style,script,.um-brand,.um-title'))continue;
+    let text=textNode.nodeValue,trimmed=text.trim(),name=names[trimmed.toLowerCase().replace(/\s+/g,' ')];
+    if(name)text=text.replace(trimmed,name);
+    Object.entries(words).forEach(([english,translated])=>{text=text.replace(new RegExp('\\b'+english+'\\b','g'),translated);});
+    textNode.nodeValue=text.replace(/Rs\./g,'روپے');
+  }
+  host.querySelectorAll('.um-person span:first-child,.um-day-table .um-article-heading,.um-received-row:not([style]) span:first-child,.um-total-single span:first-child').forEach(node=>{node.dir='rtl';node.style.unicodeBidi='isolate';});
+  host.querySelectorAll('.um-money td[colspan="2"]').forEach(node=>{node.dir='rtl';node.style.textAlign='right';node.textContent='نوٹ: '+node.textContent;});
+
+  host.querySelectorAll('.um-stamp > span:first-child').forEach(node=>{
+    const date=node.textContent.trim().match(/^(\d{1,2})\s+([^\d]+?)\s+(\d{4})$/);if(!date)return;
+    const parts=[String(Number(date[1])),date[2].trim(),date[3]].map((text,index)=>{
+      const part=document.createElement('bdi');part.dir=index===1?'rtl':'ltr';part.textContent=text;return part;
+    });
+    node.dir='ltr';node.style.display='inline-flex';node.style.flexDirection='row';node.style.direction='ltr';node.style.gap='.35em';node.style.unicodeBidi='isolate';
+    node.replaceChildren(...parts);
+  });
+
+  const style=document.createElement('style');
+  style.textContent=".supplier-voucher-urdu .supplier-weekly-voucher{direction:rtl;}.supplier-voucher-urdu .um-received-title,.supplier-voucher-urdu .um-received-row[style],.supplier-voucher-urdu .um-money td:first-child,.supplier-voucher-urdu .um-footer,.supplier-voucher-urdu .um-frame > .um-total-single:first-child > span:first-child{font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',Tahoma,Arial,sans-serif!important;line-height:1.7;}.supplier-voucher-urdu .um-money td:first-child{text-align:right;}.supplier-voucher-urdu .um-title{white-space:normal;}.supplier-voucher-urdu .um-person span:first-child{text-align:right;}.supplier-voucher-urdu .um-person span+span{border-left:0;border-right:1px solid #000;padding-left:0;padding-right:2mm;}.supplier-voucher-urdu .um-day-table td+td,.supplier-voucher-urdu .um-day-table th+th,.supplier-voucher-urdu .um-money td+td{border-left:0;border-right:1px solid #000;}.supplier-voucher-urdu .um-day-quantity[dir=rtl]{line-height:1.7;}.supplier-voucher-urdu .um-person span:first-child,.supplier-voucher-urdu .um-article-heading,.supplier-voucher-urdu .um-received-row:not([style]) span,.supplier-voucher-urdu .um-total-single span,.supplier-voucher-urdu .um-money td[colspan]{font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',Tahoma,Arial,sans-serif!important;line-height:1.7;}";
+  host.appendChild(style);return host.outerHTML;
+}
+function bindSupplierVoucherPrintActions(printId,html,title){
+  const english=document.getElementById(printId);if(!english)return;
+  english.textContent='Print English';
+  english.onclick=()=>printAggregateThermal(supplierVoucherPrintHtml(html(),'en'),title,'element');
+  const urdu=document.createElement('button');urdu.type='button';urdu.className=english.className;urdu.id=printId+'Urdu';urdu.textContent='Print Urdu';
+  english.parentElement.insertBefore(urdu,english.nextSibling);
+  urdu.onclick=()=>printAggregateThermal(supplierVoucherPrintHtml(html(),'ur'),title,'element');
+}
+
 function showSupplierProductionBill(bill){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(bill?.supplierId)){toast('Select this Supplier Card first.');return;}
   if(!supplierProductionBillWorker(bill.supplierId))return;
-  modal(`<h3 style="margin-top:0;">Weekly Voucher #${esc(String(bill.voucherNo))}</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="supplierBillPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">${supplierProductionBillHtml(bill)}</div><div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;"><button type="button" class="btn brass" id="supplierBillPrint">Print</button><button type="button" class="btn ghost" id="supplierBillShare">Share</button><button type="button" class="btn ghost" id="supplierBillClose">Close</button></div></div>`);
-  document.getElementById('supplierBillPrint').onclick=()=>printAggregateThermal(document.getElementById('supplierBillPrintArea').outerHTML,'Shoes, Magzi Dori & Batawa Suppliers Weekly Voucher','element');
+  modal(`<h3 style="margin-top:0;">Weekly Voucher #${esc(String(bill.voucherNo))}</h3>${supplierVoucherPreviewPanels(supplierProductionBillHtml(bill),'supplierBillPrintArea','supplierBillPrint')}<div class="modal-actions" style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:12px;"><button type="button" class="btn ghost" id="supplierBillShare">Share</button><button type="button" class="btn ghost" id="supplierBillClose">Close</button></div>`);
+  bindSupplierVoucherPreviewPrintActions('supplierBillPrintArea','supplierBillPrint','Shoes, Magzi Dori & Batawa Suppliers Weekly Voucher');
   document.getElementById('supplierBillShare').onclick=async()=>{
     try{const canvas=buildSupplierProductionBillCanvas(bill);canvas.toBlob(async blob=>{try{if(!blob){toast('Could not generate voucher image');return;}await shareImageToWhatsApp(blob,`supplier-weekly-voucher-${bill.voucherNo}.png`,`Weekly Voucher #${bill.voucherNo}`);}catch(error){toast('Could not share voucher image');}},'image/png');}
     catch(error){toast('Could not generate voucher image');}
   };
   document.getElementById('supplierBillClose').onclick=()=>{closeModal();render();};
+  bindSupplierVoucherPrintActions('supplierBillPrint',()=>document.getElementById('supplierBillPrintArea').outerHTML,'Shoes, Magzi Dori & Batawa Suppliers Weekly Voucher');
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -12445,7 +12509,7 @@ function bindSupplierProductionCustomUnits(existing){
 }
 function openUpperArticleModal(id){normalizeUpperFeatureState();const category=upperProductionCategory;if(supplierProductionContextScope()&&!supplierProductionActiveWorker()){toast('Select a Supplier Card first.');return;}let existing=getUpperArticle(id);const articleOnly=workerProductionArticleOnly(existing?(existing.workerCategory||'UPPER MANS'):category);const shoeLamination=workerProductionShoeLamination(existing?.workerCategory||category),supplierAtoms=workerCategoryCompareKey(existing?.workerCategory||category)==='shoes, magzi dori & batawa suppliers';let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} ${esc(upperCategoryLabel(category))} Article</h3>${articleOnly?'':`<label>Article Photo</label><input type="file" id="upperArticlePhoto" accept="image/*"><div id="upperArticlePhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div>`}<label>Article Name</label><input id="upperArticleName" value="${esc(existing?.name||'')}" placeholder="e.g. Formal Black Upper"><label>Unit${supplierAtoms?' <button type="button" class="btn ghost small" id="supplierArticleCustomUnits" style="float:right;">Custom Units</button>':''}</label><select id="upperArticleUnit">${supplierAtoms?supplierProductionArticleUnitOptions(existing):shoeLamination?`<option value="RULE" ${!existing||existing.unit==='RULE'?'selected':''}>RULE</option><option value="__custom__" ${existing&&existing.unit!=='RULE'?'selected':''}>Custom</option>`:`<option value="ATOMS">ATOMS</option><option value="SET" ${existing?.unit==='SET'?'selected':''}>SET</option>`}</select>${supplierAtoms?'<div id="supplierArticleCustomUnitsPanel" hidden style="margin:6px 0;"></div>':''}${shoeLamination&&!supplierAtoms?`<input id="upperArticleCustomUnit" aria-label="Custom unit" placeholder="Enter custom unit" value="${esc(existing?(existing.unit||'ATOMS')!== 'RULE'?(existing.unit||'ATOMS'):'':'')}" ${!existing||existing.unit==='RULE'?'hidden':''}>`:''}<label id="upperArticleRateLabel">Labour Rate Per ${supplierAtoms?esc(existing?.unit||'ATOMS'):shoeLamination?esc(existing?(existing.unit||'ATOMS'):'RULE'):articleOnly?'Item':existing?.unit==='SET'?'Set':'Atom'}</label><input id="upperArticleRate" type="number" min="0" step="0.01" value="${existing?Number(existing.rate):''}" placeholder="e.g. 320">${articleOnly||shoeLamination?'':`<label>Stock (Atoms)</label><input id="upperArticleStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 150">`}<div style="font-size:12px;color:var(--muted);margin-top:5px;">${shoeLamination?'':'1 Atom = 12 pairs.'}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperArticle">Save</button><button type="button" class="btn ghost" id="cancelUpperArticle">Cancel</button></div>`);document.getElementById('upperArticlePhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperArticlePhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read '+upperCategoryLabel(category)+' Article photo');}});document.getElementById('upperArticleUnit').onchange=()=>{if(supplierAtoms){document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+document.getElementById('upperArticleUnit').value;return;}if(shoeLamination){const custom=document.getElementById('upperArticleCustomUnit');custom.hidden=document.getElementById('upperArticleUnit').value!=='__custom__';document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(custom.hidden?'RULE':custom.value);return;}document.getElementById('upperArticleRateLabel').textContent='Labour Rate Per '+(articleOnly?'Item':document.getElementById('upperArticleUnit').value==='SET'?'Set':'Atom');};document.getElementById('upperArticleCustomUnit')?.addEventListener('input',()=>document.getElementById('upperArticleUnit').onchange());document.getElementById('cancelUpperArticle').onclick=closeModal;document.getElementById('saveUpperArticle').onclick=async()=>{const button=document.getElementById('saveUpperArticle');if(button.disabled)return;const name=document.getElementById('upperArticleName')?.value.trim()||'';const unit=supplierAtoms?document.getElementById('upperArticleUnit').value:shoeLamination?(document.getElementById('upperArticleUnit').value==='RULE'?'RULE':document.getElementById('upperArticleCustomUnit').value):document.getElementById('upperArticleUnit').value==='SET'?'SET':'ATOMS',rate=Number(document.getElementById('upperArticleRate')?.value);const stock=articleOnly||shoeLamination?(existing?.stock??0):Math.max(0,parseInt(document.getElementById('upperArticleStock')?.value,10)||0);if(shoeLamination&&(!unit.trim()||unit.length>60)){toast('Enter a unit of 1–60 characters');return;}if(!name){toast('Article Name is required');return;}if(!Number.isFinite(rate)||rate<0){toast('Enter a valid Labour Rate Per '+(shoeLamination?unit:unit==='SET'?'Set':'Atom'));return;}const before=captureCloudState();button.disabled=true;settings=JSON.parse(JSON.stringify(before.settings));existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));const now=new Date().toISOString();settings.upperArticles=settings.upperArticles||[];if(existing){existing.name=name;existing.rate=rate;if(shoeLamination&&(existing.unit||'ATOMS')!==unit)existing.laminationUnit=true;existing.unit=unit;if(!articleOnly&&!shoeLamination)existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else {const newArticleId=uid();settings.upperArticles.push({id:newArticleId,workerCategory:category,name,rate,unit,...(shoeLamination?{laminationUnit:true}:{}),stock,photo:pendingPhoto,createdAt:now,updatedAt:now});if(supplierAtoms)settings.supplierProductionArticleSuppliers={...(settings.supplierProductionArticleSuppliers||{}),[newArticleId]:String(supplierProductionActiveWorker().id)};};if(!await saveUpperCategoryConfiguration(before)){existing=(settings.upperArticles||[]).find(item=>String(item.id)===String(id));button.disabled=false;return;}closeModal();render();toast(upperCategoryLabel(category)+' Article saved');};if(supplierAtoms)bindSupplierProductionCustomUnits(existing);}
 function openUpperMaterialModal(id){normalizeUpperFeatureState();const category=upperProductionCategory;let existing=(settings.upperMaterials||[]).find(m=>String(m.id)===String(id));let pendingPhoto=existing?.photo||'';modal(`<h3 style="margin-top:0;">${existing?'Edit':'Add'} ${esc(upperCategoryLabel(category))} Material</h3><label>Material Photo (optional)</label><input type="file" id="upperMaterialPhoto" accept="image/*"><div id="upperMaterialPhotoPreview" style="margin-top:8px;max-width:180px;">${pendingPhoto?`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`:''}</div><label>Material Name</label><input id="upperMaterialName" value="${esc(existing?.name||'')}" placeholder="e.g. Black Rexine"><label>Stock (Atoms)</label><input id="upperMaterialStock" type="number" min="0" step="1" value="${existing?Number(existing.stock):0}" placeholder="e.g. 200"><div style="font-size:12px;color:var(--muted);margin-top:5px;">${esc(upperCategoryLabel(category))} Material has stock only. No rate, price, amount or cost.</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperMaterial">Save</button><button type="button" class="btn ghost" id="cancelUpperMaterial">Cancel</button></div>`);document.getElementById('upperMaterialPhoto')?.addEventListener('change',async e=>{const file=e.target.files?.[0];if(!file)return;try{pendingPhoto=await compressImageFile(file,800,.78);const box=document.getElementById('upperMaterialPhotoPreview');if(box)box.innerHTML=`<img src="${pendingPhoto}" style="width:180px;height:180px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#eee;">`;}catch(err){toast('Could not read '+upperCategoryLabel(category)+' Material photo');}});document.getElementById('cancelUpperMaterial').onclick=closeModal;document.getElementById('saveUpperMaterial').onclick=async()=>{const button=document.getElementById('saveUpperMaterial');if(button.disabled)return;const name=document.getElementById('upperMaterialName')?.value.trim()||'';const stock=Math.max(0,parseInt(document.getElementById('upperMaterialStock')?.value,10)||0);if(!name){toast('Material Name is required');return;}const before=captureCloudState();button.disabled=true;settings=JSON.parse(JSON.stringify(before.settings));existing=(settings.upperMaterials||[]).find(item=>String(item.id)===String(id));const now=new Date().toISOString();settings.upperMaterials=settings.upperMaterials||[];if(existing){existing.name=name;existing.stock=stock;existing.photo=pendingPhoto;existing.updatedAt=now;}else settings.upperMaterials.push({id:uid(),workerCategories:[category],name,stock,photo:pendingPhoto,createdAt:now,updatedAt:now});if(!await saveUpperCategoryConfiguration(before)){existing=(settings.upperMaterials||[]).find(item=>String(item.id)===String(id));button.disabled=false;return;}closeModal();render();toast(upperCategoryLabel(category)+' Material saved');};}
-function addUpperDistributionRow(kind='both'){if(workerProductionShoeLamination()&&kind==='material')return;const wrap=document.getElementById('upperDistributionRows');if(!wrap)return;const hasArticle=upperCategoryArticles().length>0,hasMaterial=!workerProductionShoeLamination()&&!workerProductionArticleOnly()&&upperCategoryMaterials().length>0;const row=document.createElement('div');row.className='upper-distribution-row';row.setAttribute('data-upper-row','');const articleHtml=(kind==='material'||!hasArticle)?'':`<div class="upper-search-wrap"><label>Search ${esc(upperCategoryLabel())} Article</label><input type="text" class="upper-article-search" placeholder="Type article name..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>`;const materialHtml=(kind==='article'||!hasMaterial)?'':`<div class="upper-search-wrap"><label>Select ${esc(upperCategoryLabel())} Material</label><input type="text" class="upper-material-search" placeholder="Type material name..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>`;row.innerHTML=`${articleHtml}${materialHtml}<div><label>Issued Quantity</label><input class="upper-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Received Quantity</label><input class="upper-received-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Labour Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div><div class="upper-remove-row"><button type="button" class="btn red small upper-remove" style="width:100%;">✕</button></div><div class="upper-row-stock-info" style="grid-column:1/-1;font-size:12px;color:var(--muted);"></div>`;wrap.appendChild(row);bindUpperDistributionRows();}
+function addUpperDistributionRow(kind='both'){if(workerProductionShoeLamination()&&kind==='material')return;const wrap=document.getElementById('upperDistributionRows');if(!wrap)return;const hasArticle=upperCategoryArticles().length>0,hasMaterial=!workerProductionShoeLamination()&&!workerProductionArticleOnly()&&upperCategoryMaterials().length>0;const row=document.createElement('div');row.className='upper-distribution-row';row.setAttribute('data-upper-row','');const articleHtml=(kind==='material'||!hasArticle)?'':`<div class="upper-search-wrap"><label>Search ${esc(upperCategoryLabel())} Article</label><input type="text" class="upper-article-search" placeholder="Type article name..." autocomplete="off"><div class="upper-autocomplete-results upper-article-results"></div></div>`;const materialHtml=(kind==='article'||!hasMaterial)?'':`<div class="upper-search-wrap"><label>Select ${esc(upperCategoryLabel())} Material</label><input type="text" class="upper-material-search" placeholder="Type material name..." autocomplete="off"><div class="upper-autocomplete-results upper-material-results"></div></div>`;row.innerHTML=`${articleHtml}${materialHtml}<div><label>Issued Quantity</label><input class="upper-qty" type="number" min="0" step="1" placeholder="Atoms"></div><div><label>Received Quantity</label><input class="upper-received-qty" type="number" min="0" step="1" placeholder="Atoms"></div>${supplierProductionContextScope()?'':`<div><label>Labour Weekly Kharcha</label><input class="upper-labour-expense" type="number" min="0" step="0.01" placeholder="Rs."></div>`}<div class="upper-remove-row"><button type="button" class="btn red small upper-remove" style="width:100%;">✕</button></div><div class="upper-row-stock-info" style="grid-column:1/-1;font-size:12px;color:var(--muted);"></div>`;wrap.appendChild(row);bindUpperDistributionRows();}
 function setUpperWorkerSelection(workerId){
   const worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w));
   upperSelWorker=worker?String(worker.id):null;
@@ -12480,7 +12544,10 @@ function renderUpperRowResults(row,kind,query){
   results.querySelectorAll('[data-upper-result-id]').forEach(b=>b.addEventListener('click',()=>setUpperRowSelection(row,kind,b.dataset.upperResultId)));
 }
 function updateUpperDistributionRow(row){const aId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',mId=row.querySelector('.upper-material-search')?.dataset.selectedId||'';const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(aId)),m=(settings.upperMaterials||[]).find(x=>String(x.id)===String(mId));const qty=row.querySelector('.upper-qty'),info=row.querySelector('.upper-row-stock-info');const unit=upperArticleUnit(a),q=Math.max(0,parseInt(qty?.value||'0',10)||0)*(unit==='SET'?2:1);row.querySelectorAll('.upper-qty,.upper-received-qty').forEach(input=>{input.placeholder=unit;const label=input.parentElement?.querySelector('label');if(label)label.textContent=(input.classList.contains('upper-received-qty')?'Received':'Issued')+' Quantity ('+unit+')';});if(workerProductionShoeLamination()){if(info)info.textContent='Labour = received quantity × saved rate per '+unit;updateUpperDistributionTotals();return;}if(info){const ap=a&&!workerProductionArticleOnly()?`Article stock: <strong class="${Number(a.stock)<q?'upper-stock-low':'upper-stock-ok'}">${a.stock} Atoms</strong>`:'';const mp=m&&!workerProductionArticleOnly()?`Material stock: <strong class="${Number(m.stock)<q?'upper-stock-low':'upper-stock-ok'}">${m.stock} Atoms</strong>`:'';info.innerHTML=[ap,mp,unit==='SET'?'1 SET = 2 ATOMS = 24 pairs':'1 ATOM = 12 pairs'].filter(Boolean).join(' &nbsp; | &nbsp; ');}updateUpperDistributionTotals();}
-function bindUpperDistributionRows(){document.querySelectorAll('.upper-distribution-row').forEach(row=>{
+function bindUpperDistributionRows(){
+  const latest=document.getElementById('supplierLatestProduction');
+  if(supplierProductionContextScope()&&latest&&!latest.dataset.bound){latest.dataset.bound='1';latest.addEventListener('click',()=>openSupplierLatestWeeklyVoucher());}
+  document.querySelectorAll('.upper-distribution-row').forEach(row=>{
   const articleSearch=row.querySelector('.upper-article-search'),materialSearch=row.querySelector('.upper-material-search'),qty=row.querySelector('.upper-qty'),expense=row.querySelector('.upper-labour-expense');
   if(articleSearch&&!articleSearch.dataset.bound){articleSearch.dataset.bound='1';articleSearch.addEventListener('input',()=>{articleSearch.dataset.selectedId='';if(row===document.querySelector('.upper-distribution-row'))rememberProductionArticleChoice(upperSelWorker,'upper','');renderUpperRowResults(row,'article',articleSearch.value);updateUpperDistributionRow(row);});}
   if(materialSearch&&!materialSearch.dataset.bound){materialSearch.dataset.bound='1';materialSearch.addEventListener('input',()=>{materialSearch.dataset.selectedId='';if(row===document.querySelector('.upper-distribution-row'))rememberUpperMaterialChoice('');renderUpperRowResults(row,'material',materialSearch.value);updateUpperDistributionRow(row);});}
@@ -12490,6 +12557,35 @@ function bindUpperDistributionRows(){document.querySelectorAll('.upper-distribut
   const remove=row.querySelector('.upper-remove');if(remove&&!remove.dataset.bound){remove.dataset.bound='1';remove.addEventListener('click',()=>{row.remove();updateUpperDistributionTotals();});}
   updateUpperDistributionRow(row);
 });}
+function supplierProductionEntryControls(worker){
+  const host=document.createElement('div');host.innerHTML=productionWorkerControls(worker,'upper');
+  host.querySelector('[data-worker-kharcha]')?.parentElement?.remove();
+  return host.innerHTML;
+}
+function openSupplierLatestWeeklyVoucher(){
+  if(!supplierProductionContextScope())return;
+  const worker=supplierProductionActiveWorker();
+  if(!worker){toast('Select a Supplier Card first.');return;}
+  const {start,end}=getUpperWorkWeekRange(new Date()),startKey=upperLocalDateKey(start);
+  const bills=(settings.supplierProductionBilling?.bills||[]).filter(bill=>{
+    if(String(bill.supplierId)!==String(worker.id))return false;
+    const periodStart=bill.periodFrom||upperLocalDateKey(getUpperWorkWeekRange(new Date(bill.date)).start);
+    return periodStart===startKey;
+  }).sort((a,b)=>(Date.parse(b.createdAt||b.date)||0)-(Date.parse(a.createdAt||a.date)||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0));
+  if(bills.length){showSupplierProductionBill(bills[0]);sizeSupplierLatestPreview();return;}
+  const records=upperProductionRecords().filter(record=>record.workflowVersion===1&&String(record.workerId)===String(worker.id)&&upperWorkTimestamp(record)>=start&&upperWorkTimestamp(record)<end)
+    .sort((a,b)=>upperWorkTimestamp(b)-upperWorkTimestamp(a)||(Date.parse(b.createdAt||b.date)||0)-(Date.parse(a.createdAt||a.date)||0));
+  if(records.length){showUpperVoucher(records[0]);sizeSupplierLatestPreview();return;}
+  toast('No production voucher exists for the current Saturday-Thursday week.');
+}
+function sizeSupplierLatestPreview(){
+  const preview=document.querySelector('#modalRoot .modal');if(!preview)return;
+  preview.style.setProperty('width','min(400px, calc(100vw - 24px))','important');
+  preview.style.setProperty('max-width','400px','important');
+  preview.style.setProperty('height','calc(100dvh - 24px)','important');
+  preview.style.setProperty('max-height','calc(100dvh - 24px)','important');
+  preview.style.setProperty('padding','12px','important');
+}
 function updateUpperDistributionTotals(){let draftArticle=0,draftMaterial=0,draftAmount=0;document.querySelectorAll('.upper-distribution-row').forEach(row=>{const aId=row.querySelector('.upper-article-search')?.dataset.selectedId||'',mId=row.querySelector('.upper-material-search')?.dataset.selectedId||'',a=(settings.upperArticles||[]).find(x=>String(x.id)===String(aId)),m=(settings.upperMaterials||[]).find(x=>String(x.id)===String(mId)),q=Math.max(0,parseInt(row.querySelector('.upper-qty')?.value||'0',10)||0)*(upperArticleUnit(a)==='SET'?2:1),expense=Math.max(0,Number(row.querySelector('.upper-labour-expense')?.value||0)||0);if(q>0){if(a)draftArticle+=q;if(m)draftMaterial+=q;if(a||m)draftAmount+=expense;}});let todayArticle=0,todayMaterial=0;upperTodayRecords().forEach(r=>(r.lines||[]).forEach(l=>{const q=Number(l.qty)||0;if(l.articleName)todayArticle+=q;if(l.materialName)todayMaterial+=q;}));const weeklyAmount=upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0);const ai=document.getElementById('upperTotalArticleAtoms');if(ai)ai.textContent=workerProductionShoeLamination()?upperShoeQuantityText(upperShoeQuantityGroups(upperTodayRecords())):String(todayArticle);const mi=document.getElementById('upperTotalMaterialAtoms');if(mi)mi.textContent=String(todayMaterial);const a=document.getElementById('upperTotalAmount');if(a)a.textContent=upperMoney(weeklyAmount);updateUpperWorkflowSummary();return {articleAtoms:draftArticle,materialAtoms:draftMaterial,amount:draftAmount};}
 function upperWorkflowStarted(workerId){return (settings.upperDistributions||[]).some(r=>r.workflowVersion===1&&String(r.workerId)===String(workerId));}
 function upperReceivedTotal(record){return record.workflowVersion===1?(record.lines||[]).reduce((n,l)=>n+(Number(l.receivedQty)||0),0):0;}
@@ -12714,7 +12810,7 @@ function upperVoucherPendingArticles(workerId,total,through=null){
 function supplierProductionWeeklyVoucherHtml(v,billView=null){
   const week=billView?.week||upperWeeklyVoucherData(v);
   const row=(label,value)=>'<div class="um-total-single"><span>'+esc(label)+'</span><span>'+esc(String(value))+'</span></div>';
-  const box=(title,groups,articles)=>'<div class="um-frame"><div class="um-total-single"><span>'+esc(title==='PENDING'?title:title+' Total')+'</span><span>'+esc(upperShoeQuantityText(groups)==='0'?'0 ATOMS':upperShoeQuantityText(groups))+'</span></div>'+(articles?.length?'<div style="border-top:1px solid #000;">'+articles.map(article=>row(article.name,article.qty+' '+article.unit)).join('')+'</div>':'')+'</div>';
+  const box=(title,groups,articles)=>'<div class="um-frame"><div class="um-total-single"><span>'+esc(title==='PENDING'?supplierVoucherLabel(title):title+' Total')+'</span><span>'+esc(upperShoeQuantityText(groups)==='0'?'0 ATOMS':upperShoeQuantityText(groups))+'</span></div>'+(articles?.length?'<div style="border-top:1px solid #000;">'+articles.map(article=>row(article.name,article.qty+' '+article.unit)).join('')+'</div>':'')+'</div>';
   const pendingGroups=(week.pendingGroups||[]).map(group=>({...group})),pendingTotal=pendingGroups.reduce((n,group)=>n+group.qty,0),pendingArticles=pendingGroups.some(group=>group.unit!=='ATOMS'&&group.qty!==0)?null:upperVoucherPendingArticles(v.workerId,pendingTotal,week.through);
   const opening=supplierProductionReportOpening(v.workerId),openingTotal=[...opening.values()].reduce((n,item)=>n+item.qty,0);
   if(openingTotal){const atoms=pendingGroups.find(group=>group.unit==='ATOMS');if(atoms)atoms.qty+=openingTotal;else pendingGroups.push({key:'supplier-opening',unit:'ATOMS',qty:openingTotal});}
@@ -12741,7 +12837,16 @@ function supplierProductionWeeklyVoucherHtml(v,billView=null){
   if(billView){receivedMoney.clear();(billView.lines||[]).forEach((line,index)=>receivedMoney.set(String(index),{name:line.articleName,unit:line.unit||'ATOMS',qty:Number(line.qty)||0,amount:Number(line.amount)||0}));}
   const receivedBlock='<div class="um-frame um-received"><div class="um-received-title">TOTAL RECEIVED</div><div class="um-received-row um-received-article" style="font-weight:700"><span>Article</span><span>Received</span><span>Amount</span></div>'+[...receivedMoney.values()].map(article=>'<div class="um-received-row um-received-article"><span>'+esc(article.name)+'</span><span>'+esc(article.qty+' '+article.unit)+'</span><span>'+esc(upperMoney(article.amount))+'</span></div>').join('')+'</div>';
   const names=['\u06c1\u0641\u062a\u06c1','\u0627\u062a\u0648\u0627\u0631','\u067e\u06cc\u0631','\u0645\u0646\u06af\u0644','\u0628\u062f\u06be','\u062c\u0645\u0639\u0631\u0627\u062a'];
-  const days=names.map((name,index)=>{const articles=(week.days[index]?.articles||[]).filter(article=>article.received>0),cells=['pumpi doori','btava shoes'].map(articleName=>'<td>'+(articles.filter(article=>{const name=String(article.name||'').trim().toLowerCase().replace(/\s+/g,' ');return articleName==='pumpi doori'?/^(?:pumpi|pumpy) do+r[iy]$/.test(name):/^(?:btava|batava|batawa) shoes$/.test(name);}).map(article=>'<div class="um-day-quantity">'+esc(article.received+' '+article.unit)+'</div>').join('')||'<div class="um-day-quantity" dir="rtl">&#1670;&#1726;&#1657;&#1740;</div>')+'</td>').join('');return '<tr><td dir="rtl">'+name+'</td>'+cells+'</tr>';}).join('');
+  const days=names.map((name,index)=>{
+    const articles=(week.days[index]?.articles||[]).filter(article=>article.received>0);
+    const received=['pumpi doori','btava shoes'].map(articleName=>articles.filter(article=>{
+      const name=String(article.name||'').trim().toLowerCase().replace(/\s+/g,' ');
+      return articleName==='pumpi doori'?/^(?:pumpi|pumpy) do+r[iy]$/.test(name):/^(?:btava|batava|batawa) shoes$/.test(name);
+    }));
+    if(!received.some(articles=>articles.length))return '';
+    const cells=received.map(articles=>'<td>'+articles.map(article=>'<div class="um-day-quantity">'+esc(article.received+' '+article.unit)+'</div>').join('')+'</td>').join('');
+    return '<tr data-weekday-index="'+index+'"><td dir="rtl">'+name+'</td>'+cells+'</tr>';
+  }).join('');
   const paidAmount=Number(v.paidAmount)||0;
   const stamp=billView?new Date(v.date):new Date(),date=stamp.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),time=stamp.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
   return `<div class="supplier-weekly-voucher"><style>
@@ -12758,7 +12863,7 @@ function supplierProductionWeeklyVoucherHtml(v,billView=null){
     .supplier-weekly-voucher .um-day-table .um-day-article{grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:1mm;align-items:center;text-align:center;}.supplier-weekly-voucher .um-day-table .um-day-article span,.supplier-weekly-voucher .um-day-table .um-day-article span:last-child{text-align:center;}.supplier-weekly-voucher .um-day-table .um-day-article+.um-day-article{border-top:1px solid #000;}.supplier-weekly-voucher .um-received-article span{text-align:center;padding:0 .5mm;}.supplier-weekly-voucher .um-received-article span+span{border-left:1px solid #000;}
     .supplier-weekly-voucher .um-day-table .um-article-heading{font-size:3.4mm;height:6.25mm;}.supplier-weekly-voucher .um-day-quantity{font-size:3.4mm;text-align:center;padding:1mm 0;overflow-wrap:anywhere;}.supplier-weekly-voucher .um-received-article{grid-template-columns:42% 30% 28%;}
     .supplier-weekly-voucher .um-day-quantity[dir=rtl]{font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',Arial,sans-serif;}
-  </style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title">SHOES, MAGZI, DORI &amp; BATAWA SUPPLIERS WEEKLY VOUCHER</div><div class="um-person"><span>${esc(v.workerName)}</span><span>#${esc(v.voucherNo)}</span></div><div class="um-stamp"><span>${esc(date)}</span><span>&#8226;</span><span>${esc(time)}</span></div><hr class="um-rule"><div class="um-frame"><table class="um-day-table"><colgroup><col style="width:28%"><col style="width:36%"><col style="width:36%"></colgroup><thead><tr><th dir="rtl">&#1583;&#1606;</th><th class="um-article-heading">Pumpi Doori</th><th class="um-article-heading">Btava Shoes</th></tr></thead><tbody>${days}</tbody></table></div>${billView?pendingBlock+receivedBlock:receivedBlock}${billView?.moneyHtml||`<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr class="um-remaining"><td>TOTAL AMOUNT</td><td>${esc(upperMoney(summary.grossEarned))}</td></tr></tbody></table></div>`}${billView?'':pendingBlock}<hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div>`;
+  </style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title">SHOES, MAGZI, DORI &amp; BATAWA SUPPLIERS WEEKLY VOUCHER</div><div class="um-person"><span>${esc(v.workerName)}</span><span>#${esc(v.voucherNo)}</span></div><div class="um-stamp"><span>${esc(date)}</span><span>&#8226;</span><span>${esc(time)}</span></div><hr class="um-rule"><div class="um-frame"><table class="um-day-table"><colgroup><col style="width:28%"><col style="width:36%"><col style="width:36%"></colgroup><thead><tr><th dir="rtl">&#1583;&#1606;</th><th class="um-article-heading">Pumpi Doori</th><th class="um-article-heading">Btava Shoes</th></tr></thead><tbody>${days}</tbody></table></div>${receivedBlock}${billView?.moneyHtml||`<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr class="um-remaining"><td>${esc(supplierVoucherLabel('TOTAL AMOUNT'))}</td><td>${esc(upperMoney(summary.grossEarned))}</td></tr></tbody></table></div>`}${pendingBlock}<hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div>`;
 }
 
 function upperManCurrentArticleLabourRate(worker,articleId){
@@ -13298,6 +13403,20 @@ function printUpperWeeklyVoucherDirect(v){
   win.print();
 }
 function showUpperVoucher(v,saved=true){
+  if(v.workflowVersion===1&&workerCategoryCompareKey(upperProductionRecordCategory(v))==='shoes, magzi dori & batawa suppliers'){
+    const html=upperVoucherHtml(v),title=upperVoucherCategoryTitle(v)+' Weekly Voucher';
+    modal(`<h3 style="margin-top:0;">${esc(upperVoucherCategoryTitle(v))} Receive Voucher #${v.voucherNo}</h3>
+      ${supplierVoucherPreviewPanels(html,'upperVoucherPrintArea','upperVoucherPrint')}
+      <div class="modal-actions" style="justify-content:center;flex-wrap:wrap;">
+        ${saved?`<button type="button" class="btn ghost" id="upperVoucherEdit">Edit</button><button type="button" class="btn red" id="upperVoucherDelete">Delete</button>`:''}
+        <button type="button" class="btn ghost" id="upperVoucherClose">Close</button>
+      </div>`);
+    bindSupplierVoucherPreviewPrintActions('upperVoucherPrintArea','upperVoucherPrint',title);
+    document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(v.id));
+    document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(v.id));
+    document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
+    return;
+  }
   const directWeekly=v.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)));
   const rows=(v.lines||[]).map(l=>`<tr><td>${esc(l.articleName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr><tr><td>${esc(l.materialName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr>`).join('');
   modal(`<h3 style="margin-top:0;">${esc(upperVoucherCategoryTitle(v))} Receive Voucher #${v.voucherNo}</h3>
@@ -13316,6 +13435,34 @@ function showUpperVoucher(v,saved=true){
   document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(v.id));
   document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
 
+  if(v.workflowVersion===1&&workerCategoryCompareKey(upperProductionRecordCategory(v))==='shoes, magzi dori & batawa suppliers')bindSupplierVoucherPrintActions('upperVoucherPrint',()=>document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Weekly Voucher');
+}
+function supplierVoucherLabel(label){
+  return ({PENDING:'Baqaya Articles','TOTAL AMOUNT':'Total Raqam'})[label]||label;
+}
+function supplierVoucherPreviewPanels(html,areaId,printId){
+  return `<div style="display:flex;justify-content:center;width:100%;"><section style="min-width:0;text-align:center;"><h4>${areaId==='supplierBillPrintArea'?'Urdu Bill Preview':'Urdu Voucher Preview'}</h4><div id="${areaId}Urdu" class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;">${supplierNormalWeeklyPreviewHtml(html,'ur')}</div><button type="button" class="btn brass" id="${printId}Urdu" style="margin-top:12px;">Print Urdu</button></section></div>`;
+}
+function bindSupplierVoucherPreviewPrintActions(areaId,printId,title){
+  for(const suffix of ['Urdu']){
+    document.getElementById(printId+suffix).onclick=()=>printAggregateThermal(document.getElementById(areaId+suffix).outerHTML,title,'element');
+  }
+}
+function supplierNormalWeeklyPreviewHtml(html,language){
+  const host=document.createElement('div');host.innerHTML=supplierVoucherPrintHtml(html,language);
+  if(language==='en'){
+    const weekdays=['Saturday','Sunday','Monday','Tuesday','Wednesday','Thursday'];
+    host.querySelectorAll('.um-day-table tbody tr[data-weekday-index]').forEach(row=>{
+      row.children[0].textContent=weekdays[Number(row.dataset.weekdayIndex)];
+    });
+    return host.innerHTML;
+  }
+  host.className='normal-supplier-weekly-urdu';
+  const style=document.createElement('style');
+  style.textContent=".normal-supplier-weekly-urdu .supplier-weekly-voucher,.normal-supplier-weekly-urdu .supplier-weekly-voucher *{font-family:'Noto Naskh Arabic','Urdu Typesetting','Noto Nastaliq Urdu','Jameel Noori Nastaleeq',Tahoma,Arial,sans-serif!important;line-height:1.8!important;letter-spacing:0;}.normal-supplier-weekly-urdu .um-brand,.normal-supplier-weekly-urdu .um-title{font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif!important;direction:ltr;unicode-bidi:isolate;line-height:1.1!important;}.normal-supplier-weekly-urdu .um-day-table td,.normal-supplier-weekly-urdu .um-day-table th{height:auto;padding:1mm;}.normal-supplier-weekly-urdu .um-day-quantity{direction:rtl;unicode-bidi:isolate;}";
+  style.textContent+=".normal-supplier-weekly-urdu .um-received-row{direction:rtl;}.normal-supplier-weekly-urdu .um-received-row span{direction:rtl;unicode-bidi:isolate;text-align:start!important;padding-inline:1mm;}.normal-supplier-weekly-urdu .um-received-article span+span{border-left:0;border-right:1px solid #000;}";
+  host.appendChild(style);
+  return host.outerHTML;
 }
 async function buildUpperDailyVoucherCanvas(v){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[],week=upperWeeklyVoucherData(v);let height=pad;
@@ -14342,7 +14489,13 @@ function doImport(file){
     try{
       const data = JSON.parse(e.target.result);
       if(!data.settings || !data.materials || !data.workers || !data.transactions) throw new Error('bad file');
-      if(!await saveBackupVersion().catch(()=>false)){toast('Safety backup could not be saved. Import cancelled.');return;}
+      try{
+        if(!await saveBackupVersion())throw new Error('Safety backup was not confirmed.');
+      }catch(err){
+        console.error('Import safety backup failed:',err);
+        toast('Import cancelled: '+err.message);
+        return;
+      }
       const before=captureCloudState(); // rollback if runtime save fails
       settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials; workers = data.workers;
       transactions = data.transactions; stockMovements = data.stockMovements || []; articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
@@ -20700,10 +20853,18 @@ async function loadAuthoritativeBackups(force=false){
   backupLoadPromise=(async()=>{
     try{
       if(!cloudReady)throw new Error('D1 is not ready.');
-      const res=await fetch(BACKUP_CLOUD_API,{cache:'no-store'});
-      if(!res.ok)throw new Error('Backup load failed: '+res.status);
-      const payload=await res.json();
-      if(!Array.isArray(payload.backups))throw new Error('Invalid backups response.');
+      let res;
+      try{res=await fetch(BACKUP_CLOUD_API,{cache:'no-store'});}
+      catch(err){throw new Error('Backup refresh GET failed: '+err.message);}
+      const status=res.status+' '+res.statusText;
+      let body;
+      try{body=await res.text();}
+      catch(err){throw new Error('Backup refresh GET failed: HTTP '+status+'; response body read failed: '+err.message);}
+      if(!res.ok)throw new Error('Backup refresh GET failed: HTTP '+status+'; body: '+body);
+      let payload;
+      try{payload=JSON.parse(body);}
+      catch(err){throw new Error('Backup refresh GET response invalid: HTTP '+status+'; '+err.message+'; body: '+body);}
+      if(!Array.isArray(payload?.backups))throw new Error('Backup refresh GET response invalid: HTTP '+status+'; body: '+body);
       backupVersions=payload.backups;
       authoritativeBackupsLoaded=true;
       return backupVersions;
@@ -20717,10 +20878,18 @@ async function saveBackupVersion(automaticDay=null){
   const data={settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
   const version=JSON.parse(JSON.stringify({id:uid(), timestamp:data.savedAt, data}));
   authoritativeBackupsLoaded=false; // append makes cached references incomplete
-  const res=await fetch(BACKUP_CLOUD_API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,automaticDay})});
-  if(!res.ok)throw new Error('Backup save failed: '+res.status);
-  const payload=await res.json();
-  if(payload.ok!==true || typeof payload.saved!=='boolean')throw new Error('Invalid backup save response.');
+  let res;
+  try{res=await fetch(BACKUP_CLOUD_API,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version,automaticDay})});}
+  catch(err){throw new Error('Backup PUT failed: '+err.message);}
+  const status=res.status+' '+res.statusText;
+  let body;
+  try{body=await res.text();}
+  catch(err){throw new Error('Backup PUT failed: HTTP '+status+'; response body read failed: '+err.message);}
+  if(!res.ok)throw new Error('Backup PUT failed: HTTP '+status+'; body: '+body);
+  let payload;
+  try{payload=JSON.parse(body);}
+  catch(err){throw new Error('Backup response invalid (PUT): HTTP '+status+'; '+err.message+'; body: '+body);}
+  if(payload?.ok!==true || typeof payload.saved!=='boolean')throw new Error('Backup response invalid (PUT): HTTP '+status+'; body: '+body);
   if(payload.saved){
     // A concurrent backup read may predate this append; refresh explicitly.
     authoritativeBackupsLoaded=false;
