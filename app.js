@@ -12725,6 +12725,13 @@ function printUpperManAllProduction(){
   const totalBaqi=workers.filter(worker=>workerCategoryCompareKey(worker.category)==='upper mans').reduce((total,worker)=>total+(Number(getWorkerSummaryAmount(worker,'baqi'))||0),0);
   const remaining=output.querySelector('.um-person > span:last-child');
   if(remaining)remaining.textContent='باقی '+productionWeeklyUrduText(upperMoney(totalBaqi));
+  const stamp=output.querySelector('.um-stamp');
+  if(stamp){
+    const issued=document.createElement('div');issued.className='upper-all-weekly-issued';
+    issued.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:1mm;border:1px solid #000;border-radius:1mm;margin:1mm 0;padding:.5mm 1mm;white-space:nowrap!important;font-size:3.1mm!important;line-height:1.2!important;';
+    issued.innerHTML='<span>ہفتہ وار جاری شدہ</span><span>'+esc(productionWeeklyUrduText(upperManQuantityText(upperManQuantityGroups(data.records,'issued'))))+'</span>';
+    stamp.after(issued);
+  }
   const dayTable=output.querySelector('.upper-man-weekly > .um-frame > table');
   if(dayTable){
     dayTable.classList.add('upper-all-production-days');
