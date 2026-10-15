@@ -2167,7 +2167,7 @@ function upperProductionWorkerMatches(worker){return !!worker&&!worker.archived&
 function upperProductionRecords(records=settings.upperDistributions||[]){return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));}
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
-  const today=new Date(now);today.setHours(0,0,0,0);const min=new Date(today);min.setDate(min.getDate()-2);const start=getUpperWorkWeekRange(today).start;
+  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
   return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
@@ -3761,7 +3761,7 @@ function upperProductionWorkerMatches(worker){return !!worker&&!worker.archived&
 function upperProductionRecords(records=settings.upperDistributions||[]){return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));}
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
-  const today=new Date(now);today.setHours(0,0,0,0);const min=new Date(today);min.setDate(min.getDate()-2);const start=getUpperWorkWeekRange(today).start;
+  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
   return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
 }
 function laserPendingEligibleRecords(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null){
@@ -6821,7 +6821,7 @@ function upperProductionWorkerMatches(worker){return !!worker&&!worker.archived&
 function upperProductionRecords(records=settings.upperDistributions||[]){return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));}
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
-  const today=new Date(now);today.setHours(0,0,0,0);const min=new Date(today);min.setDate(min.getDate()-2);const start=getUpperWorkWeekRange(today).start;
+  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
   return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
@@ -8340,7 +8340,7 @@ function upperProductionWorkerMatches(worker){return !!worker&&!worker.archived&
 function upperProductionRecords(records=settings.upperDistributions||[]){return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));}
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
-  const today=new Date(now);today.setHours(0,0,0,0);const min=new Date(today);min.setDate(min.getDate()-2);const start=getUpperWorkWeekRange(today).start;
+  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
   return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
@@ -9867,7 +9867,7 @@ function upperProductionWorkerMatches(worker){return !!worker&&!worker.archived&
 function upperProductionRecords(records=settings.upperDistributions||[]){return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));}
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
-  const today=new Date(now);today.setHours(0,0,0,0);const min=new Date(today);min.setDate(min.getDate()-2);const start=getUpperWorkWeekRange(today).start;
+  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
   return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
@@ -10742,6 +10742,7 @@ function render(){
   else if(currentPage==='workers') main.innerHTML = pageWorkers();
   else if(currentPage==='workerHistory') main.innerHTML = pageWorkerHistory(selectedWorkerId);
   else if(currentPage==='workerSummaryDetail') main.innerHTML = pageWorkerSummaryDetail(workerSummaryDetailType);
+  else if(currentPage==='upperManAllProduction') main.innerHTML = pageUpperManAllProduction();
   else if(productionView==='distributeUpper') main.innerHTML = renderWorkerProductionPage(productionRoute.category);
   else if(productionView==='upperArticles') main.innerHTML = pageUpperArticles();
   else if(productionView==='upperMaterials') main.innerHTML = pageUpperMaterials();
@@ -12170,7 +12171,7 @@ function pageDistributeUpper(pageContext=workerProductionPageContext()){
       <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayReceivedCard"><span>${upperMan?'Today<br>Received':'Today Received'}</span><strong>${upperMan?upperManCardQuantityHtml(upperManQuantityGroups(allUpperRecords,'received')):upperMovementRows('received','today',upperNow).reduce((n,r)=>n+r.quantity,0)+' ATOMS'}</strong></button>
       <div class="bm-top-stat"><span>${upperMan?'Today<br>Pending':'Today Pending'}</span><strong>${pendingWorkers}</strong></div>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList">👞 ${esc(categoryLabel)} Articles</button>
-      <button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>${upperMan?'Weekly<br>Kharcha':'Weekly Kharcha'}</span><strong>${upperMoney(weeklyAmount)}</strong></button>`:`      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayIssuedCard"><span>${upperMan?'Today<br>Issued':'Today Issued'}</span><strong>${upperMan?upperManCardQuantityHtml(upperMovementRows('issued','today',upperNow).map(r=>({qty:r.quantity,unit:r.unit}))):upperMovementRows('issued','today',upperNow).reduce((n,r)=>n+r.quantity,0)+' ATOMS'}</strong></button>
+      <button type="button" class="bm-top-stat upper-click-stat" id="upperWeeklyKharchaCard"><span>${upperMan?'Weekly<br>Kharcha':'Weekly Kharcha'}</span><strong>${upperMoney(weeklyAmount)}</strong></button>`:`      <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayIssuedCard">${upperMan?'<span style="grid-column:1 / -1;text-align:center;">All Production</span>':`<span>Today Issued</span><strong>${upperMovementRows('issued','today',upperNow).reduce((n,r)=>n+r.quantity,0)} ATOMS</strong>`}</button>
       <button type="button" class="bm-top-stat upper-click-stat" id="upperTodayReceivedCard"><span>${upperMan?'Today<br>Received':'Today Received'}</span><strong>${upperMan?upperManCardQuantityHtml(upperManQuantityGroups(allUpperRecords,'received')):upperMovementRows('received','today',upperNow).reduce((n,r)=>n+r.quantity,0)+' ATOMS'}</strong></button>
       <button type="button" class="btn ghost small bm-top-card" id="upperPendingCard" style="display:flex;flex-direction:column;gap:2px;${upperMan?'height:38px!important;min-height:38px!important;white-space:normal!important;':''}"><span>${upperMan?'Today<br>Pending':'Today Pending'}</span><strong${upperMan?' style="min-width:0;max-width:100%;white-space:normal!important;overflow-wrap:anywhere;"':''}>${upperMan?upperManPendingCards:pendingTotal+' ATOMS'}</strong></button>
       <button type="button" class="btn brass small bm-top-card" id="btnUpperArticleList">👞 ${esc(categoryLabel)} Articles</button>
@@ -12649,7 +12650,7 @@ function upperWorkflowStarted(workerId){return (settings.upperDistributions||[])
 function upperReceivedTotal(record){return record.workflowVersion===1?(record.lines||[]).reduce((n,l)=>n+(Number(l.receivedQty)||0),0):0;}
 function upperLocalDateKey(date){return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
 function upperEntryWorkDateRange(now=new Date()){
-  const today=new Date(now);today.setHours(0,0,0,0);const min=new Date(today);min.setDate(min.getDate()-2);const start=getUpperWorkWeekRange(today).start;
+  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
   return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
 }
 function upperWorkTimestamp(record){
@@ -12692,6 +12693,63 @@ async function saveUpperManualPending(workerId){
   closeModal();updateUpperWorkflowSummary();toast('Article Pending saved: '+qty+' '+unit);
 }
 
+function openUpperManAllProduction(){
+  if(upperManContext())goto('upperManAllProduction');
+}
+function upperManAllProductionData(now=new Date()){
+  const {start,end}=getUpperWorkWeekRange(now),through=new Date(now);through.setHours(24,0,0,0);
+  const active=r=>!r.deletedAt&&r.deleted!==true;
+  const records=(settings.upperDistributions||[]).filter(r=>active(r)&&upperManRecord(r)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<end&&upperWorkTimestamp(r)<through);
+  const groups=upperManQuantityGroups(records,'received');
+  let labour=0;const labourRows=[];
+  const workerIds=new Set(records.map(r=>String(r.workerId)));
+  workerIds.forEach(id=>{const worker=workers.find(w=>String(w.id)===id);upperManQuantityGroups(records.filter(r=>String(r.workerId)===id),'received').forEach(g=>{if(g.qty<=0)return;const rate=productionDisplayLabourRate(worker,'upper',g.articleId),amount=g.qty*(rate??0);labour+=amount;labourRows.push({...g,workerId:id,rate,amount});});});
+  const expenseEnd=new Date(Math.min(+end,+through));
+  const adjustments=(settings.productionKharchaAdjustments||[]).filter(r=>active(r)&&r.module==='upper'&&upperManRecord(r)&&new Date(r.date)>=start&&new Date(r.date)<expenseEnd);
+  const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+adjustments.reduce((n,r)=>n+(Number(r.delta)||0),0);
+  const articles=new Map();labourRows.forEach(row=>{const key=upperManPendingKey(row.articleId||'name:'+row.name,row.unit),article=articles.get(key)||{articleId:row.articleId,name:row.name,unit:row.unit,qty:0,amount:0,rate:0};article.qty+=row.qty;article.amount+=row.amount;articles.set(key,article);});
+  return {now,start,end,records,groups,labourRows,articleRows:[...articles.values()],labour,kharcha};
+}
+function pageUpperManAllProduction(){
+  if(!upperManContext())return '';
+  const {start,end,records,groups,articleRows,labour,kharcha}=upperManAllProductionData();
+  const days=[];for(let i=0;i<6;i++){const date=new Date(start);date.setDate(date.getDate()+i);const key=upperLocalDateKey(date),daily=records.filter(r=>upperLocalDateKey(upperWorkTimestamp(r))===key);days.push('<tr><td>'+esc(date.toLocaleDateString('en-US',{weekday:'long'})+' '+key)+'</td><td>'+esc(upperManQuantityText(upperManQuantityGroups(daily,'received')))+'</td></tr>');}
+  days.push('<tr><td><b>WEEKLY TOTAL</b></td><td>'+esc(upperManQuantityText(groups))+'</td></tr>');
+  return '<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;"><h2>All Production</h2><div><button class="btn ghost" id="upperAllProductionBack">Back</button> <button class="btn brass" id="upperAllProductionPrint">Print</button></div></div><div>'+esc(upperLocalDateKey(start))+' to '+esc(upperLocalDateKey(new Date(end.getTime()-1)))+'</div><h4>Day-wise Total Production</h4><table style="width:100%"><tbody>'+days.join('')+'</tbody></table><p><b>Weekly Total Production:</b> '+esc(upperManQuantityText(groups))+'</p><h4>Article-wise Breakdown</h4><table style="width:100%"><tbody>'+articleRows.map(g=>'<tr><td>'+esc(g.name||'Article')+'</td><td>'+esc(g.qty+' '+g.unit)+'</td><td>'+esc(upperMoney(g.amount))+'</td></tr>').join('')+'</tbody></table><p>Total Labour Amount: '+upperMoney(labour)+'</p><p>Total Weekly Kharcha: '+upperMoney(kharcha)+'</p><p><b>Remaining: '+upperMoney(labour-kharcha)+'</b></p></div>';
+}
+function printUpperManAllProduction(){
+  if(!upperManContext())return;
+  const data=upperManAllProductionData(),date=upperLocalDateKey(data.now);
+  const voucher={workerName:'تمام اپر مین',workerCategory:'UPPER MANS',voucherNo:'ALL',workDate:date,createdAt:data.now.toISOString(),date:data.now.toISOString()};
+  const output=document.createElement('div');output.className='upper-all-production-print';output.innerHTML=upperManWeeklyVoucherHtml(voucher,data);
+  const totalBaqi=workers.filter(worker=>workerCategoryCompareKey(worker.category)==='upper mans').reduce((total,worker)=>total+(Number(getWorkerSummaryAmount(worker,'baqi'))||0),0);
+  const remaining=output.querySelector('.um-person > span:last-child');
+  if(remaining)remaining.textContent='باقی '+productionWeeklyUrduText(upperMoney(totalBaqi));
+  const dayTable=output.querySelector('.upper-man-weekly > .um-frame > table');
+  if(dayTable){
+    dayTable.classList.add('upper-all-production-days');
+    const columns=dayTable.querySelectorAll('col');if(columns[0])columns[0].style.width='34%';if(columns[1])columns[1].style.width='66%';
+    const weeklyLabel=dayTable.querySelector('tbody tr:last-child td:first-child');if(weeklyLabel)weeklyLabel.textContent='ہفتہ وار ٹوٹل';
+  }
+  const missingWorkers=new Map();data.labourRows.filter(row=>row.qty>0&&row.rate===null).forEach(row=>{const id=String(row.workerId);if(missingWorkers.has(id))return;const worker=workers.find(w=>String(w.id)===id),record=data.records.find(r=>String(r.workerId)===id);missingWorkers.set(id,worker?.name||record?.workerName||id);});
+  const genericWarning=productionWeeklyUrduText('* Totals incomplete: saved labour rate missing.');
+  output.querySelectorAll('div').forEach(node=>{if(!node.children.length&&node.textContent.trim()===genericWarning)node.remove();});
+  const moneyFrame=output.querySelector('.um-money')?.closest('.um-frame');
+  if(moneyFrame&&missingWorkers.size){
+    const warning=document.createElement('div');warning.style.cssText='font-size:3mm;padding:1mm';
+    missingWorkers.forEach(name=>{const line=document.createElement('div');line.textContent=productionWeeklyUrduText(name,true)+' — اجرت محفوظ نہیں';warning.appendChild(line);});moneyFrame.before(warning);
+  }
+  const pendingArticles=new Map();upperManPendingAccounts().forEach(account=>account.groups.filter(g=>!g.legacy&&g.articleId&&g.qty>0).forEach(g=>{const key=upperManPendingKey(g.articleId,g.unit),article=pendingArticles.get(key)||{name:g.name,unit:g.unit,qty:0};article.qty+=g.qty;pendingArticles.set(key,article);}));
+  if(moneyFrame){
+    const pending=document.createElement('div');pending.className='um-frame um-pending';
+    pending.innerHTML='<div class="um-received-title">بکایا آرٹیکلز</div><table><thead><tr><th>آرٹیکل</th><th>بکایا مقدار</th><th>یونٹ</th></tr></thead><tbody>'+[...pendingArticles.values()].map(g=>'<tr><td>'+esc(productionWeeklyUrduText(g.name,true))+'</td><td>'+esc(g.qty)+'</td><td>'+esc(productionWeeklyUrduText(g.unit))+'</td></tr>').join('')+'</tbody></table>';moneyFrame.after(pending);
+  }
+  const style=document.createElement('style');
+  style.textContent='.upper-all-production-print .upper-all-production-days tbody td{height:6.25mm!important;padding:0 1mm!important;line-height:1.2!important;white-space:nowrap!important;overflow-wrap:normal!important;word-break:normal!important;}.upper-all-production-print .upper-all-production-days tbody td:last-child{font-size:3.7mm!important;}.upper-all-production-print .um-person>span:last-child{font-size:3.6mm!important;}';
+  output.appendChild(style);
+  const html=output.outerHTML;
+  printAggregateThermal('<div class="receipt-paper" style="width:80mm;margin:auto;">'+html+'</div>','Upper Man Weekly Voucher','element',{settledSizing:true,continuousReceipt:true});
+}
 function upperManContext(){return workerCategoryCompareKey(upperProductionCategory)==='upper mans';}
 function upperManRecord(record){return workerCategoryCompareKey(upperProductionRecordCategory(record))==='upper mans';}
 function upperManPendingKey(articleId,unit){return JSON.stringify([String(articleId),unit]);}
@@ -12995,21 +13053,21 @@ function urduProductionWeeklyVoucherHtml(html){
   style.textContent=".urdu-production-weekly-voucher .upper-man-weekly,.urdu-production-weekly-voucher .bf-weekly-voucher{direction:rtl;}.urdu-production-weekly-voucher .upper-man-weekly *,.urdu-production-weekly-voucher .bf-weekly-voucher *{font-family:'Noto Naskh Arabic',serif!important;line-height:1.6!important;letter-spacing:0;}.urdu-production-weekly-voucher .um-brand,.urdu-production-weekly-voucher .um-title{font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif!important;direction:ltr;unicode-bidi:isolate;line-height:1.1!important;}.urdu-production-weekly-voucher .um-person span:first-child{white-space:normal;text-align:start!important;}.urdu-production-weekly-voucher .um-person span+span{border-left:0;border-right:1px solid #000;padding-left:0;padding-right:2mm;}.urdu-production-weekly-voucher .um-received-row{grid-template-columns:42% 30% 28%!important;direction:rtl;}.urdu-production-weekly-voucher .um-received-row span{min-width:0;text-align:start!important;unicode-bidi:isolate;}.urdu-production-weekly-voucher .um-money td:first-child,.urdu-production-weekly-voucher .um-pending td:first-child{text-align:start!important;}.urdu-production-weekly-voucher th+th,.urdu-production-weekly-voucher td+td{border-left:0;border-right:1px solid #000;}";
   host.appendChild(style);return host.outerHTML;
 }
-function upperManWeeklyVoucherHtml(v){
-  const base=upperWorkTimestamp(v),summary=upperWorkerWeekSummary(v.workerId,base,new Date(new Date(base).setHours(23,59,59,999))),week=upperWeeklyVoucherData(v),start=getUpperWorkWeekRange(base).start;
-  const now=new Date(),currentWeek=getUpperWorkWeekRange(now),currentWeekVoucher=base>=currentWeek.start&&base<currentWeek.end,worker=workers.find(w=>String(w.id)===String(v.workerId));
-  if(currentWeekVoucher){const through=new Date(now);through.setHours(24,0,0,0);summary.records=(settings.upperDistributions||[]).filter(r=>upperManRecord(r)&&String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=currentWeek.start&&upperWorkTimestamp(r)<currentWeek.end&&upperWorkTimestamp(r)<through);}
+function upperManWeeklyVoucherHtml(v,allProduction=null){
+  const base=upperWorkTimestamp(v),summary=allProduction?{records:allProduction.records,kharcha:allProduction.kharcha}:upperWorkerWeekSummary(v.workerId,base,new Date(new Date(base).setHours(23,59,59,999))),week=allProduction?{pendingGroups:[],legacyPendingGroups:[]}:upperWeeklyVoucherData(v),start=getUpperWorkWeekRange(base).start;
+  const now=allProduction?allProduction.now:new Date(),currentWeek=getUpperWorkWeekRange(now),currentWeekVoucher=base>=currentWeek.start&&base<currentWeek.end,worker=workers.find(w=>String(w.id)===String(v.workerId));
+  if(currentWeekVoucher&&!allProduction){const through=new Date(now);through.setHours(24,0,0,0);summary.records=(settings.upperDistributions||[]).filter(r=>upperManRecord(r)&&String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=currentWeek.start&&upperWorkTimestamp(r)<currentWeek.end&&upperWorkTimestamp(r)<through);}
   summary.records=summary.records.filter(upperManRecord);
-  const labourRows=upperManQuantityGroups(summary.records,'received').filter(g=>g.qty>0).map(g=>{const rate=productionDisplayLabourRate(worker,'upper',g.articleId);return {...g,rate,amount:g.qty*(rate??0)};});
+  const labourRows=allProduction?allProduction.labourRows:upperManQuantityGroups(summary.records,'received').filter(g=>g.qty>0).map(g=>{const rate=productionDisplayLabourRate(worker,'upper',g.articleId);return {...g,rate,amount:g.qty*(rate??0)};});
   {summary.grossEarned=labourRows.reduce((n,row)=>n+row.amount,0);summary.netEarned=summary.grossEarned-summary.kharcha;}
   const displayThrough=currentWeekVoucher?now:base;
-  const expenseThrough=new Date(displayThrough);expenseThrough.setHours(24,0,0,0);const expenseEnd=getUpperWorkWeekRange(base).end;if(expenseThrough>expenseEnd)expenseThrough.setTime(expenseEnd.getTime());summary.kharcha=summary.records.reduce((n,record)=>n+(Number(record.totalAmount)||0),0)+productionKharchaAdjustmentTotal('upper',v.workerId,base,new Date(expenseThrough.getTime()-1));summary.netEarned=summary.grossEarned-summary.kharcha;
+  const expenseThrough=new Date(displayThrough);expenseThrough.setHours(24,0,0,0);const expenseEnd=getUpperWorkWeekRange(base).end;if(expenseThrough>expenseEnd)expenseThrough.setTime(expenseEnd.getTime());summary.kharcha=allProduction?allProduction.kharcha:summary.records.reduce((n,record)=>n+(Number(record.totalAmount)||0),0)+productionKharchaAdjustmentTotal('upper',v.workerId,base,new Date(expenseThrough.getTime()-1));summary.netEarned=summary.grossEarned-summary.kharcha;
   const receivedUnits=new Map();labourRows.forEach(row=>{const rows=receivedUnits.get(row.unit)||[];rows.push(row);receivedUnits.set(row.unit,rows);});
   const receivedSummaryRows=[...receivedUnits.values()].flatMap(rows=>new Set(rows.map(row=>row.rate)).size===1?[{unit:rows[0].unit,rate:rows[0].rate,qty:rows.reduce((n,row)=>n+row.qty,0),amount:rows.reduce((n,row)=>n+row.amount,0)}]:rows);
-  const receivedBreakdown=productionDisplayReceivedHtml(labourRows);
+  const receivedBreakdown=allProduction?productionDisplayReceivedHtml(allProduction.articleRows,false,true)+(labourRows.some(row=>row.rate===null)?'<div style="font-size:3mm;padding:1mm">* Totals incomplete: saved labour rate missing.</div>':''):productionDisplayReceivedHtml(labourRows,true,false);
   const totals=new Map();upperManQuantityGroups(summary.records,'received').forEach(g=>{if(g.qty>0)totals.set(g.unit,(totals.get(g.unit)||0)+g.qty);});
   const names=['ہفتہ','اتوار','پیر','منگل','بدھ','جمعرات'];
-  const days=names.map((name,index)=>{const date=new Date(start);date.setDate(date.getDate()+index);const entries=summary.records.filter(r=>upperLocalDateKey(upperWorkTimestamp(r))===upperLocalDateKey(date)),groups=upperManQuantityGroups(entries,'received');return '<tr><td dir="rtl">'+name+'</td><td'+(!groups.some(g=>g.qty>0)&&date<=displayThrough?' class="um-holiday" dir="rtl"':'')+'>'+esc(groups.some(g=>g.qty>0)?upperManQuantityText(groups):date<=displayThrough?'چھٹی':'')+'</td></tr>';}).join('');
+  const days=names.map((name,index)=>{const date=new Date(start);date.setDate(date.getDate()+index);const entries=summary.records.filter(r=>upperLocalDateKey(upperWorkTimestamp(r))===upperLocalDateKey(date)),groups=upperManQuantityGroups(entries,'received');return '<tr><td dir="rtl">'+name+'</td><td'+(!groups.some(g=>g.qty>0)&&date<=displayThrough?' class="um-holiday" dir="rtl"':'')+'>'+esc(groups.some(g=>g.qty>0)?upperManQuantityText(groups):date<=displayThrough?'چھٹی':'')+'</td></tr>';}).join('')+(allProduction?'<tr><td>WEEKLY TOTAL</td><td>'+esc(upperManQuantityText(allProduction.groups))+'</td></tr>':'');
   const pending=upperManQuantityText([...week.pendingGroups,...week.legacyPendingGroups]);
   const pendingBlock=[...week.pendingGroups,...week.legacyPendingGroups].some(group=>Number(group.qty)>0)?`<div class="um-frame um-pending"><table><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr><td>PENDING</td><td>${esc(pending)}</td></tr></tbody></table></div>`:'';
   const stamp=new Date(v.createdAt||v.date),date=base.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),time=stamp.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
@@ -14310,7 +14368,7 @@ async function createBill(lines){
   const bill={id:uid(),billNo:settings.nextBillNo||1001,date:new Date().toISOString(),shopkeeperId:s.id,shopkeeperName:s.name,lines:clean,total,paid,note:window.__billNote||''};settings.nextBillNo=(bill.billNo||1001)+1;bills.push(bill);audit('Sales Bill Created',`Bill #${bill.billNo} — ${s.name} — ${total}`);if(!await saveCriticalCloudState('salesBill')){articles=before.articles;bills=before.bills;auditLog=before.auditLog;settings.nextBillNo=before.nextBillNo;await reconcileCloudAfterCriticalRollback();toast('Bill was not saved.');return;}delete window.__billSk;delete window.__billPaid;delete window.__billNote;closeModal();render();showBill(bill);toast('Bill created');
 }
 function showBill(b){const s=shopkeepers.find(x=>x.id===b.shopkeeperId);modal(`<h3>Bill #${b.billNo}</h3><div id="billPrintArea" class="receipt-paper" style="width:80mm;margin:auto;"><h3>${esc(settings.factoryName)}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub">Sales Bill</div><hr><div class="rline"><span>Bill #:</span><span>${b.billNo}</span></div><div class="rline"><span>Date:</span><span>${fmtDate(b.date)}</span></div><div class="rline"><span>Shopkeeper:</span><span>${esc(s?s.name:b.shopkeeperName)}</span></div><hr>${b.lines.map(l=>`<div style="margin:4px 0;"><div>${esc(l.articleName)}</div><div class="rline"><span>${l.qty} × ${money(l.rate)}</span><span>${money(l.qty*l.rate)}</span></div></div>`).join('')}<hr><div class="rline"><b>Total</b><b>${money(b.total)}</b></div><div class="rline"><span>Paid</span><span>${money(b.paid)}</span></div><div class="rline"><span>Balance</span><span>${money(b.total-b.paid)}</span></div>${b.note?`<hr><div class="footer">${esc(b.note)}</div>`:''}</div><div class="modal-actions"><button class="btn brass" id="printBill">🖨️ Print Bill</button><button class="btn ghost" id="closeBill">Close</button></div>`);document.getElementById('printBill').onclick=()=>printElement('billPrintArea');document.getElementById('closeBill').onclick=closeModal;}
-async function prepareSettledThermalPage(win,receipt,pageStyle){
+async function prepareSettledThermalPage(win,receipt,pageStyle,continuousReceipt=false){
   if(win.document.readyState!=='complete')await new Promise(resolve=>win.addEventListener('load',resolve,{once:true}));
   if(win.document.fonts?.ready)await win.document.fonts.ready;
   await Promise.all(Array.from(win.document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});})));
@@ -14324,7 +14382,7 @@ async function prepareSettledThermalPage(win,receipt,pageStyle){
   const sizePage=()=>{
     const heightPx=Math.max(receipt.getBoundingClientRect().height,receipt.scrollHeight);
     if(!Number.isFinite(heightPx)||heightPx<=0)throw new Error('Receipt measurement failed');
-    const heightMm=Math.ceil(heightPx*25.4/96*100)/100;
+    const heightMm=Math.ceil((heightPx*25.4/96+(continuousReceipt?3:0))*100)/100;
     const css='@page{size:80mm '+heightMm+'mm;margin:0;}';
     if(pageStyle.textContent!==css)pageStyle.textContent=css;
   };
@@ -14348,13 +14406,14 @@ async function printAggregateThermal(html,title='Aggregate Report',profile='prod
   if(!win){toast('Please allow pop-ups to print');return;}
   const elementProfile=profile==='element';
   const css='*{box-sizing:border-box;}html,body{width:80mm!important;margin:0!important;padding:0!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;background:#fff;color:#000;}body{font-family:'+(elementProfile?'"Courier New",monospace':'Arial,sans-serif')+';font-size:'+(elementProfile?'12px':'16px')+';line-height:'+(elementProfile?'1.25':'normal')+';}#aggregateThermalReceipt{display:flow-root;width:80mm;padding:'+(elementProfile?'3mm 4mm':'4mm')+';height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;}#aggregateThermalReceipt .receipt-paper{width:100%!important;max-width:100%!important;margin:0 auto!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;overflow-wrap:anywhere;}#aggregateThermalReceipt img{max-width:100%;height:auto;}'+(elementProfile?'':'#aggregateThermalReceipt .sub{font-size:10px;text-align:center;}#aggregateThermalReceipt table{width:100%;border-collapse:collapse;font-size:9px;}#aggregateThermalReceipt th,#aggregateThermalReceipt td{padding:2px 1px;border-bottom:1px solid #ddd;text-align:left;}#aggregateThermalReceipt hr{border:0;border-top:1px dashed #777;margin:6px 0;}')+'#aggregateThermalReceipt .rline{display:flex;justify-content:space-between;gap:4mm;margin:3px 0;}@page{margin:0;}';
+  const continuousCss=options.continuousReceipt?'@media print{html,body,#aggregateThermalReceipt,#aggregateThermalReceipt .receipt-paper,#aggregateThermalReceipt .upper-man-weekly,#aggregateThermalReceipt .um-frame,#aggregateThermalReceipt table,#aggregateThermalReceipt tbody{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;break-before:auto!important;break-after:auto!important;break-inside:auto!important;page-break-before:auto!important;page-break-after:auto!important;page-break-inside:auto!important;}}':'';
   try{
     win.document.open();
-    win.document.write('<!doctype html><html><head><meta charset="UTF-8"><title>'+esc(title)+'</title><style>'+css+'</style><style id="aggregateThermalPageSize"></style></head><body><div id="aggregateThermalReceipt"'+(voucherBillTypography?' class="voucher-bill-typography"':'')+'>'+html+'</div>'+(voucherBillTypography?'':'')+'</body></html>');
+    win.document.write('<!doctype html><html><head><meta charset="UTF-8"><title>'+esc(title)+'</title><style>'+css+continuousCss+'</style><style id="aggregateThermalPageSize"></style></head><body><div id="aggregateThermalReceipt"'+(voucherBillTypography?' class="voucher-bill-typography"':'')+'>'+html+'</div>'+(voucherBillTypography?'':'')+'</body></html>');
     win.document.close();
     if(voucherBillTypography)applyVoucherBillTypography(win.document.getElementById('aggregateThermalReceipt'));
     if(options.settledSizing){
-      if(await prepareSettledThermalPage(win,win.document.getElementById('aggregateThermalReceipt'),win.document.getElementById('aggregateThermalPageSize'))){win.focus();win.print();}
+      if(await prepareSettledThermalPage(win,win.document.getElementById('aggregateThermalReceipt'),win.document.getElementById('aggregateThermalPageSize'),options.continuousReceipt)){win.focus();win.print();}
       return;
     }
     if(win.document.readyState!=='complete')await new Promise(resolve=>win.addEventListener('load',resolve,{once:true}));
@@ -18959,7 +19018,7 @@ function batamWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
 }
 function bfWeeklyDateKey(date){return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
 function bfWeeklyWorkDateRange(now=new Date()){
- const today=new Date(now);today.setHours(0,0,0,0);const start=new Date(today);start.setDate(start.getDate()-(start.getDay()+1)%7);const min=new Date(today);min.setDate(min.getDate()-2);
+ const today=new Date(now);today.setHours(0,0,0,0);const start=new Date(today);start.setDate(start.getDate()-(start.getDay()+1)%7);const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
  return {today:bfWeeklyDateKey(today),min:bfWeeklyDateKey(min<start?start:min)};
 }
 function bfWeeklyWorkDateValid(value,now=new Date()){
@@ -20492,7 +20551,9 @@ function bindCurrentWeekWorkerVoucherDoubleClick(){
   document.getElementById('btnAddUpperMaterialRow')?.addEventListener('click',()=>addUpperDistributionRow('material'));
   if(document.getElementById('upperDistributionRows')) bindUpperDistributionRows();
   document.getElementById('btnCreateUpperVoucher')?.addEventListener('click',createUpperDistribution);   document.getElementById('btnSaveUpperPending')?.addEventListener('click',saveUpperPending);
-  document.getElementById('upperTodayIssuedCard')?.addEventListener('click',()=>{window.__upperMovementMode='today';goto('upperIssuedReport');});
+  document.getElementById('upperTodayIssuedCard')?.addEventListener('click',()=>{if(upperManContext()){openUpperManAllProduction();return;}window.__upperMovementMode='today';goto('upperIssuedReport');});
+  document.getElementById('upperAllProductionBack')?.addEventListener('click',()=>goto('distributeUpper'));
+  document.getElementById('upperAllProductionPrint')?.addEventListener('click',printUpperManAllProduction);
   document.getElementById('upperTodayReceivedCard')?.addEventListener('click',()=>{if(supplierProductionReportScope())supplierProductionReportFilters.received.mode='week';window.__upperMovementMode='today';goto('upperReceivedReport');});
   document.getElementById('upperMovementBack')?.addEventListener('click',()=>goto('distributeUpper'));
   document.querySelectorAll('[data-upper-movement-period]').forEach(b=>b.addEventListener('click',()=>{window.__upperMovementMode=b.dataset.upperMovementPeriod;render();}));
