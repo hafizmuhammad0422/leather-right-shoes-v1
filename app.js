@@ -12721,7 +12721,7 @@ function pageUpperManAllProduction(){
 }
 function showCombinedProductionPreview(html,title){
   modal('<h3>'+esc(title)+'</h3><div id="combinedProductionPreview">'+html+'</div><div class="modal-actions"><button type="button" class="btn brass" id="combinedProductionPreviewPrint">Print</button><button type="button" class="btn ghost" id="combinedProductionPreviewClose">Close</button></div>');
-  const dialog=document.querySelector('#modalRoot .modal');if(dialog){dialog.style.width='min(440px, calc(100vw - 24px))';dialog.style.maxHeight='90dvh';dialog.style.overflow='auto';}
+  const dialog=document.querySelector('#modalRoot .modal');if(dialog){dialog.style.width='min(440px, calc(100vw - 24px))';dialog.style.maxHeight='90dvh';dialog.style.overflow='auto';if(window.matchMedia('(min-width:901px)').matches){dialog.style.height='calc(100dvh - 24px)';dialog.style.maxHeight='calc(100dvh - 24px)';dialog.style.boxSizing='border-box';}}
   document.getElementById('combinedProductionPreviewPrint').onclick=()=>printAggregateThermal(html,title,'element',{settledSizing:true,continuousReceipt:true});
   document.getElementById('combinedProductionPreviewClose').onclick=closeModal;
 }
