@@ -15587,30 +15587,37 @@ function shoeBoxCurrentProductTotalAtoms(supplier,product){
   return Math.max(0,Number(b.opening)||0)+Math.max(0,Number(b.newAtom)||0);
 }
 function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes='',voucherId=''){
-  const supplier=getShoeBoxSuppliers()[supplierIndex]; const ids=purchaseIds.map(String); const rows=(supplier?.purchases||[]).filter(p=>ids.includes(String(p.id))); if(!supplier||!rows.length)return '';
-  const voucher=Array.isArray(supplier.receiveVouchers)?supplier.receiveVouchers.find(v=>voucherId?String(v.id)===String(voucherId):(v.purchaseIds||[]).some(id=>ids.includes(String(id)))):null;
-  const voucherNo=String(voucher?.voucherNo||rows[0].voucherNo||'—');
-  const totalAtoms=rows.reduce((sum,p)=>sum+(Number(p.atoms ?? p.items)||0),0);
-  const row0={...rows[0],supplierIndex,totalAtoms};
-  const cfg=shoeBoxVoucherFieldConfig();
-  const lines=Object.keys(cfg).filter(f=>!['productName','atoms','totalAtoms','receivingSummary'].includes(f)).map(f=>shoeBoxVoucherLine(f,row0,supplier,voucherNo)+(f==='voucherNo'?sbRickshawPheraHtml(voucher):'')).join('');
-  const showProduct=cfg.productName?.show!==false;
-  const showReceived=cfg.atoms?.show!==false;
-  const productHeader=cfg.productName?.label||'Product Name';
-  const receivedHeader=cfg.atoms?.label||'Received Atoms';
-  const productRows=(showProduct||showReceived)?rows.map(p=>`<tr>${showProduct?`<td style="${cfg.productName?.bold===true?'font-weight:900;':''}">${esc(p.productName)}</td>`:''}${showReceived?`<td style="text-align:right;${cfg.atoms?.bold===true?'font-weight:900;':''}">${shoeBoxQuantityDisplay(p.atoms ?? p.items)} Atoms</td>`:''}</tr>`).join(''):'';
-  const header=(showProduct||showReceived)?`<table style="width:100%;font-size:11px;border-collapse:collapse;"><thead><tr>${showProduct?`<th style="text-align:left;${cfg.productName?.bold===true?'font-weight:900;':''}">${esc(productHeader)}</th>`:''}${showReceived?`<th style="text-align:right;${cfg.atoms?.bold===true?'font-weight:900;':''}">${esc(receivedHeader)}</th>`:''}</tr></thead><tbody>${productRows}</tbody></table>`:'';
-  const totalLine=cfg.totalAtoms?.show!==false?`<div class="rline" style="${cfg.totalAtoms?.bold===true?'font-weight:900;':''}"><span>${esc(cfg.totalAtoms?.label||'Total Atoms')}:</span><span>${shoeBoxQuantityDisplay(totalAtoms)} Atoms</span></div>`:'';
-  const summaryByProduct=new Map();
-  (supplier.products||[]).forEach(product=>{
-    const pid=String(product?.id||product?.name||'');
-    if(!pid || summaryByProduct.has(pid))return;
-    const total=shoeBoxHistoricalProductAtomsAt(supplier,product.id,voucher);
-    summaryByProduct.set(pid,{name:product?.name||'Product',total});
+  const savedVouchers=settings.shoeBoxSuppliers?.[supplierIndex]?.receiveVouchers;
+  const supplier=settings.shoeBoxSuppliers?.[supplierIndex]||getShoeBoxSuppliers()[supplierIndex],ids=new Set((purchaseIds||[]).map(String)),selected=(supplier?.purchases||[]).filter(purchase=>ids.has(String(purchase.id)));if(!supplier||!selected.length)return '';
+  const voucher=(supplier.receiveVouchers||[]).find(item=>voucherId?String(item.id)===String(voucherId):(item.purchaseIds||[]).some(id=>ids.has(String(id)))),voucherNo=String(voucher?.voucherNo||selected[0].voucherNo||'\u2014'),stamp=new Date(voucher?.createdAt||voucher?.date||selected[0].date),base=new Date(selected[0].workDate?selected[0].workDate+'T00:00:00':voucher?.date||selected[0].date);if(!Number.isFinite(+base)||!Number.isFinite(+stamp))return '';
+  const range=getUpperWorkWeekRange(base),now=new Date(),currentRange=getUpperWorkWeekRange(now),through=base>=currentRange.start&&base<currentRange.end?new Date(now):new Date(stamp);if(base>=currentRange.start&&base<currentRange.end)through.setHours(23,59,59,999);if(through>=range.end)through.setTime(range.end.getTime()-1);
+  const tripIds=new Set(),tripNumbers=new Set(),tripPurchases=new Set();let trips=0;
+  (Array.isArray(savedVouchers)?savedVouchers:supplier.receiveVouchers||[]).forEach(record=>{
+    if(!record||record.deletedAt||record.cancelledAt||record.canceledAt||record.deleted===true||record.cancelled===true||record.canceled===true||record.isCancelled===true||record.isCanceled===true||/^(?:deleted|cancelled|canceled|void|voided)$/i.test(String(record.status||'').trim()))return;
+    const date=new Date(record.workDate?record.workDate+'T00:00:00':record.date);if(!Number.isFinite(+date)||date<range.start||date>=range.end||date.getDay()===5)return;
+    const id=record.id!=null&&String(record.id)!==''?String(record.id):'',number=record.voucherNo!=null&&String(record.voucherNo)!==''?String(record.voucherNo):'',purchases=[...new Set((record.purchaseIds||[]).map(String))].sort(),purchaseKey=purchases.length?JSON.stringify(purchases):'',fallback=JSON.stringify([record.date||record.workDate,purchases]);
+    if((id&&tripIds.has(id))||(number&&tripNumbers.has(number))||(purchaseKey&&tripPurchases.has(purchaseKey))||(!id&&!number&&tripIds.has('legacy:'+fallback)))return;
+    if(id)tripIds.add(id);else if(!number)tripIds.add('legacy:'+fallback);if(number)tripNumbers.add(number);if(purchaseKey)tripPurchases.add(purchaseKey);trips++;
   });
-  const summary=cfg.receivingSummary?.show!==false?`<div style="margin-top:10px;padding-top:8px;border-top:1px dashed #777;"><div style="font-weight:800;text-align:center;margin-bottom:5px;${cfg.receivingSummary?.bold===true?'font-weight:900;':''}">${esc(cfg.receivingSummary?.label||'RECEIVING SUMMARY')}</div>${Array.from(summaryByProduct.values()).map(x=>`<div class="rline" style="${cfg.receivingSummary?.bold===true?'font-weight:900;':''}"><span>${esc(x.name)}</span><span>TOTAL ATOMS: ${shoeBoxQuantityDisplay(x.total)} Atoms</span></div>`).join('')}${(()=>{const totalReceivingItems=Array.from(summaryByProduct.values()).reduce((sum,x)=>sum+(Number(x.total)||0),0);return `<div class="rline" style="margin-top:6px;padding-top:6px;border-top:1px dashed #777;font-weight:900;"><span>TOTAL RECEIVING ITEMS:</span><span>${shoeBoxQuantityDisplay(totalReceivingItems)} ITEMS</span></div>`;})()}</div>`:'';
-  return `<div id="sbsReceiveVoucherPrint" class="receipt-paper" style="width:80mm;margin:auto;"><h3 style="text-align:center;margin:0;">${esc(settings.factoryName||'Leather Right Shoes')}</h3>${settings.address?`<div class="sub">${esc(settings.address)}</div>`:''}<div class="sub" style="font-weight:700;margin-top:3px;">SHOE BOX RECEIVE VOUCHER</div><hr>${lines}${Object.prototype.hasOwnProperty.call(cfg,'voucherNo')?'':sbRickshawPheraHtml(voucher)}<hr>${header}${totalLine}${summary}</div>`;
+  const displayName=shoeBoxSupplierDisplayName(supplier,supplierIndex),urduNames={'akbar box maker':'\u0627\u06a9\u0628\u0631 \u0628\u0627\u06a9\u0633 \u0645\u06cc\u06a9\u0631','shabbir gujjar box maker':'\u0634\u0628\u06cc\u0631 \u06af\u062c\u0631 \u0628\u0627\u06a9\u0633 \u0645\u06cc\u06a9\u0631'},supplierName=urduNames[String(displayName).trim().toLowerCase().replace(/\s+/g,' ')]||displayName;
+  const unique=new Map();(supplier.purchases||[]).forEach((purchase,index)=>{if(purchase.deletedAt||purchase.deleted===true)return;const date=new Date(purchase.workDate?purchase.workDate+'T00:00:00':purchase.date);if(!Number.isFinite(+date)||date<range.start||date>=range.end||date>through||date.getDay()===5)return;unique.set(purchase.id!=null&&String(purchase.id)!==''?'id:'+String(purchase.id):'legacy:'+index,{purchase,date,qty:shoeBoxPurchaseItems(purchase)});});
+  const rows=[...unique.values()],articles=new Map();rows.forEach(({purchase,qty})=>{if(qty<=0)return;const key=purchase.productId?'id:'+String(purchase.productId):'name:'+String(purchase.productName||''),article=articles.get(key)||{name:String(purchase.productName||(supplier.products||[]).find(product=>String(product.id)===String(purchase.productId))?.name||'Product'),qty:0};article.qty+=qty;articles.set(key,article);});
+  const names=['\u06c1\u0641\u062a\u06c1','\u0627\u062a\u0648\u0627\u0631','\u067e\u06cc\u0631','\u0645\u0646\u06af\u0644','\u0628\u062f\u06be','\u062c\u0645\u0639\u0631\u0627\u062a'],total=rows.reduce((sum,row)=>sum+row.qty,0);
+  const days=names.map((name,index)=>{const date=new Date(range.start);date.setDate(date.getDate()+index);const key=sbBillDateKey(date),daily=rows.filter(row=>sbBillDateKey(row.date)===key),qty=daily.reduce((sum,row)=>sum+row.qty,0);return '<tr><td dir="rtl">'+name+'</td><td>'+esc(qty?shoeBoxQuantityDisplay(qty)+' \u0622\u0626\u0679\u0645\u0632':'\u2014')+'</td></tr>';}).join('');
+  const received='<div class="um-frame um-received"><div class="um-received-title">TOTAL RECEIVED</div><div class="um-received-row um-received-article" style="font-weight:700"><span>Article</span><span>Received</span></div>'+[...articles.values()].map(article=>'<div class="um-received-row um-received-article"><span>'+esc(article.name)+'</span><span>'+esc(shoeBoxQuantityDisplay(article.qty)+' \u0622\u0626\u0679\u0645\u0632')+'</span></div>').join('')+'</div><div class="um-frame um-total-single"><span>TOTAL RECEIVED</span><span>'+esc(shoeBoxQuantityDisplay(total)+' \u0622\u0626\u0679\u0645\u0632')+'</span></div>';
+  const date=base.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),time=stamp.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+  return urduProductionWeeklyVoucherHtml(`<div id="sbsReceiveVoucherPrint" class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;"><div class="bf-weekly-voucher"><style>
+    .bf-weekly-voucher{box-sizing:border-box;width:100%;padding:4mm 0 1mm;color:#000;background:#fff;font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif;font-weight:600;line-height:1.1;text-align:center;}
+    .bf-weekly-voucher *{box-sizing:border-box;}.bf-weekly-voucher .um-brand{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:700;font-size:5.2mm;letter-spacing:0;white-space:nowrap;}.bf-weekly-voucher .um-title{font-family:"Arial Narrow",Arial,sans-serif;font-weight:600;display:flex;align-items:center;gap:1.5mm;font-size:4.25mm;margin:1.5mm 0 2mm;white-space:nowrap;}.bf-weekly-voucher .um-title:before,.bf-weekly-voucher .um-title:after{content:'';flex:1;border-top:1px solid #000;}
+    .bf-weekly-voucher .um-person{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1mm;font-size:4.6mm;min-height:7mm;align-items:center;}.bf-weekly-voucher .um-person span{min-width:0;white-space:nowrap;text-align:left;}.bf-weekly-voucher .um-person span+span{white-space:nowrap;padding-left:2mm;text-align:right;}.bf-weekly-voucher .um-person span+span{border-left:1px solid #000;}.bf-weekly-voucher .um-stamp{font-weight:600;display:flex;justify-content:space-between;align-items:center;font-family:'Arial Narrow',Arial,sans-serif;font-size:3.6mm;margin:2mm 0;}
+    .bf-weekly-voucher .um-rule{border:0;border-top:1px dashed #000;margin:2mm 0;}.bf-weekly-voucher .um-frame{border:1.5px solid #000;border-radius:1.2mm;overflow:hidden;margin-top:1mm;}.bf-weekly-voucher table{border-collapse:collapse;table-layout:fixed;width:100%;margin:0;color:#000;font-size:4.4mm;}.bf-weekly-voucher th,.bf-weekly-voucher td{padding:0 1mm;height:6.25mm;text-align:center;border:0;border-bottom:1px solid #000;font-weight:600;background:#fff;}.bf-weekly-voucher tr:last-child td{border-bottom:0;}.bf-weekly-voucher th+th,.bf-weekly-voucher td+td{border-left:1px solid #000;}.bf-weekly-voucher th{font-family:"Arial Narrow",Arial,sans-serif;background:#fff!important;color:#000!important;font-weight:700;height:7.5mm;font-size:4.3mm;}.bf-weekly-voucher td[dir=rtl]{color:#000!important;font-weight:700;}.bf-weekly-voucher td[dir=rtl],.bf-weekly-voucher th[dir=rtl],.bf-weekly-voucher td.um-holiday{font-family:'Noto Naskh Arabic',serif;font-size:4.8mm;}
+    .bf-weekly-voucher .um-total-title{font-family:"Arial Narrow",Arial,sans-serif;font-weight:700;height:7mm;display:flex;align-items:center;justify-content:center;font-size:4.8mm;}.bf-weekly-voucher .um-total-single{display:flex;justify-content:space-between;align-items:center;gap:1mm;padding:1mm 2mm;min-height:7mm;font-family:"Arial Narrow",Arial,sans-serif;font-size:3.8mm;font-weight:600;}.bf-weekly-voucher .um-totals{display:flex;gap:1mm;margin-top:1mm;}.bf-weekly-voucher .um-unit{font-family:"Arial Narrow",Arial,sans-serif;font-weight:600;flex:1;min-width:0;border:1.5px solid #000;border-radius:1mm;height:8mm;display:flex;align-items:center;justify-content:center;font-size:5mm;white-space:nowrap;}.bf-weekly-voucher .um-money td:first-child,.bf-weekly-voucher .um-pending td:first-child{text-align:left;padding-left:2mm;}.bf-weekly-voucher .um-money td{font-size:4mm;height:6mm;}.bf-weekly-voucher .um-money .um-remaining td{height:8mm;font-size:5.5mm;font-weight:700;}.bf-weekly-voucher .um-footer{font-family:'Arial Narrow',Arial,sans-serif;font-size:3mm;font-weight:700;letter-spacing:.15mm;}
+    .bf-weekly-voucher .um-total-single span:first-child,.bf-weekly-voucher .um-pending td{font-weight:700;}
+    .bf-weekly-voucher .um-received-title{font-family:"Arial Narrow",Arial,sans-serif;font-size:4.8mm;font-weight:700;padding:1mm;}.bf-weekly-voucher .um-received-row{display:grid;grid-template-columns:36% 28% 36%;align-items:center;border-top:1px solid #000;padding:1mm .5mm;font-size:3.4mm;gap:0;}.bf-weekly-voucher .um-received-article{grid-template-columns:34% 24% 20% 22%;font-size:3mm;}.bf-weekly-voucher .um-received-row span{min-width:0;overflow-wrap:anywhere;}.bf-weekly-voucher .um-received-article span:first-child{text-align:left;}
+  
+#sbsReceiveVoucherPrint .um-received-row{grid-template-columns:58% 42%!important;}#sbsReceiveVoucherPrint .um-person>span,#sbsReceiveVoucherPrint .um-person>div{min-width:0;white-space:normal;overflow-wrap:anywhere;direction:rtl;unicode-bidi:isolate;text-align:right;}#sbsReceiveVoucherPrint .sbs-rickshaw-trips{border-right:1px solid #000;padding-right:2mm;}</style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title" style="white-space:normal;">SHOES BOX SUPPLIERS WEEKLY VOUCHER</div><div class="um-person"><span class="sbs-supplier-name">${esc(supplierName)}</span><div class="sbs-rickshaw-trips">\u0631\u06a9\u0634\u06c1 \u0686\u06a9\u0631 ${esc(trips)}</div></div><div class="um-stamp"><span>${esc(date)}</span><span>&#9679;</span><span>${esc(time)}</span></div><hr class="um-rule"><div class="um-frame"><table><colgroup><col style="width:52%"><col style="width:48%"></colgroup><thead><tr><th dir="rtl">\u062f\u0646</th><th>Received Items</th></tr></thead><tbody>${days}</tbody></table></div>${received}<hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div></div>`);
 }
+
 function shoeBoxVoucherLine(field,row,supplier,voucherNo){
   const cfg=shoeBoxVoucherFieldConfig()[field]; if(!cfg?.show)return '';
   let value='';
@@ -15664,24 +15671,7 @@ function openShoeBoxReceiveVoucherBuilder(supplierIndex,initialPurchaseIds){
   renderBuilder();
 }
 function printShoeBoxVoucherHtml(html,voucherNo){
-  const w=window.open('','_blank','width=420,height=720');
-  if(!w){toast('Print window was blocked. Please allow pop-ups for this site and try again.');return;}
-  w.document.open();
-  w.document.write(`<!doctype html><html><head><title>Receive Voucher ${esc(voucherNo)}</title>
-  <style>
-    @page{size:80mm auto;margin:0}
-    html,body{margin:0;padding:0;width:80mm}
-    body{font-family:Arial,sans-serif;padding:4mm;box-sizing:border-box}
-    .receipt-paper{width:100%;margin:auto}
-    .rline{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin:3px 0}
-    .sub{font-size:10px;text-align:center}.footer{font-size:10px}
-    table{width:100%;font-size:9px}th,td{padding:2px 1px}
-    hr{border:0;border-top:1px dashed #777;margin:6px 0}
-    @media print{html,body{width:80mm}.receipt-paper{width:100%}}
-  </style></head><body class="voucher-bill-typography">${html}</body></html>`);
-  w.document.close();applyVoucherBillTypography(w.document.body);
-  w.focus();
-  w.print();
+  return printAggregateThermal(html,'SHOES BOX SUPPLIERS WEEKLY VOUCHER #'+voucherNo,'element',{settledSizing:true,continuousReceipt:true});
 }
 
 function openShoeBoxReceiveVoucherModal(supplierIndex,purchaseIds,autoPrint=false,voucherId=''){
