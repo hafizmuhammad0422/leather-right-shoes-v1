@@ -7708,16 +7708,69 @@ function pressMeterMovementData(mode='today',workerId='',now=new Date()){
 }
 function pressMeterMovementTable(data,printing=false){
   const cell='border:1px solid #aaa;padding:4px;vertical-align:top;overflow-wrap:anywhere;',width=printing?'100%':Math.max(600,(data.columns.length+3)*110)+'px';
-  return '<div style="max-width:100%;overflow-x:auto;"><table style="width:'+width+';min-width:'+(printing?'0':'100%')+';border-collapse:collapse;table-layout:fixed;font-size:'+(printing?Math.max(7,12-data.columns.length):12)+'px;"><thead><tr>'+['Date','Worker Name',...data.columns.map(column=>column.name),'Total Meter'].map(label=>'<th style="'+cell+'">'+esc(label)+'</th>').join('')+'</tr></thead><tbody>'+(data.rows.length?data.rows.map(row=>'<tr><td style="'+cell+'">'+esc(row.date)+'</td><td style="'+cell+'">'+esc(row.workerName)+'</td>'+data.columns.map(column=>'<td style="'+cell+'">'+esc(row.quantities.get(column.key)||'0')+'</td>').join('')+'<td style="'+cell+'"><b>'+esc(row.total)+'</b></td></tr>').join(''):'<tr><td colspan="'+(data.columns.length+3)+'" style="'+cell+'">No meter production for this period.</td></tr>')+'</tbody><tfoot><tr><th colspan="2" style="'+cell+'">Total Meter</th>'+data.columns.map(column=>'<th style="'+cell+'">'+esc(data.totals.get(column.key)||'0')+'</th>').join('')+'<th style="'+cell+'">'+esc(data.total)+'</th></tr></tfoot></table></div>';
+  return '<div style="max-width:100%;overflow-x:auto;"><table style="width:'+width+';min-width:'+(printing?'0':'100%')+';border-collapse:collapse;table-layout:fixed;font-size:'+(printing?Math.max(7,12-data.columns.length):12)+'px;"><thead><tr>'+['Date','Worker Name',...data.columns.map(column=>column.name),'Total Meter',...(printing?[]:['Actions'])].map(label=>'<th style="'+cell+'">'+esc(label)+'</th>').join('')+'</tr></thead><tbody>'+(data.rows.length?data.rows.map((row,index)=>'<tr><td style="'+cell+'">'+esc(row.date)+'</td><td style="'+cell+'">'+esc(row.workerName)+'</td>'+data.columns.map(column=>'<td style="'+cell+'">'+esc(row.quantities.get(column.key)||'0')+'</td>').join('')+'<td style="'+cell+'"><b>'+esc(row.total)+'</b></td>'+(printing?'':'<td style="'+cell+'"><button type="button" class="btn ghost small" data-press-meter-edit-row="'+index+'">Edit</button> <button type="button" class="btn red small" data-press-meter-delete-row="'+index+'">Delete</button></td>')+'</tr>').join(''):'<tr><td colspan="'+(data.columns.length+(printing?3:4))+'" style="'+cell+'">No meter production for this period.</td></tr>')+'</tbody><tfoot><tr><th colspan="2" style="'+cell+'">Total Meter</th>'+data.columns.map(column=>'<th style="'+cell+'">'+esc(data.totals.get(column.key)||'0')+'</th>').join('')+'<th style="'+cell+'">'+esc(data.total)+'</th>'+(printing?'':'<th style="'+cell+'"></th>')+'</tr></tfoot></table></div>';
 }
 function pagePressMeterMovement(){
   const data=pressMeterMovementData(pressMeterMovementFilter.mode,pressMeterMovementFilter.workerId);
   return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><h2>Shoes Press Man - Cutting Meter</h2><button type="button" class="btn brass" id="pressMeterReportPrint">Print</button></div><div style="display:flex;gap:8px;flex-wrap:wrap;"><label>Period<select id="pressMeterReportMode"><option value="today" '+(data.mode==='today'?'selected':'')+'>Today</option><option value="week" '+(data.mode==='week'?'selected':'')+'>This Week (Saturday-Thursday)</option></select></label><label>Press Man<select id="pressMeterReportWorker"><option value="">All Press Men</option>'+workers.filter(worker=>workerCategoryCompareKey(worker.category)==='shoes press man').map(worker=>'<option value="'+esc(worker.id)+'" '+(String(worker.id)===data.workerId?'selected':'')+'>'+esc(worker.name)+'</option>').join('')+'</select></label></div><p>All quantities are Meter. '+esc(upperLocalDateKey(data.start))+' to '+esc(upperLocalDateKey(new Date(data.end.getTime()-1)))+'</p>'+pressMeterMovementTable(data)+'</div>';
 }
 function bindPressMeterMovement(){
+  const rowAction=(button,deleting)=>{const data=pressMeterMovementData(pressMeterMovementFilter.mode,pressMeterMovementFilter.workerId),index=Number(deleting?button.dataset.pressMeterDeleteRow:button.dataset.pressMeterEditRow),row=data.rows[index];if(row)openPressMeterRowEditor(row,deleting);};
+  document.querySelectorAll('[data-press-meter-edit-row]').forEach(button=>button.addEventListener('click',()=>rowAction(button,false)));
+  document.querySelectorAll('[data-press-meter-delete-row]').forEach(button=>button.addEventListener('click',()=>rowAction(button,true)));
   document.getElementById('pressMeterReportMode')?.addEventListener('change',event=>{pressMeterMovementFilter.mode=event.target.value;render();});
   document.getElementById('pressMeterReportWorker')?.addEventListener('change',event=>{pressMeterMovementFilter.workerId=event.target.value;render();});
   document.getElementById('pressMeterReportPrint')?.addEventListener('click',()=>{const data=pressMeterMovementData(pressMeterMovementFilter.mode,pressMeterMovementFilter.workerId),html='<div class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;"><h3>Shoes Press Man - Cutting Meter</h3><div>'+esc(upperLocalDateKey(data.start))+' to '+esc(upperLocalDateKey(new Date(data.end.getTime()-1)))+'</div><p>All quantities are Meter</p>'+pressMeterMovementTable(data,true)+'</div>';printAggregateThermal(html,'Shoes Press Man Meter Production','element',{settledSizing:true,continuousReceipt:true});});
+}
+function pressMeterRowEntries(row){
+  return (settings.shoesPressCuttingMeters||[]).filter(record=>{
+    if(String(record.workerId)!==String(row.workerId))return false;
+    const date=upperWorkTimestamp(record);if(!Number.isFinite(+date)||upperLocalDateKey(date)!==row.date)return false;
+    if(record.allocationVersion!==1)return Number.isFinite(Number(record.meterQuantity))&&Number(record.meterQuantity)>0;
+    const parent=(settings.upperDistributions||[]).find(voucher=>String(voucher.id)===String(record.voucherId));
+    return !record.deletedAt&&record.deleted!==true&&parent&&!parent.deletedAt&&parent.deleted!==true&&String(parent.workerId)===String(record.workerId)&&(record.allocations||[]).some(item=>Number(item.meterQuantity)>0);
+  });
+}
+let pressMeterEntrySaving=false;
+async function pressSaveMeterEntry(record,snapshot,quantities,deleting=false){
+  if(pressMeterEntrySaving)return false;
+  const entries=settings.shoesPressCuttingMeters||[],index=entries.indexOf(record);if(index<0||JSON.stringify(record)!==snapshot){toast('This meter entry changed. Reopen the report and try again.');return false;}
+  let updated;
+  if(!deleting){
+    const lines=record.allocationVersion===1?record.allocations:[record];if(!Array.isArray(quantities)||quantities.length!==lines.length){toast('Meter entry changed. Reopen it before saving.');return false;}
+    const values=quantities.map(value=>pressMeterDecimal(String(value??'').trim()));if(values.some(value=>!value)){toast('Enter valid non-negative meter quantities.');return false;}
+    const total=pressMeterDecimal(pressMeterSum(values.map(value=>value.text)));if(!total){toast('Total Meter Quantity is invalid.');return false;}
+    updated={...record,meterQuantity:total.value,meterQuantityExact:total.text,editedAt:new Date().toISOString()};
+    if(record.allocationVersion===1)updated.allocations=lines.map((line,i)=>({...line,meterQuantity:values[i].value,meterQuantityExact:values[i].text}));
+  }
+  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);pressMeterEntrySaving=true;
+  try{
+    settings.shoesPressCuttingMeters=deleting?entries.filter((_,i)=>i!==index):entries.map((entry,i)=>i===index?updated:entry);
+    auditLog.push({id:uid(),date:new Date().toISOString(),action:deleting?'Press Meter Entry Deleted':'Press Meter Entry Edited',details:JSON.stringify({id:record.id,voucherId:record.voucherId,workerId:record.workerId,workDate:record.workDate,meterQuantity:record.meterQuantity,updatedMeterQuantity:updated?.meterQuantity})});
+    if(!await saveCriticalCloudState())throw new Error('Save failed');
+  }catch(error){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Meter entry was NOT saved. Please try again.');return false;}
+  finally{pressMeterEntrySaving=false;}
+  closeModal();render();toast(deleting?'Meter entry deleted':'Meter entry updated');return true;
+}
+function openPressMeterRowEditor(row,deleting=false){
+  const entries=pressMeterRowEntries(row);if(!entries.length){toast('Meter entry not found. Refresh the report.');return;}
+  modal('<h3>'+ (deleting?'Delete':'Edit')+' Cutting Meter Entry</h3><p>'+esc(row.workerName)+' - '+esc(row.date)+'</p><label>Saved entry</label><select id="pressMeterEditEntry">'+entries.map((record,index)=>'<option value="'+index+'">'+esc((record.voucherNo?'Voucher #'+record.voucherNo+' - ':'')+(record.createdAt||record.date||record.id||('Entry '+(index+1))))+' - '+esc(record.meterQuantityExact||record.meterQuantity)+' Meter</option>').join('')+'</select><div id="pressMeterEditFields"></div><div class="modal-actions"><button type="button" class="btn '+(deleting?'red':'brass')+'" id="pressMeterEditSave">'+(deleting?'Delete selected entry':'Save Changes')+'</button><button type="button" class="btn ghost" id="pressMeterEditCancel">Cancel</button></div>');
+  let selected,snapshot;
+  const refresh=()=>{selected=entries[Number(document.getElementById('pressMeterEditEntry').value)];snapshot=JSON.stringify(selected);const lines=selected.allocationVersion===1?selected.allocations:[selected];document.getElementById('pressMeterEditFields').innerHTML=lines.map(line=>'<label style="display:block;margin-top:8px;">'+esc(line.materialName||line.articleName||'Legacy Meter')+' (Meter)<input data-press-meter-edit-quantity type="number" min="0" step="any" value="'+esc(line.meterQuantityExact||line.meterQuantity||'0')+'" '+(deleting?'readonly':'')+'></label>').join('')+(deleting?'<p>Only this selected meter entry will be deleted. Normal cutting and kharcha stay unchanged.</p>':'');};
+  document.getElementById('pressMeterEditEntry').onchange=refresh;refresh();
+  document.getElementById('pressMeterEditCancel').onclick=closeModal;
+  document.getElementById('pressMeterEditSave').onclick=async()=>{const button=document.getElementById('pressMeterEditSave');button.disabled=true;try{await pressSaveMeterEntry(selected,snapshot,[...document.querySelectorAll('[data-press-meter-edit-quantity]')].map(input=>input.validity?.badInput?'invalid':input.value),deleting);}finally{button.disabled=false;}};
+}
+function pressOpenLatestWorkerVoucher(workerId){
+  const latest=(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(workerId)&&upperProductionRecordMatches(record)&&!record.deletedAt&&record.deleted!==true).sort((a,b)=>(new Date(b.createdAt||b.date).getTime()||0)-(new Date(a.createdAt||a.date).getTime()||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0))[0];
+  if(!latest){toast('No saved voucher for this worker.');return;}showUpperVoucher(latest);
+}
+let pressWorkerCardClickTimer;
+function bindPressWorkerCards(){
+  document.querySelectorAll('[data-upper-pickworker]').forEach(button=>{
+    button.addEventListener('click',event=>{clearTimeout(pressWorkerCardClickTimer);if(event.detail>1)return;pressWorkerCardClickTimer=setTimeout(()=>supplierProductionBillWorker(button.dataset.upperPickworker)?openSupplierProductionProfile(button.dataset.upperPickworker):setUpperWorkerSelection(button.dataset.upperPickworker),500);});
+    button.addEventListener('dblclick',event=>{event.preventDefault();clearTimeout(pressWorkerCardClickTimer);pressOpenLatestWorkerVoucher(button.dataset.upperPickworker);});
+  });
 }
 function pressMeterReportRows(workerId,start,end){
   const groups=new Map();pressCuttingMeterRecords().filter(record=>String(record.workerId)===String(workerId)).forEach(record=>{const date=upperWorkTimestamp(record);if(!Number.isFinite(+date)||date.getDay()===5||(start&&date<start)||(end&&date>=end))return;const key=record.meterMaterialId?'material:'+record.meterMaterialId:JSON.stringify([record.cuttingMeterArticleId||record.materialId||'',record.articleName]),group=groups.get(key)||{name:record.articleName||'Meter Material',meterQuantityExact:'0'};group.meterQuantityExact=pressMeterSum([group.meterQuantityExact,record.meterQuantityExact||record.meterQuantity]);groups.set(key,group);});return [...groups.values()];
@@ -7815,7 +7868,7 @@ function pageDistributeUpper(pageContext=workerProductionPageContext()){
 
     ${supplierProduction?'<div class="worker-production-details-row" style="display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:stretch;">':''}
     <div class="card bm-worker-card" data-press-worker-cards><style>.upper-compact-v15 [data-press-worker-cards] #upperWorkerCards{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),220px))!important;gap:6px!important;overflow-x:visible!important}.upper-compact-v15 [data-press-worker-cards] #upperWorkerCards .bm-worker-box{height:auto!important;min-height:150px!important;padding:5px 8px!important;display:grid!important;grid-template-columns:40px minmax(0,1fr);gap:3px 8px;align-items:center}.upper-compact-v15 [data-press-worker-cards] #upperWorkerCards .entity-photo{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;margin:0!important}.upper-compact-v15 [data-press-worker-cards] #upperWorkerCards .bm-worker-name{min-width:0;white-space:normal;overflow-wrap:anywhere}.upper-compact-v15 [data-press-worker-cards] #upperWorkerCards .bm-worker-box>div:not(.entity-photo):not(.bm-worker-name){grid-column:1/-1}</style>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;"><strong>Workers</strong><div style="display:flex;gap:6px;flex-wrap:wrap;"><button type="button" class="btn ghost small" id="pressAddWorker">+ Add Worker</button></div></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;"><strong>Workers</strong><div style="display:flex;gap:6px;flex-wrap:wrap;"></div></div>
       ${supplierProduction?'':`<div class="bm-worker-heading upper-worker-heading-v16"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">${shoeLamination?'':`<h3>Select ${esc(categoryLabel)}</h3><input id="upperWorkerSearch" type="search" aria-label="Search ${esc(categoryLabel)}" placeholder="Search worker" autocomplete="off" style="width:130px;max-width:100%;padding:4px 6px;font-size:12px;">`}</div>${articleOnly||shoeLamination?'':`<div class="production-total-baqi-v18">Total BAQI: <strong>${workerMoneyDisplay(totalBaqi)}</strong></div>`}<span>${workerCategoryCompareKey(upperProductionCategory)==='upper mans'?'Total Upper Mans':'Total '+esc(categoryLabel)+' Workers'}: <strong>${upperWorkers.length}</strong>${articleOnly?'':` • Pending: <strong>${shoeLamination?esc(upperShoeQuantityText(upperShoeFilterPending())):pendingTotal+' ATOMS'}</strong>`}<small style="display:block;font-size:11px;color:var(--muted);">Completed: ${completedWorkers} &bull; Pending: ${pendingWorkers}</small></span></div>`}
       <div class="bm-worker-grid" id="upperWorkerCards"${supplierProduction?' style="grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),220px))!important;gap:6px!important;"':''}>
         ${upperWorkers.length?upperCards.map(({w,completed})=>{return `${supplierProduction?'<div style="display:flex;flex-direction:column;gap:4px;">':''}<button type="button" class="pick-box bm-worker-box ${String(upperSelWorker)===String(w.id)?'selected':''}" data-upper-pickworker="${esc(w.id)}" data-upper-worker-name="${esc(String(w.name||''))}" title="${esc(w.name||'')}" style="position:relative;"><div class="entity-photo ${w.photo?'zoomable':''}" style="margin:auto;">${w.photo?`<img src="${w.photo}" alt="${esc(w.name||'')}">`:`<span>${initials(w.name||'')}</span>`}</div>${completed?`<span class="production-completed-tick" aria-label="Completed" title="Completed">&#10003;</span>`:''}<div class="bm-worker-name">${esc(w.name||'')}</div>${workerDefaultArticleCard(w,'upper')}${articleOnly||supplierProduction?'':(shoeLamination?'':upperDefaultMaterialCard(w))+`<div class="bm-worker-baqi">BAQI: ${workerMoneyDisplay(getWorkerSummaryAmount(w,'baqi'))}</div>`}</button>${supplierProduction?`<button type="button" class="btn ghost small" data-worker-production-bill="${esc(w.id)}">Create Bill</button></div>`:''}`;}).join(''):'<div class="empty">No active workers in '+esc(categoryLabel)+'.</div>'}
@@ -9152,7 +9205,7 @@ function upperVoucherFieldStyle(id){const f=(settings.upperVoucherCustomization|
     if(!['distributeUpper','upperIssuedReport','upperReceivedReport','upperPending'].includes(route.view))html=(navHistory.length?'<button type="button" class="btn ghost small" id="btnBackPage" style="margin-bottom:14px;margin-right:8px;">← Back</button>':'')+'<button type="button" class="btn ghost small" id="btnBackDashboard" style="margin-bottom:14px;">← Back to Dashboard</button>'+html;
     return html;
   }
-  function bind(){bindPressMeterAllocation();bindPressMeterMovement();document.getElementById('pressAddWorker')?.addEventListener('click',()=>openWorkerModal(null,'Shoes Press Man'));bindProductionWorkerFeatures();document.getElementById('btnBackDashboard')?.addEventListener('click',()=>goto('dashboard'));document.getElementById('btnBackPage')?.addEventListener('click',goBack);
+  function bind(){bindPressMeterAllocation();bindPressMeterMovement();bindProductionWorkerFeatures();document.getElementById('btnBackDashboard')?.addEventListener('click',()=>goto('dashboard'));document.getElementById('btnBackPage')?.addEventListener('click',goBack);
   document.getElementById('btnAddUpperArticles')?.addEventListener('click', ()=>goto('upperArticles'));
   document.getElementById('btnUpperArticleList')?.addEventListener('click', ()=>goto('upperArticles'));
   document.getElementById('btnAddUpperMaterial')?.addEventListener('click', ()=>openUpperMaterialModal());
@@ -9213,7 +9266,7 @@ function upperVoucherFieldStyle(id){const f=(settings.upperVoucherCustomization|
   document.getElementById('upperArticleSummaryCard')?.addEventListener('click',()=>{window.__shoesPressManUpperSummaryFilterMode='today';goto('upperArticleSummary');});document.getElementById('upperMaterialSummaryCard')?.addEventListener('click',()=>{window.__shoesPressManUpperSummaryFilterMode='today';goto('upperMaterialSummary');});
   document.getElementById('upperTotalLabour')?.addEventListener('click',()=>{window.__shoesPressManUpperLabourFilterMode='week';goto('upperLabourSummary');});
   document.getElementById('upperCategoryFilter')?.addEventListener('change',e=>openWorkerProductionPage(e.target.value));
-  document.querySelectorAll('[data-upper-pickworker]').forEach(b=>b.addEventListener('click',()=>supplierProductionBillWorker(b.dataset.upperPickworker)?openSupplierProductionProfile(b.dataset.upperPickworker):setUpperWorkerSelection(b.dataset.upperPickworker)));
+  bindPressWorkerCards();
   document.querySelectorAll('[data-worker-production-bill]').forEach(b=>b.addEventListener('click',()=>openSupplierProductionBill(b.dataset.workerProductionBill)));
   bindProductionWorkerSearch('upper');
 
