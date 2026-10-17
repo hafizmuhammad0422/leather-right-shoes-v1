@@ -15298,7 +15298,7 @@ function pageShoeBoxSuppliers(){
             <div style="min-width:0;flex:1;">
               <div style="font-size:18px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(displayName)}</div>
               <div style="font-size:12px;color:var(--muted);margin-top:5px;">${esc(supplier.ownerName||'Owner / Contact not added')}</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:3px;">${products.length} Product${products.length===1?'':'s'}</div><button type="button" class="btn brass small" style="margin-top:6px;" onclick="event.stopPropagation();openShoeBoxSupplierBillModal(${index})">Create Bill</button>
+              <div style="font-size:12px;color:var(--muted);margin-top:3px;">${products.length} Product${products.length===1?'':'s'}</div>
             </div>
           </div>
         </div>`;
@@ -15308,6 +15308,48 @@ function pageShoeBoxSuppliers(){
 }
 
 
+function openShoeBoxProductList(index,productId=null){
+  const supplier=getShoeBoxSuppliers()[index];if(!supplier)return;
+  const product=(supplier.products||[]).find(p=>String(p.id)===String(productId));
+  const units=[...new Set(['SET','ATOMS','BOX',...(supplier.products||[]).map(shoeBoxProductDisplayUnit)])];
+  document.getElementById('mainArea').innerHTML=`<div class="card"><h3>Product List — ${esc(shoeBoxSupplierDisplayName(supplier,index))}</h3><table><thead><tr><th>Product Name</th><th>Unit</th><th>Rate Per Unit</th><th></th></tr></thead><tbody>${(supplier.products||[]).map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(shoeBoxProductDisplayUnit(p))}</td><td>${esc(p.ratePerUnit??0)}</td><td><button class="btn ghost small" data-box-list-edit="${esc(p.id)}">Edit</button></td></tr>`).join('')}</tbody></table><h3>${product?'Edit':'Add'} Product</h3><label>Product Name</label><input id="sbpName" value="${esc(product?.name||'')}"><label>Unit</label><input id="sbListUnit" list="sbListUnits" value="${esc(product?shoeBoxProductDisplayUnit(product):'SET')}"><datalist id="sbListUnits">${units.map(unit=>`<option value="${esc(unit)}"></option>`).join('')}</datalist><label>Rate Per Unit</label><input id="sbListRate" type="number" min="0" step="any" value="${esc(product?.ratePerUnit??0)}"><div class="modal-actions"><button class="btn brass" id="sbListSave">Save Product</button><button class="btn ghost" id="sbListNew">Add New</button><button class="btn ghost" onclick="render()">Back to Supplier</button></div></div>`;
+  document.querySelectorAll('[data-box-list-edit]').forEach(button=>button.onclick=()=>openShoeBoxProductList(index,button.dataset.boxListEdit));
+  document.getElementById('sbListNew').onclick=()=>openShoeBoxProductList(index);
+  document.getElementById('sbListSave').onclick=async()=>{
+    const button=document.getElementById('sbListSave');if(button.disabled)return;
+    const name=factoryReadName('sbpName'),unit=document.getElementById('sbListUnit').value.trim(),raw=document.getElementById('sbListRate').value,ratePerUnit=Number(raw);
+    if(!name||!unit||raw===''||!Number.isFinite(ratePerUnit)||ratePerUnit<0){toast('Enter Product Name, Unit and a valid Rate Per Unit');return;}
+    button.disabled=true;const snap=sbSnapshot();
+    if(product){product.name=name;product.ratePerUnit=ratePerUnit;if(unit!==shoeBoxProductDisplayUnit(product)){product.unit=unit;product.customUnit='';}}
+    else supplier.products.push({id:uid(),name,unit,ratePerUnit,customUnit:'',stockItems:0,stockBoxes:0,notes:'',photo:'',customFields:[]});
+    if(!await sbCriticalCommit(snap,'Product was not saved. Original values were restored.')){button.disabled=false;return;}
+    render();openShoeBoxProductList(index);
+  };
+}
+function shoeBoxCreateProductionVoucher(index){
+  const date=document.getElementById('sbProductionDate').value,quantities={};
+  for(const input of document.querySelectorAll('[data-box-production-qty]')){
+    if(input.value===''||Number(input.value)===0)continue;
+    const qty=sbWholeAtoms(input.value);if(!qty){toast('Enter positive whole quantities');return;}
+    quantities[input.dataset.boxProductionQty]=qty;
+  }
+  if(!date||!Object.keys(quantities).length){toast('Select Work Date and enter an article quantity');return;}
+  openShoeBoxReceiveSession(index,{date,quantities});
+}
+function shoeBoxSyncProductionQuantity(fromTop=false){
+  const id=document.getElementById('sbProductionArticle').value,top=document.getElementById('sbProductionQuantity');
+  const input=[...document.querySelectorAll('[data-box-production-qty]')].find(input=>input.dataset.boxProductionQty===id);
+  if(fromTop&&input)input.value=top.value;else top.value=input?.value||'';
+}
+function shoeBoxProductionEntryHtml(index,products){
+  return `<div class="card" style="margin-bottom:16px;overflow-x:auto;"><h3>Enter Production Details</h3><div style="display:grid;grid-template-columns:150px minmax(140px,1fr) 100px auto auto;gap:8px;align-items:end;min-width:700px;"><div><label>Work Date</label><input id="sbProductionDate" type="date" value="${sbBillDateKey(new Date())}"></div><div><label>Article</label><input id="sbProductionArticle" readonly value="${products[0]?esc(products[0].name)+' ('+esc(shoeBoxProductDisplayUnit(products[0]))+')':'No saved articles'}"></div><div><label>Quantity</label><input id="sbProductionQuantity" ${products[0]?`data-box-production-qty="${esc(products[0].id)}"`:'disabled'} type="number" min="0" step="1"></div><button type="button" class="btn ghost" onclick="openShoeBoxLatestProduction(${index})">Latest Production</button><button type="button" class="btn brass" onclick="shoeBoxCreateProductionVoucher(${index})">Create Voucher</button></div><div style="display:grid;grid-template-columns:repeat(3,minmax(130px,1fr) 85px);gap:8px;align-items:end;margin-top:14px;min-width:700px;">${products.slice(1).map(p=>`<div><label>Article</label><input readonly value="${esc(p.name)} (${esc(shoeBoxProductDisplayUnit(p))})"></div><div><label>Quantity</label><input data-box-production-qty="${esc(p.id)}" aria-label="${esc(p.name)} quantity" type="number" min="0" step="1"></div>`).join('')}</div></div>`;
+}
+function openShoeBoxLatestProduction(index){
+  const supplier=getShoeBoxSuppliers()[index];if(!supplier)return;
+  const range=getUpperWorkWeekRange(new Date()),rows=(supplier.purchases||[]).filter(p=>{const date=new Date(p.workDate?p.workDate+'T00:00:00':p.date);return !p.deletedAt&&p.deleted!==true&&date>=range.start&&date<range.end&&date.getDay()!==5;}).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  if(!rows.length){toast('No receiving in the current week');return;}
+  openShoeBoxReceiveVoucherModal(index,[String(rows[0].id)]);
+}
 function openShoeBoxExtraBalanceModal(si,id){
  const s=getShoeBoxSuppliers()[si];if(!s)return;const list=sbExtraBalances(s),x=id?list.find(r=>String(r.id)===String(id)):null;
  modal(`<h3>${x?'Edit':'Add'} Extra Balance</h3><label>Details</label><input id="sbExtraDetails" value="${esc(x?.details||'')}"><label>Amount (Rs.)</label><input id="sbExtraAmount" type="number" min="0.01" step="0.01" value="${Number(x?.amount)||0}"><div class="modal-actions"><button class="btn brass" id="sbExtraSave">Save</button><button class="btn ghost" id="sbExtraCancel">Cancel</button></div>`);
@@ -15322,7 +15364,7 @@ function pageShoeBoxSupplierDetail(index){
   return `<div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
       <div><h2 class="page-title" style="margin-bottom:4px;">📦 ${esc(displayName)}</h2><div style="font-size:12px;color:var(--muted);">Supplier ${index+1} — complete Shoe Box Supplier details, products and receiving.</div></div>
-      <div style="display:flex;gap:6px;"><button type="button" class="btn blue small" data-editsbs="${index}">✏️ Edit Supplier</button><button type="button" class="btn red small" onclick="deleteShoeBoxSupplier(${index})">Delete Supplier</button></div>
+      <div style="display:flex;gap:6px;"><button type="button" class="btn brass small" onclick="openShoeBoxProductList(${index})">Add Product</button><button class="btn brass small" type="button" onclick="openShoeBoxSupplierBillModal(${index})">Create Bill</button><button type="button" class="btn blue small" data-editsbs="${index}">✏️ Edit Supplier</button><button type="button" class="btn red small" onclick="deleteShoeBoxSupplier(${index})">Delete Supplier</button></div>
     </div>
 
     <div class="card" style="margin-bottom:16px;">
@@ -15340,31 +15382,11 @@ function pageShoeBoxSupplierDetail(index){
       </div>
       <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
         <div style="font-size:12px;color:var(--muted);">${Array.isArray(supplier.customFields)?supplier.customFields.length:0} Custom Field${(Array.isArray(supplier.customFields)?supplier.customFields.length:0)===1?'':'s'}</div>
-        <button class="btn brass small" type="button" onclick="openShoeBoxSupplierBillModal(${index})">Create Bill</button><button class="btn ghost small" type="button" data-customsbs="${index}">⚙️ Custom Fields</button>
+        <button class="btn ghost small" type="button" data-customsbs="${index}">⚙️ Custom Fields</button>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <h3 style="margin:0;font-size:17px;">Product List</h3>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;">
-          <button class="btn brass small" type="button" data-createsbreceive="${index}">＋ Create Receive Voucher</button>
-          <button class="btn ghost small" type="button" data-addsbproduct="${index}">＋ Add Product</button>
-        </div>
-      </div>
-      ${products.length?`<div class="sbs-product-list" style="display:grid;gap:5px;overflow-x:auto;"><div style="display:grid;grid-template-columns:minmax(145px,1.5fr) 82px 82px 82px 92px 86px minmax(115px,auto);align-items:center;gap:5px;padding:4px 5px;font-size:9px;color:var(--muted);font-weight:800;white-space:nowrap;min-width:750px;"><div>Product</div><div>Opening Atoms</div><div>New Atoms</div><div>Pay Atoms</div><div>Remaining Atoms</div><div>Advance Atoms</div><div>Actions</div></div>${products.map((product,productIndex)=>{const b=shoeBoxProductAtomBalanceForSupplier(supplier,product);const isFootprint=/footprint/i.test(String(product.name||''));return `<div class="entity-card sbs-product-row" data-openproductactions="${index}" data-productid="${esc(product.id)}" style="display:grid;grid-template-columns:minmax(145px,1.5fr) 82px 82px 82px 92px 86px minmax(115px,auto);align-items:center;gap:5px;text-align:left;padding:5px;min-width:750px;cursor:pointer;">
-        <div style="display:flex;align-items:center;gap:5px;min-width:0;"><span style="font-size:11px;font-weight:800;line-height:1;min-width:16px;text-align:center;flex-shrink:0;">${productIndex+1}.</span><div class="sbs-product-photo" style="width:${isFootprint?'40px':'32px'};height:${isFootprint?'40px':'32px'};border-radius:6px;overflow:hidden;background:#f4f1e8;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:${product.photo?'zoom-in':'default'};" ${product.photo?`data-sbsproductphoto="${esc(product.id)}"`:''}>${product.photo?`<img src="${product.photo}" alt="${esc(product.name)}" style="width:100%;height:100%;object-fit:cover;">`:'📦'}</div><div style="min-width:0;"><div style="font-weight:900;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(product.name)}</div><div style="font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(shoeBoxProductDisplayUnit(product))}</div></div></div>
-        <button type="button" class="sbs-item-cell sbs-item-opening" data-openingproductatom="${index}" data-productid="${esc(product.id)}"><span>OPENING ATOMS</span><strong>${shoeBoxQuantityDisplay(b.opening)} Atoms</strong></button>
-        <div class="sbs-item-cell sbs-item-new"><span>NEW ATOMS</span><strong>${shoeBoxQuantityDisplay(b.newAtom)} Atoms</strong></div>
-        <button type="button" class="sbs-item-cell sbs-item-pay" data-payproductatom="${index}" data-productid="${esc(product.id)}"><span>PAY ATOMS</span><strong>0 Atoms</strong></button>
-        <div class="sbs-item-cell sbs-item-remaining"><span>REMAINING ATOMS</span><strong>${shoeBoxQuantityDisplay(b.remaining)} Atoms</strong></div>
-        <div class="sbs-item-cell sbs-item-advance"><span>ADVANCE ATOMS</span><strong>${shoeBoxQuantityDisplay(b.advance)} Atoms</strong></div>
-        <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.2;">Click Product for actions</div>
-      </div>`;}).join('')}</div>`:'<div class="empty">No products added yet. Add the supplier’s first product.</div>'}
-    </div>
-
-    <div class="card" style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><h3 style="margin:0;font-size:17px;">Extra Balance</h3><button class="btn brass small" onclick="openShoeBoxExtraBalanceModal(${index},null)">＋ Add</button></div><div style="margin-top:8px;">${sbExtraBalances(supplier).length?sbExtraBalances(supplier).map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line);"><span>${esc(x.details)} — ${formatMoney(x.amount)}</span><button class="btn blue small" onclick="openShoeBoxExtraBalanceModal(${index},'${x.id}')">Edit</button></div>`).join(''):'<div style="font-size:12px;color:var(--muted);">No extra balance.</div>'}</div></div>
-
+    ${shoeBoxProductionEntryHtml(index,products)}
     <div class="card" style="margin-bottom:16px;cursor:pointer;" data-open-sbs-receive="${index}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div>
@@ -16010,15 +16032,16 @@ function openShoeBoxProductCustomFieldModal(supplierIndex,productId,fieldId){
   document.getElementById('sbpcfCancel').onclick=()=>openShoeBoxProductCustomFieldsModal(supplierIndex,productId);
   document.getElementById('sbpcfSave').onclick=()=>{const name=document.getElementById('sbpcfName').value.trim(),value=document.getElementById('sbpcfValue').value.trim();if(!name){toast('Enter a field name');return;}if(product.customFields.some(f=>String(f.id)!==String(fieldId||'')&&String(f.name).toLowerCase()===name.toLowerCase())){toast('This field name already exists');return;}if(field){field.name=name;field.value=value;}else product.customFields.push({id:uid(),name,value});persistAll();openShoeBoxProductCustomFieldsModal(supplierIndex,productId);};
 }
-function openShoeBoxReceiveSession(supplierIndex){
+function openShoeBoxReceiveSession(supplierIndex,draft=null){
   let supplier=getShoeBoxSuppliers()[supplierIndex];
   if(!supplier) return;
   const products=Array.isArray(supplier.products)?supplier.products:[];
   if(!products.length){toast('Add at least one product first');return;}
   const selected={};
+  if(draft)products.forEach(p=>{const qty=sbWholeAtoms(draft.quantities[String(p.id)]);if(qty)selected[String(p.id)]={atoms:qty};});
   let notes='';
   const today=new Date();
-  const defaultDate=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const defaultDate=draft?.date||`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const renderSession=()=>{
     const chosen=products.filter(p=>selected[String(p.id)]);
     const totalAtoms=chosen.reduce((sum,p)=>sum+(Math.max(0,Number(selected[String(p.id)].atoms)||0)),0);
@@ -16070,7 +16093,7 @@ function openShoeBoxReceiveSession(supplierIndex){
         const currentItems=shoeBoxProductStockItems(p);
         p.stockItems=currentItems+atoms;
         p.stockBoxes=Math.max(0,Number(p.stockBoxes)||0)+atoms;
-        const purchase={id:uid(),productId:p.id,productName:p.name,date:iso,items:atoms,atoms,boxes:atoms,voucherNo,notes:document.getElementById('rsNotes').value.trim(),time:iso};
+        const purchase={id:uid(),productId:p.id,productName:p.name,unit:shoeBoxProductDisplayUnit(p),date:iso,items:atoms,atoms,boxes:atoms,voucherNo,notes:document.getElementById('rsNotes').value.trim(),time:iso};
         supplier.purchases.push(purchase); purchaseIds.push(String(purchase.id));
       });
       supplier.receiveVouchers=supplier.receiveVouchers||[];
