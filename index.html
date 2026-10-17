@@ -1490,6 +1490,34 @@ body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard
 .cloud-safe-pill.busy{background:#fff6dc;color:#7b5b00;border-color:#ead69a}
 .cloud-safe-pill.bad{background:#fdeaea;color:#9b2525;border-color:#e9b6b6}
 </style>
+<style id="mobile-shell-layout">
+@media screen and (max-width:700px){
+  #topbar .factory-title-row{display:grid;grid-template-columns:32px minmax(0,1fr) 32px;width:100%;gap:7px;}
+  #topbar #topFactoryName{min-width:0;max-width:100%;font-size:16px;line-height:1.25;letter-spacing:1px;overflow-wrap:anywhere;}
+  #topbar .topLogoClickArea,#topbar .logo-placeholder,#topbar #topLogo,#topbar #topOwnerPhoto{width:32px!important;height:32px!important;max-width:32px!important;max-height:32px!important;}
+  #topbar .topbar-right{flex-wrap:wrap;row-gap:5px;}
+  #topbar #cloudSafeIndicators{flex-basis:100%;justify-content:center;flex-wrap:wrap;margin-top:0;}
+  #appBody>nav.mobile-nav-open #navItems{max-height:60vh;max-height:60dvh;overflow-y:auto;overscroll-behavior:contain;}
+  #appBody>nav #navItems .nav-item{white-space:normal;overflow-wrap:anywhere;text-align:left;}
+}
+</style>
+
+<style id="production-entry-row-cleanup">
+[data-production-entry-cleanup]{align-items:start!important;padding-bottom:18px!important;}
+[data-production-entry-cleanup]>div:not(.upper-row-stock-info):not(.upper-remove-row){position:relative;align-self:start!important;min-width:0;}
+[data-production-entry-cleanup]>div>label{display:block!important;height:11px;line-height:11px!important;margin:0 0 3px!important;white-space:nowrap;}
+[data-production-entry-cleanup] [data-bf-pairs],[data-production-entry-cleanup] [data-upper-entry-unit]{position:absolute;top:calc(100% + 2px);left:0;display:block;line-height:12px;font-size:10px;white-space:nowrap;}
+.upper-one-row[data-production-entry-cleanup="upper"]{padding-bottom:0!important;row-gap:34px!important;}
+[data-production-entry-cleanup="upper"] #btnUpperManualPending{position:absolute;top:calc(100% + 2px);left:0;width:100%;}
+.bm-entry-row.bf-worker-entry-row[data-production-entry-cleanup]{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.65fr) minmax(0,.8fr) minmax(0,.65fr) minmax(0,1.6fr) minmax(0,.7fr) minmax(0,1.1fr)!important;}
+.bf-worker-entry-row[data-production-entry-cleanup]>.production-latest-field{grid-column:span 2;}
+@media(max-width:900px){.bm-entry-row.bf-worker-entry-row[data-production-entry-cleanup]{grid-template-columns:120px 140px 90px 110px 70px 100px 90px 120px!important;overflow-x:auto;}}
+@media screen and (min-width:901px){
+[data-production-entry-cleanup]>div:not(.upper-row-stock-info):not(.upper-remove-row){display:grid!important;grid-template-rows:11px auto;row-gap:3px;align-content:start!important;}
+[data-production-entry-cleanup]>div>label{grid-row:1;min-height:11px;height:11px!important;margin:0!important;}
+[data-production-entry-cleanup]>div>input,[data-production-entry-cleanup]>div>select,[data-production-entry-cleanup]>div>button{display:block;grid-row:2;align-self:start!important;margin:0!important;}
+}
+</style>
 </head>
 <body>
 <div id="app">
@@ -1547,6 +1575,8 @@ body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard
 <div id="modalRoot"></div>
 <div class="toast" id="toast">Local storage is full. Please use Backup Export or a smaller photo.</div>
 
+<script src="./factory-sale.js"></script>
+<script src="./shared/name-input.js"></script>
 <script src="./app.js"></script>
 <script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}</script>
 
@@ -1664,8 +1694,8 @@ function mb20WeeklyData(v,now=new Date()){
 function mb20PrintVoucher(v){if(v.workflowVersion===1)return printAggregateThermal(mb20voucherHtml(v),'Magzi & Batava Weekly Voucher','element');return printBatamMansHtml(mb20voucherHtml(v),'Magzi & Batava Receive Voucher');}
 function pageMagziBatavaVoucher(){const range=mb20WorkRange(),sp=mb20s().supplier||{},total=mb20s().vouchers.filter(v=>v.workflowVersion===1).reduce((n,v)=>n+(v.lines||[]).reduce((q,l)=>q+(Number(l.receivedQty)||0),0),0);return '<div class="mb20"><div class="mb20-row"><button class="btn ghost small" id="mb20vback">Back</button><b>Enter Magzi/Batava Distribution Details</b></div><div class="mb20-card"><strong>'+esc(sp.shopName||sp.ownerName||'Magzi & Batava Supplier')+'</strong><div style="display:flex;gap:5px;flex-wrap:wrap;align-items:end;margin:5px 0;"><div><label>Work Date</label><input id="mb20WorkDate" type="date" value="'+range.today+'" min="'+range.min+'" max="'+range.today+'"></div><div><label>Weekly Kharcha</label><input id="mb20WorkflowKharcha" type="number" min="0" step="0.01" value="0" title="Separate voucher expense; does not settle the supplier balance"></div><div><label>Total ATOMS</label><input readonly value="'+total+' ATOMS"></div></div><div style="overflow-x:auto;"><div id="mb20WorkflowRows" style="min-width:450px;">'+mb20WorkflowRow()+'</div></div><div style="display:flex;gap:5px;justify-content:flex-end;"><button class="btn ghost small" id="mb20AddArticle">+ Article</button><button class="btn brass" id="mb20savev">Create Voucher</button></div></div>'+'</div>';}
 
-function mb20SaveProductForm(){let s=mb20s(),id=window.__mb20EditProductId||'',p=s.products.find(x=>String(x.id)===String(id)),name=(document.getElementById('mb20ProductName')?.value||'').trim(),rate=Number(document.getElementById('mb20ProductRate')?.value);if(!name)return toast('Product Name is required');if(!Number.isFinite(rate)||rate<0)return toast('Enter valid Labour Rate');if(p){p.name=name;p.rate=rate;p.updatedAt=new Date().toISOString()}else{s.products.push({id:'mbp'+Date.now(),name,rate,createdAt:new Date().toISOString()})}window.__mb20EditProductId='';persistAll();render();toast('Product saved')}
-function mb20supplier(){let s=mb20s(),p=s.supplier||{},pendingPhoto=p.photo||mb20LocalPhotoGet(),photoChanged=false;modal(`<h3 style="margin-top:0">Edit Supplier Details</h3><label>Supplier Photo</label><input type="file" id="mb20SupplierPhoto" accept="image/*"><div id="mb20SupplierPreview" style="margin:8px 0">${pendingPhoto?`<img src="${pendingPhoto}" class="zoomable" style="width:130px;height:130px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer">`:'No photo selected'}</div><label>Shop Name</label><input id="mb20ShopName" value="${esc(p.shopName||'')}"><label>Owner Name</label><input id="mb20OwnerName" value="${esc(p.ownerName||'')}"><label>Mobile No</label><input id="mb20Mobile" value="${esc(p.mobile||'')}"><label>Shop Location</label><input id="mb20Location" value="${esc(p.location||'')}"><div class="modal-actions"><button class="btn brass" id="mb20SupplierSave">Save</button><button class="btn ghost" id="mb20SupplierCancel">Cancel</button></div>`);const refresh=()=>{let w=document.getElementById('mb20SupplierPreview');if(!w)return;w.innerHTML=pendingPhoto?`<img src="${pendingPhoto}" class="zoomable" style="width:130px;height:130px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer">`:'No photo selected';w.querySelector('img')?.addEventListener('click',()=>openImageLightbox(pendingPhoto))};document.getElementById('mb20SupplierPhoto')?.addEventListener('change',e=>{let f=e.target.files?.[0];if(!f)return;openImageCropper(f,async cropped=>{if(!cropped)return;try{pendingPhoto=typeof compressImageDataUrl==='function'?await compressImageDataUrl(cropped,700,.72):cropped}catch(err){console.error(err);pendingPhoto=cropped}photoChanged=true;refresh()})});refresh();document.getElementById('mb20SupplierCancel').onclick=closeModal;document.getElementById('mb20SupplierSave').onclick=()=>{p.shopName=document.getElementById('mb20ShopName').value.trim();p.ownerName=document.getElementById('mb20OwnerName').value.trim();p.mobile=document.getElementById('mb20Mobile').value.trim();p.location=document.getElementById('mb20Location').value.trim();if(photoChanged)p.photo=pendingPhoto;s.supplier=p;if(photoChanged)mb20LocalPhotoSet(pendingPhoto);else persistAll();closeModal();render();toast('Supplier details saved')}}
+function mb20SaveProductForm(){let s=mb20s(),id=window.__mb20EditProductId||'',p=s.products.find(x=>String(x.id)===String(id)),name=factoryReadName('mb20ProductName'),rate=Number(document.getElementById('mb20ProductRate')?.value);if(!name)return toast('Product Name is required');if(!Number.isFinite(rate)||rate<0)return toast('Enter valid Labour Rate');if(p){p.name=name;p.rate=rate;p.updatedAt=new Date().toISOString()}else{s.products.push({id:'mbp'+Date.now(),name,rate,createdAt:new Date().toISOString()})}window.__mb20EditProductId='';persistAll();render();toast('Product saved')}
+function mb20supplier(){let s=mb20s(),p=s.supplier||{},pendingPhoto=p.photo||mb20LocalPhotoGet(),photoChanged=false;modal(`<h3 style="margin-top:0">Edit Supplier Details</h3><label>Supplier Photo</label><input type="file" id="mb20SupplierPhoto" accept="image/*"><div id="mb20SupplierPreview" style="margin:8px 0">${pendingPhoto?`<img src="${pendingPhoto}" class="zoomable" style="width:130px;height:130px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer">`:'No photo selected'}</div><label>Shop Name</label><input id="mb20ShopName" value="${esc(p.shopName||'')}"><label>Owner Name</label><input id="mb20OwnerName" value="${esc(p.ownerName||'')}"><label>Mobile No</label><input id="mb20Mobile" value="${esc(p.mobile||'')}"><label>Shop Location</label><input id="mb20Location" value="${esc(p.location||'')}"><div class="modal-actions"><button class="btn brass" id="mb20SupplierSave">Save</button><button class="btn ghost" id="mb20SupplierCancel">Cancel</button></div>`);const refresh=()=>{let w=document.getElementById('mb20SupplierPreview');if(!w)return;w.innerHTML=pendingPhoto?`<img src="${pendingPhoto}" class="zoomable" style="width:130px;height:130px;object-fit:cover;border-radius:9px;border:1px solid var(--line);cursor:pointer">`:'No photo selected';w.querySelector('img')?.addEventListener('click',()=>openImageLightbox(pendingPhoto))};document.getElementById('mb20SupplierPhoto')?.addEventListener('change',e=>{let f=e.target.files?.[0];if(!f)return;openImageCropper(f,async cropped=>{if(!cropped)return;try{pendingPhoto=typeof compressImageDataUrl==='function'?await compressImageDataUrl(cropped,700,.72):cropped}catch(err){console.error(err);pendingPhoto=cropped}photoChanged=true;refresh()})});refresh();document.getElementById('mb20SupplierCancel').onclick=closeModal;document.getElementById('mb20SupplierSave').onclick=()=>{p.shopName=factoryReadName('mb20ShopName');p.ownerName=factoryReadName('mb20OwnerName');p.mobile=document.getElementById('mb20Mobile').value.trim();p.location=document.getElementById('mb20Location').value.trim();if(photoChanged)p.photo=pendingPhoto;s.supplier=p;if(photoChanged)mb20LocalPhotoSet(pendingPhoto);else persistAll();closeModal();render();toast('Supplier details saved')}}
 function mb20opening(id){let s=mb20s(),p=s.products.find(x=>String(x.id)===String(id)),cur=Number(s.opening[id])||0;modal(`<h3 style="margin-top:0">${esc(p?.name||'Product')} — Opening Amount</h3><label>Opening Amount (Rs.)</label><input id="mb20OpeningInput" type="number" min="0" step="1" value="${cur}"><div class="modal-actions"><button class="btn brass" id="mb20OpeningSave">Save</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);document.getElementById('mb20OpeningSave').onclick=()=>{let a=Number(document.getElementById('mb20OpeningInput').value);if(!Number.isFinite(a)||a<0)return toast('Enter valid Opening Amount');s.opening[id]=a;persistAll();closeModal();render();toast('Opening Amount saved')}}
 function mb20pay(id){let s=mb20s(),p=s.products.find(x=>String(x.id)===String(id)),b=mb20bal(id);modal(`<h3 style="margin-top:0">${esc(p?.name||'Product')} — Pay Amount</h3><div style="font-size:12px;color:var(--muted);margin-bottom:8px">Current Remaining: <b>${mb20m(b.remaining)}</b></div><label>Pay Amount (Rs.)</label><input id="mb20PayInput" type="number" min="0" step="1" value=""><div class="modal-actions"><button class="btn brass" id="mb20PaySave">Save Payment</button><button class="btn ghost" onclick="closeModal()">Cancel</button></div>`);let submitted=false;document.getElementById('mb20PaySave').onclick=async()=>{if(submitted||mb20SettlementBusy)return;let a=Number(document.getElementById('mb20PayInput').value);if(!Number.isFinite(a)||a<=0)return toast('Enter valid Pay Amount');submitted=true;const button=document.getElementById('mb20PaySave');button.disabled=true;const ok=await mb20SettlementSave(()=>{let s=mb20s(),b=mb20bal(id),before={opening:b.opening,newAmount:b.newAmount,advance:b.advance},net=b.opening+b.newAmount-b.advance-a,now=new Date(),localDate=String(now.getFullYear()).padStart(4,'0')+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0'),paymentId='pay'+uid(),entry=mb20Settlement(id),baseline=!entry;if(!entry){entry={version:1,activatedAt:now.toISOString(),lastPaymentId:'',lastSettledAt:'',includedVouchers:{}};s.settlements=s.settlements||{};s.settlements[String(id)]=entry}const includedVoucherIds=mb20IncludeVouchers(entry,id,baseline);s.opening[id]=Math.max(0,net);s.advance[id]=Math.max(0,-net);entry.lastPaymentId=paymentId;entry.lastSettledAt=now.toISOString();s.payments.push({id:paymentId,productId:id,amount:a,date:localDate,createdAt:now.toISOString(),settlementVersion:1,before,after:{opening:s.opening[id],advance:s.advance[id]},includedVoucherIds})});if(!ok){submitted=false;button.disabled=false;return}closeModal();render();toast('Payment settled')}}
 function mb20NextVoucherNo(vouchers){
@@ -1918,4 +1948,115 @@ function bindMB20(){mb20BindReceiveReport();document.querySelectorAll('[data-mb2
   }
 }
 </style>
+<style id="iphone-mobile-polish">
+/* Narrow mobile screens only; existing desktop and print rules stay intact. */
+@media screen and (max-width:430px){
+  #topbar{padding:10px 12px;gap:7px;}
+  #topbar .factory-title-row{gap:9px;align-items:center;}
+  #topbar #topFactoryName{line-height:1.3;letter-spacing:.6px;}
+  #topbar .sub{font-size:10px;line-height:1.4;letter-spacing:.4px;}
+  #topbar .topbar-right{gap:6px 12px;line-height:1.4;}
+  #appBody>nav .brand{padding:8px 12px!important;margin-bottom:0!important;gap:12px;}
+  #mobileMenuToggle{min-width:44px;min-height:44px;border-radius:10px;background:#293b30;border-color:#496052;}
+  #navItems{margin-top:0;padding:4px 8px 8px;box-sizing:border-box;}
+  #appBody>nav #navItems button.nav-item{min-height:46px;padding:12px!important;border-radius:9px!important;line-height:1.4;}
+  #navItems .sidebar-menu-group-toggle,#navItems .sidebar-menu-settings{min-height:44px;line-height:1.4;}
+  main#mainArea{padding:16px 12px calc(24px + env(safe-area-inset-bottom,0px))!important;}
+  #mainArea h2.page-title,#mainArea .dashboard-page-title{font-size:20px!important;line-height:1.3;margin-bottom:14px!important;overflow-wrap:anywhere;}
+  #mainArea .card{padding:14px!important;margin-bottom:12px!important;border-radius:15px!important;}
+  #mainArea .card h3{line-height:1.4;overflow-wrap:anywhere;}
+  #mainArea .grid,#mainArea .dashboard-stats-grid{gap:10px!important;}
+  #mainArea .btn,.modal .btn{min-height:44px!important;height:auto!important;padding:9px 12px!important;font-size:13px!important;line-height:1.35;white-space:normal;overflow-wrap:anywhere;touch-action:manipulation;}
+  #mainArea .dashboard-actions .btn{min-height:80px!important;padding:12px 8px!important;gap:8px;}
+  #mainArea input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+  #mainArea select,#mainArea textarea,
+  .modal input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+  .modal select,.modal textarea{min-height:44px!important;height:auto!important;font-size:16px!important;line-height:1.4;padding:10px!important;min-width:0;box-sizing:border-box;}
+  #mainArea label,.modal label{line-height:1.4;}
+  #mainArea .form-row,#mainArea .form-grid,#mainArea .actions,#mainArea .card-actions{gap:10px;}
+  #mainArea .worker-table thead th,#mainArea .worker-table tbody td{padding:9px 5px!important;line-height:1.45;}
+  #mainArea .worker-table .actions-cell .btn{width:100%;margin:0 0 5px;padding:8px 4px!important;font-size:12px!important;}
+  .modal{width:calc(100vw - 24px)!important;max-width:calc(100vw - 24px)!important;max-height:calc(100dvh - 32px)!important;padding:16px!important;scroll-padding:16px;}
+  .modal-actions{flex-wrap:wrap;gap:10px!important;}
+}
+</style>
+<style id="iphone-mobile-header">
+@media screen and (max-width:430px){
+  #topbar{display:grid;grid-template-columns:28px minmax(0,1fr) 28px;align-items:center;min-height:0;padding:6px 4px;gap:3px 4px;margin-bottom:0;position:relative;box-shadow:inset 0 -1px 0 #d4ded6!important;}
+  #topbar .topbar-center,#topbar .factory-title-row{display:contents;}
+  #topbar #topLogoClickArea{grid-column:1;grid-row:1 / span 2;}
+  #topbar #topOwnerPhotoClickArea{grid-column:3;grid-row:1 / span 2;}
+  #topbar .topLogoClickArea,#topbar .logo-placeholder,#topbar #topLogo,#topbar #topOwnerPhoto,#topbar #topOwnerPhotoPlaceholder{width:28px!important;height:28px!important;max-width:28px!important;max-height:28px!important;box-sizing:border-box;}
+  #topbar .logo-placeholder{font-size:15px;}
+  #topbar #topFactoryName{grid-column:2;grid-row:1;display:block;width:100%;max-width:100%;margin:0;padding:0;border-bottom:0;font-size:0!important;letter-spacing:0;line-height:1.25;text-align:center;white-space:nowrap;overflow:visible;text-overflow:clip;}
+  #topbar #topFactoryName::after{content:"LEATHER RIGHT SHOES BY ABID";font-size:clamp(9px,3.1vw,12.5px);font-weight:900;color:#203027;letter-spacing:.15px;line-height:1.25;}
+  #topbar .sub{display:none;}
+  #topbar .topbar-right{grid-column:2;grid-row:2;display:flex;flex-wrap:nowrap;justify-content:space-evenly;align-items:center;gap:4px;flex:none;width:100%;min-width:0;padding:0 3px;box-sizing:border-box;text-align:left;line-height:1.3;}
+  #topbar #liveDate,#topbar #liveTime{font-size:clamp(8px,2.3vw,9px)!important;line-height:1.3;white-space:nowrap;}
+  #topbar #liveTime{padding-left:4px;border-left:1px solid #c6d2c9;}
+  #topbar #cloudSafeIndicators{display:contents;}
+  #topbar .cloud-safe-pill{padding:2px 4px;font:700 clamp(8px,2.3vw,9px)/1.3 Arial,sans-serif;}
+}
+</style>
+<button type="button" id="mobileSidebarOverlay" aria-label="Close mobile menu" tabindex="-1" style="display:none;"></button>
+<style id="iphone-mobile-sidebar">
+@media screen and (max-width:430px){
+  #appBody>nav #navItems{
+    display:block!important;position:fixed;inset:0 auto 0 0;
+    width:min(300px,calc(100vw - 56px));min-width:0;max-width:none;
+    height:100vh;height:100dvh;max-height:none!important;
+    margin:0;padding:64px 10px calc(16px + env(safe-area-inset-bottom,0px));
+    box-sizing:border-box;background:#19271f;color:#e5eee8;
+    border-right:1px solid #34493b;box-shadow:12px 0 32px rgba(0,0,0,.24);
+    overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+    transform:translateX(-100%);visibility:hidden;pointer-events:none;
+    transition:transform .22s ease,visibility .22s;z-index:1;
+  }
+  #appBody>nav.mobile-nav-open{z-index:1001;background:transparent!important;}
+  #appBody>nav.mobile-nav-open .brand{visibility:hidden;}
+  #appBody>nav.mobile-nav-open #navItems{transform:translateX(0);visibility:visible;pointer-events:auto;}
+  #appBody>nav.mobile-nav-open #mobileMenuToggle{
+    position:fixed;top:12px;left:calc(min(300px,100vw - 56px) - 54px);
+    visibility:visible;z-index:2;
+  }
+  #appBody>nav #navItems button.nav-item{
+    width:100%;min-width:0;min-height:44px;margin:3px 0!important;padding:11px 12px!important;
+    border-bottom:0!important;border-radius:10px!important;color:#dce9df!important;font-size:14px;
+    line-height:1.4;text-align:left;transform:none!important;
+  }
+  #appBody>nav #navItems button.nav-item.active{
+    background:#284d3a!important;color:#f0fff6!important;
+    box-shadow:inset 3px 0 0 #57c79f!important;
+  }
+  #appBody>nav #navItems .sidebar-menu-group-toggle,
+  #appBody>nav #navItems .sidebar-menu-settings{
+    min-height:44px;padding:11px 12px;color:#dce9df;line-height:1.4;
+    border-radius:10px;
+  }
+  #appBody>nav #navItems .sidebar-menu-group-toggle.has-active{background:#233e2f;}
+  body:has(#appBody>nav.mobile-nav-open){overflow:hidden;}
+  body:has(#appBody>nav.mobile-nav-open) #mobileSidebarOverlay{
+    display:block!important;position:fixed;inset:0;width:100%;max-width:none;
+    height:100%;margin:0;padding:0;border:0;border-radius:0;
+    background:rgba(0,0,0,.56);z-index:1000;cursor:pointer;touch-action:manipulation;
+  }
+}
+@media screen and (max-width:430px) and (prefers-reduced-motion:reduce){
+  #appBody>nav #navItems{transition:none;}
+}
+</style>
+<script id="mobile-sidebar-overlay-handler">
+(function(){
+  const overlay=document.getElementById('mobileSidebarOverlay');
+  const toggle=document.getElementById('mobileMenuToggle');
+  const nav=document.querySelector('#appBody>nav');
+  if(!overlay || !toggle || !nav)return;
+  overlay.addEventListener('click',()=>{
+    if(window.matchMedia('(max-width:430px)').matches && nav.classList.contains('mobile-nav-open')){
+      toggle.click();
+      toggle.focus();
+    }
+  });
+})();
+</script>
 </body></html>
