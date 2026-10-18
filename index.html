@@ -1547,7 +1547,7 @@ body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard
   <div id="appBody">
     <nav>
       <div class="brand">
-        <h1>MENU</h1>
+        <h1 data-i18n="ui_MENU">MENU</h1>
         <button type="button" id="mobileMenuToggle" aria-label="Open menu" aria-expanded="false">☰</button>
       </div>
       <div id="navItems"><button class="nav-item" data-page="dashboard">📊 Dashboard</button><button class="nav-item" data-page="materials">📦 Materials / Stock</button><button class="nav-item" data-page="workers">👷 Workers</button><button class="nav-item" data-page="issue">📤 Material Distribution</button><button class="nav-item" data-page="articles">👞 Shoe Articles</button><button class="nav-item" data-page="bills">🧾 Sales Bills</button><button class="nav-item" data-page="shopkeepers">👤 Shopkeepers / Khata</button><button class="nav-item" data-page="history">📜 Transaction History</button><button class="nav-item" data-page="audit">🛡️ Audit Log</button><button class="nav-item" data-page="settings">⚙️ Settings</button><button class="nav-item active" data-page="backup">💾 Backup</button><button class="nav-item" data-page="archive">🗄️ Archive</button></div>
@@ -2044,6 +2044,20 @@ function bindMB20(){mb20BindReceiveReport();document.querySelectorAll('[data-mb2
 }
 @media screen and (max-width:430px) and (prefers-reduced-motion:reduce){
   #appBody>nav #navItems{transition:none;}
+}
+</style>
+<style id="app-language-layout">
+@media screen{
+  [data-i18n-screen-original]{display:none!important;}
+  [data-i18n-screen-translation]{display:inline!important;}
+}
+@media screen{
+  html[dir="rtl"] #appBody>nav button.nav-item{text-align:right;}
+}
+@media screen and (max-width:430px){
+  html[dir="rtl"] #appBody>nav #navItems{inset:0 0 0 auto;transform:translateX(100%);border-right:0;border-left:1px solid #34493b;box-shadow:-12px 0 32px rgba(0,0,0,.24);}
+  html[dir="rtl"] #appBody>nav.mobile-nav-open #navItems{transform:translateX(0);}
+  html[dir="rtl"] #appBody>nav.mobile-nav-open #mobileMenuToggle{left:auto;right:calc(min(300px,100vw - 56px) - 54px);}
 }
 </style>
 <script id="mobile-sidebar-overlay-handler">
