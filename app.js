@@ -799,7 +799,7 @@ function normalizeShoeBoxSuppliers(){
         date:String(v.date||new Date().toISOString()),
         purchaseIds:Array.isArray(v.purchaseIds)?v.purchaseIds.map(String):[],
         notes:String(v.notes||''),
-        createdAt:String(v.createdAt||new Date().toISOString()),
+        createdAt:String(v.createdAt||''),
         balanceSnapshot:v.balanceSnapshot&&typeof v.balanceSnapshot==='object'?v.balanceSnapshot:null,
         workerTotalBoxesSnapshot:Number.isFinite(Number(v.workerTotalBoxesSnapshot))?Number(v.workerTotalBoxesSnapshot):null,
         rateSnapshot:Number.isFinite(Number(v.rateSnapshot))?Number(v.rateSnapshot):null,
@@ -810,6 +810,10 @@ function normalizeShoeBoxSuppliers(){
         id:String(purchase.id||uid()),
         productId:String(purchase.productId||''),
         productName:String(purchase.productName||''),
+        ...(purchase.unit?{unit:String(purchase.unit)}:{}),
+        ...(purchase.customUnit?{customUnit:String(purchase.customUnit)}:{}),
+        ...(purchase.createdAt?{createdAt:String(purchase.createdAt)}:{}),
+        ...(purchase.workDate?{workDate:String(purchase.workDate)}:{}),
         date:String(purchase.date||new Date().toISOString()),
         boxes:Math.max(0,Number(purchase.boxes)||0),
         atoms:Math.max(0,Number(purchase.atoms)||0),
@@ -15289,7 +15293,7 @@ function pageShoeBoxSuppliers(){
     <div style="display:flex;gap:8px;flex-wrap:nowrap;margin-bottom:20px;width:100%;box-sizing:border-box;">
       ${suppliers.map((supplier,index)=>{
         const displayName=shoeBoxSupplierDisplayName(supplier,index);
-        const products=Array.isArray(supplier.products)?supplier.products:[];
+        const products=Array.isArray(supplier.products)?supplier.products.filter(p=>!p.productListHiddenAt):[];
         return `<div class="card shoe-box-main-card" data-opensbs="${index}" id="shoeBoxSupplierCard${index}" style="flex:0 0 calc(50% - 4px);width:calc(50% - 4px);min-width:0;margin:0;box-sizing:border-box;cursor:pointer;transition:transform .15s,box-shadow .15s;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
             <h3 style="margin:0;font-size:18px;">Supplier ${index+1}</h3>
@@ -15313,8 +15317,8 @@ function pageShoeBoxSuppliers(){
 function openShoeBoxProductList(index,productId=null){
   const supplier=getShoeBoxSuppliers()[index];if(!supplier)return;
   const product=(supplier.products||[]).find(p=>String(p.id)===String(productId));
-  const units=[...new Set(['SET','ATOMS','BOX',...(supplier.products||[]).map(shoeBoxProductDisplayUnit)])];
-  document.getElementById('mainArea').innerHTML=`<div class="card"><button class="btn ghost" onclick="render()" data-i18n=ui_Back_20_to_20_Supplier>Back to Supplier</button><h3>Product List — ${esc(shoeBoxSupplierDisplayName(supplier,index))}</h3><table><thead><tr><th data-i18n=ui_Product_20_Name>Product Name</th><th data-i18n=ui_Unit>Unit</th><th data-i18n=ui_Rate_20_Per_20_Unit>Rate Per Unit</th><th></th></tr></thead><tbody>${(supplier.products||[]).filter(p=>!p.productListHiddenAt).map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(shoeBoxProductDisplayUnit(p))}</td><td>${esc(p.ratePerUnit??0)}</td><td><button class="btn ghost small" data-box-list-edit="${esc(p.id)}" data-i18n=ui_Edit>Edit</button> <button class="btn red small" data-box-list-delete="${esc(p.id)}" data-i18n=ui_Delete>Delete</button></td></tr>`).join('')}</tbody></table><h3>${product?'Edit':'Add'} Product</h3><label data-i18n=ui_Product_20_Name>Product Name</label><input id="sbpName" value="${esc(product?.name||'')}"><label data-i18n=ui_Unit>Unit</label><input id="sbListUnit" list="sbListUnits" value="${esc(product?shoeBoxProductDisplayUnit(product):'SET')}"><datalist id="sbListUnits">${units.map(unit=>`<option value="${esc(unit)}"></option>`).join('')}</datalist><label data-i18n=ui_Rate_20_Per_20_Unit>Rate Per Unit</label><input id="sbListRate" type="number" min="0" step="any" value="${esc(product?.ratePerUnit??0)}"><div class="modal-actions"><button class="btn brass" id="sbListSave" data-i18n=ui_Save_20_Product>Save Product</button><button class="btn ghost" id="sbListNew" data-i18n=ui_Add_20_New>Add New</button></div></div>`;
+  const unitKeys=new Set(),units=['SET','ATOMS','BOX',...(supplier.products||[]).map(shoeBoxProductDisplayUnit)].filter(unit=>{const key=unit.trim().toLowerCase();if(!key||unitKeys.has(key))return false;unitKeys.add(key);return true;});
+  document.getElementById('mainArea').innerHTML=`<div class="card"><button class="btn ghost" onclick="render()" data-i18n=ui_Back_20_to_20_Supplier>Back to Supplier</button><h3>Product List — ${esc(shoeBoxSupplierDisplayName(supplier,index))}</h3><table><thead><tr><th data-i18n=ui_Product_20_Name>Product Name</th><th data-i18n=ui_Unit>Unit</th><th data-i18n=ui_Rate_20_Per_20_Unit>Rate Per Unit</th><th></th></tr></thead><tbody>${(supplier.products||[]).filter(p=>!p.productListHiddenAt).map(p=>`<tr><td>${esc(p.name)}</td><td>${esc(shoeBoxProductDisplayUnit(p))}</td><td>${esc(p.ratePerUnit??0)}</td><td><button class="btn ghost small" data-box-list-edit="${esc(p.id)}" data-i18n=ui_Edit>Edit</button> <button class="btn red small" data-box-list-delete="${esc(p.id)}" data-i18n=ui_Delete>Delete</button></td></tr>`).join('')}</tbody></table><h3>${product?'Edit':'Add'} Product</h3><label data-i18n=ui_Product_20_Name>Product Name</label><input id="sbpName" value="${esc(product?.name||'')}"><label data-i18n=ui_Unit>Unit</label><input id="sbListUnit" aria-label="Unit or Custom Unit" placeholder="Select or type Custom Unit" list="sbListUnits" value="${esc(product?shoeBoxProductDisplayUnit(product):'SET')}"><datalist id="sbListUnits">${units.map(unit=>`<option value="${esc(unit)}"></option>`).join('')}</datalist><button type="button" class="btn ghost small" id="sbListCustomUnit">Custom Unit</button><label data-i18n=ui_Rate_20_Per_20_Unit>Rate Per Unit</label><input id="sbListRate" type="number" min="0" step="any" value="${esc(product?.ratePerUnit??0)}"><div class="modal-actions"><button class="btn brass" id="sbListSave" data-i18n=ui_Save_20_Product>Save Product</button><button class="btn ghost" id="sbListNew" data-i18n=ui_Add_20_New>Add New</button></div></div>`;
   document.querySelectorAll('[data-box-list-edit]').forEach(button=>button.onclick=()=>openShoeBoxProductList(index,button.dataset.boxListEdit));
   document.querySelectorAll('[data-box-list-delete]').forEach(button=>button.onclick=async()=>{
     if(button.disabled)return;
@@ -15324,6 +15328,7 @@ function openShoeBoxProductList(index,productId=null){
     if(!await sbCriticalCommit(snap,'Product removal was not saved. Original data was restored.')){openShoeBoxProductList(index);return;}
     openShoeBoxProductList(index);
   });
+  document.getElementById('sbListCustomUnit').onclick=()=>{const input=document.getElementById('sbListUnit');input.value='';input.focus();};
   document.getElementById('sbListNew').onclick=()=>openShoeBoxProductList(index);
   document.getElementById('sbListSave').onclick=async()=>{
     const button=document.getElementById('sbListSave');if(button.disabled)return;
@@ -15352,7 +15357,7 @@ function shoeBoxSyncProductionQuantity(fromTop=false){
   if(fromTop&&input)input.value=top.value;else top.value=input?.value||'';
 }
 function shoeBoxProductionEntryHtml(index,products){
-  return `<div class="card" style="margin-bottom:16px;overflow-x:auto;"><h3 data-i18n=ui_Enter_20_Production_20_Details>Enter Production Details</h3><div style="display:grid;grid-template-columns:150px minmax(140px,1fr) 100px auto auto;gap:8px;align-items:end;min-width:700px;"><div><label data-i18n=ui_Work_20_Date>Work Date</label><input id="sbProductionDate" type="date" value="${sbBillDateKey(new Date())}"></div><div><label data-i18n=ui_Article>Article</label><input id="sbProductionArticle" readonly value="${products[0]?esc(products[0].name)+' ('+esc(shoeBoxProductDisplayUnit(products[0]))+')':'No saved articles'}"></div><div><label data-i18n=ui_Quantity>Quantity</label><input id="sbProductionQuantity" ${products[0]?`data-box-production-qty="${esc(products[0].id)}"`:'disabled'} type="number" min="0" step="1"></div><button type="button" class="btn ghost" onclick="openShoeBoxLatestProduction(${index})" data-i18n=ui_Latest_20_Production>Latest Production</button><button type="button" class="btn brass" onclick="shoeBoxCreateProductionVoucher(${index})" data-i18n=ui_Create_20_Voucher>Create Voucher</button></div><div style="display:grid;grid-template-columns:repeat(3,minmax(130px,1fr) 85px);gap:8px;align-items:end;margin-top:14px;min-width:700px;">${products.slice(1).map(p=>`<div><label data-i18n=ui_Article>Article</label><input readonly value="${esc(p.name)} (${esc(shoeBoxProductDisplayUnit(p))})"></div><div><label data-i18n=ui_Quantity>Quantity</label><input data-box-production-qty="${esc(p.id)}" aria-label="${esc(p.name)} quantity" type="number" min="0" step="1"></div>`).join('')}</div></div>`;
+  return `<div class="card" style="margin-bottom:16px;overflow-x:auto;"><h3 data-i18n=ui_Enter_20_Production_20_Details>Enter Production Details</h3><div style="display:grid;grid-template-columns:150px minmax(140px,1fr) 100px auto auto;gap:8px;align-items:end;min-width:700px;"><div><label data-i18n=ui_Work_20_Date>Work Date</label><input id="sbProductionDate" type="date" value="${sbBillDateKey(new Date())}"></div><div><label data-i18n=ui_Article>Article</label><input id="sbProductionArticle" readonly value="${products[0]?esc(products[0].name):'No saved articles'}"></div><div><label data-i18n=ui_Quantity>Quantity</label><input id="sbProductionQuantity" ${products[0]?`data-box-production-qty="${esc(products[0].id)}"`:'disabled'} type="number" min="0" step="1"></div><button type="button" class="btn ghost" onclick="openShoeBoxLatestProduction(${index})" data-i18n=ui_Latest_20_Production>Latest Production</button><button type="button" class="btn brass" onclick="shoeBoxCreateProductionVoucher(${index})" data-i18n=ui_Create_20_Voucher>Create Voucher</button></div><div style="display:grid;grid-template-columns:repeat(3,minmax(130px,1fr) 85px);gap:8px;align-items:end;margin-top:14px;min-width:700px;">${products.slice(1).map(p=>`<div><label data-i18n=ui_Article>Article</label><input readonly value="${esc(p.name)}"></div><div><label data-i18n=ui_Quantity>Quantity</label><input data-box-production-qty="${esc(p.id)}" aria-label="${esc(p.name)} quantity" type="number" min="0" step="1"></div>`).join('')}</div></div>`;
 }
 function openShoeBoxLatestProduction(index){
   const supplier=getShoeBoxSuppliers()[index];if(!supplier)return;
@@ -15414,8 +15419,17 @@ function shoeBoxReceiveDateRange(filter, customStart='', customEnd=''){
   now.setHours(0,0,0,0);
   let start=new Date(now), end=new Date(now);
   end.setHours(23,59,59,999);
-  if(filter==='weekly') start.setDate(start.getDate()-6);
-  else if(filter==='monthly') start=new Date(now.getFullYear(),now.getMonth(),1);
+  if(filter==='all') return {start:new Date(-8640000000000000),end:new Date(8640000000000000)};
+  if(filter==='weekly'){
+    start.setDate(start.getDate()-(start.getDay()+1)%7);
+    end=new Date(start);end.setDate(end.getDate()+5);end.setHours(23,59,59,999);
+  }
+  else if(filter==='monthly'){
+    const selected=customStart?new Date(customStart.slice(0,7)+'-01T00:00:00'):now;
+    const month=Number.isNaN(selected.getTime())?now:selected;
+    start=new Date(month.getFullYear(),month.getMonth(),1);
+    end=new Date(month.getFullYear(),month.getMonth()+1,0,23,59,59,999);
+  }
   else if(filter==='custom'){
     if(customStart) start=new Date(customStart+'T00:00:00');
     if(customEnd) end=new Date(customEnd+'T23:59:59');
@@ -15426,7 +15440,7 @@ function shoeBoxReceiveRows(supplier,filter='today',customStart='',customEnd='')
   const {start,end}=shoeBoxReceiveDateRange(filter,customStart,customEnd);
   const rows=(supplier?.purchases||[]).filter(p=>{
     const d=new Date(p.date);
-    return !Number.isNaN(d.getTime()) && d>=start && d<=end;
+    return !Number.isNaN(d.getTime()) && d>=start && d<=end && (!['weekly','monthly'].includes(filter)||d.getDay()!==5);
   }).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   return rows;
 }
@@ -15463,8 +15477,8 @@ function shoeBoxReceiveGroupedRows(supplier,rows){
 }
 function shoeBoxReceivePeriodLabel(filter,start='',end=''){
   if(filter==='today') return 'Today';
-  if(filter==='weekly') return 'Last 7 Days';
-  if(filter==='monthly') return 'This Month';
+  if(filter==='weekly') return 'Saturday?Thursday';
+  if(filter==='monthly'){const {start:month}=shoeBoxReceiveDateRange('monthly',start);return month.toLocaleDateString('en-GB',{month:'long',year:'numeric'});}
   if(filter==='custom') return `${start||'—'} to ${end||'—'}`;
   return '';
 }
@@ -15519,8 +15533,8 @@ function pageShoeBoxReceiveDetail(index){
     </div>
     <div class="card" style="margin-bottom:14px;"><div style="display:flex;gap:6px;flex-wrap:wrap;">
       <button class="btn ${filter.filter==='today'?'brass':'ghost'} small" id="sbsReceiveToday" data-i18n=ui_Today>Today</button><button class="btn ${filter.filter==='weekly'?'brass':'ghost'} small" id="sbsReceiveWeekly" data-i18n=ui_Weekly>Weekly</button><button class="btn ${filter.filter==='monthly'?'brass':'ghost'} small" id="sbsReceiveMonthly" data-i18n=ui_Monthly>Monthly</button><button class="btn ${filter.filter==='all'?'brass':'ghost'} small" id="sbsReceiveAll" data-i18n=ui_All_20_Time>All Time</button><button class="btn ${filter.filter==='custom'?'brass':'ghost'} small" id="sbsReceiveCustom" data-i18n=ui_Custom_20_Date>Custom Date</button>
-    </div>${filter.filter==='custom'?`<div class="row" style="margin-top:10px;"><div><label data-i18n=ui_Start_20_Date>Start Date</label><input id="sbsReceiveStart" type="date" value="${esc(filter.start||'')}"></div><div><label data-i18n=ui_End_20_Date>End Date</label><input id="sbsReceiveEnd" type="date" value="${esc(filter.end||'')}"></div><div style="display:flex;align-items:flex-end;"><button class="btn blue small" id="sbsReceiveApply" data-i18n=ui_Apply>Apply</button></div></div>`:''}</div>
-    <div class="card" style="margin-bottom:14px;"><div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px;">Article-wise Received Summary</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;">${(supplier.products||[]).map(product=>{const pid=String(product?.id||product?.name||'');const productRows=rows.filter(p=>String(p.productId||p.productName||'')===pid || (!p.productId && String(p.productName||'')===String(product?.name||'')));return `<div class="entity-card" style="padding:8px;text-align:center;min-width:0;"><div style="font-weight:800;font-size:12px;line-height:1.2;overflow-wrap:anywhere;">${esc(product?.name||'Product')}</div><div style="font-size:10px;color:var(--muted);margin-top:4px;" data-i18n=ui_Received>Received</div><div style="font-size:16px;font-weight:900;color:var(--brass-dark);margin-top:2px;">${esc(productRows.length?shoeBoxReceivingQuantityText(supplier,productRows):shoeBoxReceivingQuantityText(supplier,[{productId:product.id,items:0}]))}</div></div>`;}).join('')||'<div class="empty">No products added yet.</div>'}</div></div>
+    </div>${filter.filter==='monthly'?`<label style="margin-top:10px;">Month</label><input id="sbsReceiveMonth" type="month" value="${esc((filter.start||sbBillDateKey(new Date())).slice(0,7))}" onchange="window.__shoeBoxReceiveFilters=window.__shoeBoxReceiveFilters||{};window.__shoeBoxReceiveFilters[${index}]={filter:'monthly',start:this.value,end:''};render();">`:''}${filter.filter==='custom'?`<div class="row" style="margin-top:10px;"><div><label data-i18n=ui_Start_20_Date>Start Date</label><input id="sbsReceiveStart" type="date" value="${esc(filter.start||'')}"></div><div><label data-i18n=ui_End_20_Date>End Date</label><input id="sbsReceiveEnd" type="date" value="${esc(filter.end||'')}"></div><div style="display:flex;align-items:flex-end;"><button class="btn blue small" id="sbsReceiveApply" data-i18n=ui_Apply>Apply</button></div></div>`:''}</div>
+    <div class="card" style="margin-bottom:14px;"><div style="font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px;">Article-wise Received Summary</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;">${(supplier.products||[]).filter(product=>!product.productListHiddenAt).map(product=>{const pid=String(product?.id||product?.name||'');const productRows=rows.filter(p=>String(p.productId||p.productName||'')===pid || (!p.productId && String(p.productName||'')===String(product?.name||'')));return `<div class="entity-card" style="padding:8px;text-align:center;min-width:0;"><div style="font-weight:800;font-size:12px;line-height:1.2;overflow-wrap:anywhere;">${esc(product?.name||'Product')}</div><div style="font-size:10px;color:var(--muted);margin-top:4px;" data-i18n=ui_Received>Received</div><div style="font-size:16px;font-weight:900;color:var(--brass-dark);margin-top:2px;">${esc(productRows.length?shoeBoxReceivingQuantityText(supplier,productRows):shoeBoxReceivingQuantityText(supplier,[{productId:product.id,items:0}]))}</div></div>`;}).join('')||'<div class="empty">No products added yet.</div>'}</div></div>
     <div class="card" style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;"><div><div style="font-size:12px;color:var(--muted);font-weight:700;">TOTAL RECEIVED</div><div style="font-size:18px;font-weight:900;color:var(--brass-dark);margin-top:3px;">${esc(totals)}</div></div></div></div>
     <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;"><h3 style="margin:0;font-size:17px;" data-i18n=ui_Receiving_20_Summary>Receiving Summary</h3><span style="font-size:12px;color:var(--muted);">${vouchers.length} Voucher${vouchers.length===1?'':'s'}</span></div>
       <div style="display:grid;gap:8px;">${vouchers.length?vouchers.map(v=>`<div class="entity-card" style="padding:11px;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(90px,.7fr) minmax(110px,.8fr) auto;gap:10px;align-items:center;">
@@ -15633,13 +15647,35 @@ function shoeBoxCurrentProductTotalAtoms(supplier,product){
   const b=shoeBoxProductAtomBalanceForSupplier(supplier,product);
   return Math.max(0,Number(b.opening)||0)+Math.max(0,Number(b.newAtom)||0);
 }
+function shoeBoxVoucherHistory(supplier,voucher,selected){
+  const base=new Date(selected[0]?.workDate?selected[0].workDate+'T00:00:00':voucher?.date||selected[0]?.date),range=getUpperWorkWeekRange(base);
+  const cutoff=voucher?.balanceSnapshot?.capturedAt||voucher?.createdAt||voucher?.date||selected[0]?.time||selected[0]?.date;
+  const through=new Date(cutoff),vouchers=supplier.receiveVouchers||[],ownIds=new Set((voucher?.purchaseIds||selected.map(p=>p.id)).map(String));
+  const recordedAt=p=>{
+    if(p.createdAt)return new Date(p.createdAt);
+    const owners=vouchers.filter(v=>(v.purchaseIds||[]).some(id=>String(id)===String(p.id)));
+    const times=owners.map(v=>new Date(v.createdAt||v.date).getTime()).filter(Number.isFinite);
+    return times.length?new Date(Math.min(...times)):new Date(p.time||p.date);
+  };
+  const purchases=(supplier.purchases||[]).filter(p=>{
+    const date=new Date(p.workDate?p.workDate+'T00:00:00':p.date),created=recordedAt(p);
+    return !p.deletedAt&&p.deleted!==true&&date>=range.start&&date<range.end&&date.getDay()!==5&&(ownIds.has(String(p.id))||Number.isFinite(+created)&&created<=through);
+  }).map(p=>({...p,unit:shoeBoxReceivingUnit(supplier,p)}));
+  const records=vouchers.filter(v=>new Date(v.createdAt||v.date)<=through||String(v.id)===String(voucher?.id));
+  return {cutoff,purchases,records};
+}
+function shoeBoxCaptureVoucherHistory(supplier,voucher){
+  const selected=(supplier.purchases||[]).filter(p=>(voucher.purchaseIds||[]).some(id=>String(id)===String(p.id)));
+  if(!selected.length)return;
+  const history=shoeBoxVoucherHistory(supplier,voucher,selected);
+  voucher.balanceSnapshot={...(voucher.balanceSnapshot||{}),shoeBoxWeekly:{version:1,cutoff:history.cutoff,purchases:history.purchases,records:history.records.map(v=>({id:v.id,voucherNo:v.voucherNo,date:v.date,createdAt:v.createdAt,purchaseIds:[...(v.purchaseIds||[])],deletedAt:v.deletedAt}))}};
+}
 function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes='',voucherId=''){
-  const savedVouchers=settings.shoeBoxSuppliers?.[supplierIndex]?.receiveVouchers;
   const supplier=settings.shoeBoxSuppliers?.[supplierIndex]||getShoeBoxSuppliers()[supplierIndex],ids=new Set((purchaseIds||[]).map(String)),selected=(supplier?.purchases||[]).filter(purchase=>ids.has(String(purchase.id)));if(!supplier||!selected.length)return '';
   const voucher=(supplier.receiveVouchers||[]).find(item=>voucherId?String(item.id)===String(voucherId):(item.purchaseIds||[]).some(id=>ids.has(String(id)))),voucherNo=String(voucher?.voucherNo||selected[0].voucherNo||'\u2014'),stamp=new Date(voucher?.createdAt||voucher?.date||selected[0].date),base=new Date(selected[0].workDate?selected[0].workDate+'T00:00:00':voucher?.date||selected[0].date);if(!Number.isFinite(+base)||!Number.isFinite(+stamp))return '';
-  const range=getUpperWorkWeekRange(base),now=new Date(),currentRange=getUpperWorkWeekRange(now),through=base>=currentRange.start&&base<currentRange.end?new Date(now):new Date(stamp);if(base>=currentRange.start&&base<currentRange.end)through.setHours(23,59,59,999);if(through>=range.end)through.setTime(range.end.getTime()-1);
+  const range=getUpperWorkWeekRange(base),snapshot=voucher?.balanceSnapshot?.shoeBoxWeekly,history=snapshot?.version===1?snapshot:shoeBoxVoucherHistory(supplier,voucher,selected);
   const tripIds=new Set(),tripNumbers=new Set(),tripPurchases=new Set();let trips=0;
-  (Array.isArray(savedVouchers)?savedVouchers:supplier.receiveVouchers||[]).forEach(record=>{
+  (history.records||[]).forEach(record=>{
     if(!record||record.deletedAt||record.cancelledAt||record.canceledAt||record.deleted===true||record.cancelled===true||record.canceled===true||record.isCancelled===true||record.isCanceled===true||/^(?:deleted|cancelled|canceled|void|voided)$/i.test(String(record.status||'').trim()))return;
     const date=new Date(record.workDate?record.workDate+'T00:00:00':record.date);if(!Number.isFinite(+date)||date<range.start||date>=range.end||date.getDay()===5)return;
     const id=record.id!=null&&String(record.id)!==''?String(record.id):'',number=record.voucherNo!=null&&String(record.voucherNo)!==''?String(record.voucherNo):'',purchases=[...new Set((record.purchaseIds||[]).map(String))].sort(),purchaseKey=purchases.length?JSON.stringify(purchases):'',fallback=JSON.stringify([record.date||record.workDate,purchases]);
@@ -15647,7 +15683,7 @@ function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes='',voucherI
     if(id)tripIds.add(id);else if(!number)tripIds.add('legacy:'+fallback);if(number)tripNumbers.add(number);if(purchaseKey)tripPurchases.add(purchaseKey);trips++;
   });
   const displayName=shoeBoxSupplierDisplayName(supplier,supplierIndex),urduNames={'akbar box maker':'\u0627\u06a9\u0628\u0631 \u0628\u0627\u06a9\u0633 \u0645\u06cc\u06a9\u0631','shabbir gujjar box maker':'\u0634\u0628\u06cc\u0631 \u06af\u062c\u0631 \u0628\u0627\u06a9\u0633 \u0645\u06cc\u06a9\u0631'},supplierName=urduNames[String(displayName).trim().toLowerCase().replace(/\s+/g,' ')]||displayName;
-  const unique=new Map();(supplier.purchases||[]).forEach((purchase,index)=>{if(purchase.deletedAt||purchase.deleted===true)return;const date=new Date(purchase.workDate?purchase.workDate+'T00:00:00':purchase.date);if(!Number.isFinite(+date)||date<range.start||date>=range.end||date>through||date.getDay()===5)return;unique.set(purchase.id!=null&&String(purchase.id)!==''?'id:'+String(purchase.id):'legacy:'+index,{purchase,date,qty:shoeBoxPurchaseItems(purchase)});});
+  const unique=new Map();(history.purchases||[]).forEach((purchase,index)=>{if(purchase.deletedAt||purchase.deleted===true)return;const date=new Date(purchase.workDate?purchase.workDate+'T00:00:00':purchase.date);if(!Number.isFinite(+date)||date<range.start||date>=range.end||date.getDay()===5)return;unique.set(purchase.id!=null&&String(purchase.id)!==''?'id:'+String(purchase.id):'legacy:'+index,{purchase,date,qty:shoeBoxPurchaseItems(purchase)});});
   const rows=[...unique.values()],articles=new Map();rows.forEach(({purchase,qty})=>{if(qty<=0)return;const unit=shoeBoxReceivingUnit(supplier,purchase),key=JSON.stringify([purchase.productId||purchase.productName||'',unit,unit?null:purchase.id]),article=articles.get(key)||{name:String(purchase.productName||(supplier.products||[]).find(product=>String(product.id)===String(purchase.productId))?.name||'Product'),unit,qty:0};article.qty+=qty;articles.set(key,article);});
   const names=['\u06c1\u0641\u062a\u06c1','\u0627\u062a\u0648\u0627\u0631','\u067e\u06cc\u0631','\u0645\u0646\u06af\u0644','\u0628\u062f\u06be','\u062c\u0645\u0639\u0631\u0627\u062a'],total=shoeBoxReceivingQuantityText(supplier,rows.map(row=>row.purchase));
   const days=names.map((name,index)=>{const date=new Date(range.start);date.setDate(date.getDate()+index);const key=sbBillDateKey(date),daily=rows.filter(row=>sbBillDateKey(row.date)===key),qty=shoeBoxReceivingQuantityText(supplier,daily.map(row=>row.purchase));return '<tr><td dir="rtl">'+name+'</td><td>'+esc(daily.length?qty:'\u2014')+'</td></tr>';}).join('');
@@ -15709,7 +15745,8 @@ function openShoeBoxReceiveVoucherBuilder(supplierIndex,initialPurchaseIds){
       const voucherNo=String(settings.nextShoeBoxReceiveVoucherNo||1001);
       settings.nextShoeBoxReceiveVoucherNo=(Number(settings.nextShoeBoxReceiveVoucherNo)||1001)+1;
       supplier.receiveVouchers=supplier.receiveVouchers||[];
-      supplier.receiveVouchers.push({id:uid(),voucherNo,date:now,purchaseIds:ids,notes,rickshawPheraNo:sbAssignRickshawPheraNo(supplier,now)});
+      supplier.receiveVouchers.push({id:uid(),voucherNo,date:now,createdAt:now,purchaseIds:ids,notes,rickshawPheraNo:sbAssignRickshawPheraNo(supplier,now)});
+      shoeBoxCaptureVoucherHistory(supplier,supplier.receiveVouchers[supplier.receiveVouchers.length-1]);
       persistAll();
       closeModal();
       openShoeBoxReceiveVoucherModal(supplierIndex,ids,false,supplier.receiveVouchers[supplier.receiveVouchers.length-1].id);
@@ -15815,6 +15852,11 @@ function editShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
         p.stockBoxes=(Number(p.stockBoxes)||0)+n.atoms;
       });
       voucher.purchaseIds=newIds;
+      const weeklySnapshot=voucher.balanceSnapshot?.shoeBoxWeekly;
+      if(weeklySnapshot?.version===1){
+        weeklySnapshot.purchases=(weeklySnapshot.purchases||[]).filter(p=>!ids.includes(String(p.id))).concat(supplier.purchases.filter(p=>newIds.includes(String(p.id))).map(p=>({...p,unit:shoeBoxReceivingUnit(supplier,p)})));
+        weeklySnapshot.records=(weeklySnapshot.records||[]).map(record=>String(record.id)===String(voucher.id)?{...record,purchaseIds:[...newIds]}:record);
+      }
       voucher.workerTotalBoxesSnapshot=shoeBoxHistoricalReceivedTotalAt(supplier,voucher);
       voucher.editedAt=new Date().toISOString();
       audit('Shoe Box Voucher Edited',`${voucher.voucherNo} — multi-product voucher updated`);
@@ -16103,13 +16145,14 @@ function openShoeBoxReceiveSession(supplierIndex,draft=null){
         const currentItems=shoeBoxProductStockItems(p);
         p.stockItems=currentItems+atoms;
         p.stockBoxes=Math.max(0,Number(p.stockBoxes)||0)+atoms;
-        const purchase={id:uid(),productId:p.id,productName:p.name,unit:shoeBoxProductDisplayUnit(p),date:iso,items:atoms,atoms,boxes:atoms,voucherNo,notes:document.getElementById('rsNotes').value.trim(),time:iso};
+        const purchase={id:uid(),productId:p.id,productName:p.name,unit:shoeBoxProductDisplayUnit(p),createdAt:now.toISOString(),date:iso,items:atoms,atoms,boxes:atoms,voucherNo,notes:document.getElementById('rsNotes').value.trim(),time:iso};
         supplier.purchases.push(purchase); purchaseIds.push(String(purchase.id));
       });
       supplier.receiveVouchers=supplier.receiveVouchers||[];
       const workerTotalBoxesSnapshot=purchaseIds.reduce((sum,id)=>{const q=supplier.purchases.find(x=>String(x.id)===String(id));return sum+(Number(q?.atoms??q?.items)||0);},0);
       const totalAmount=purchaseIds.reduce((sum,id)=>{const q=supplier.purchases.find(x=>String(x.id)===String(id));return sum+(Number(q?.amount)||0);},0);
-      supplier.receiveVouchers.push({id:uid(),voucherNo,date:iso,rickshawPheraNo:sbAssignRickshawPheraNo(supplier,iso),purchaseIds,notes:document.getElementById('rsNotes').value.trim(),createdAt:iso,workerTotalBoxesSnapshot,balanceSnapshot:{capturedAt:iso},amountSnapshot:totalAmount});
+      supplier.receiveVouchers.push({id:uid(),voucherNo,date:iso,rickshawPheraNo:sbAssignRickshawPheraNo(supplier,iso),purchaseIds,notes:document.getElementById('rsNotes').value.trim(),createdAt:now.toISOString(),workerTotalBoxesSnapshot,balanceSnapshot:{capturedAt:now.toISOString()},amountSnapshot:totalAmount});
+      shoeBoxCaptureVoucherHistory(supplier,supplier.receiveVouchers[supplier.receiveVouchers.length-1]);
       audit('Shoe Box Receive Voucher Created',`${voucherNo} — ${workerTotalBoxesSnapshot} Atoms`);
       if(!await sbCriticalCommit(__snap,'Shoe Box voucher was not saved to D1. Voucher, stock and voucher number were rolled back.'))return;
       closeModal();
@@ -16188,6 +16231,7 @@ function openShoeBoxPurchaseModal(supplierIndex,productId){
 
     settings.nextShoeBoxReceiveVoucherNo=(Number(settings.nextShoeBoxReceiveVoucherNo)||1001)+1;
 
+    shoeBoxCaptureVoucherHistory(supplier,supplier.receiveVouchers[supplier.receiveVouchers.length-1]);
     audit('Shoe Box Receiving Created',`${voucherNo} — ${atoms} Atoms`);if(!await sbCriticalCommit(__snap,'Shoe Box receiving was not saved to D1. Stock and account were rolled back.'))return;
     closeModal();
     render();
