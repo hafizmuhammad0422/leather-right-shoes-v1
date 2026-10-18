@@ -19,34 +19,9 @@
   const style = document.createElement('style');
   style.textContent = '.factory-name-controls{display:flex;gap:5px;align-items:center;flex-wrap:wrap;margin:3px 0 7px;font-size:12px}.factory-name-controls button{font:inherit;padding:3px 7px;cursor:pointer}.factory-name-controls button[aria-pressed="true"]{font-weight:bold;outline:1px solid currentColor}.factory-name-keys{flex-basis:100%;display:flex;flex-wrap:wrap;gap:3px;direction:rtl}.factory-name-keys[hidden]{display:none}.factory-name-keys button{font:18px "Noto Naskh Arabic","Segoe UI",serif;min-width:30px}.factory-name-urdu{direction:rtl!important;text-align:right!important;font-family:"Noto Naskh Arabic","Segoe UI",Tahoma,serif!important}@media print{.factory-name-controls{display:none!important}}';
   document.head.appendChild(style);
-  function isSearchInput(input) {
-    if (!['text','search'].includes(input.type)) return false;
-    return input.type==='search' || /search/i.test([input.id,input.name,input.className,
-      input.getAttribute('placeholder'),input.getAttribute('aria-label'),input.dataset.i18nPlaceholder].join(' ')) ||
-      [...input.attributes].some(attribute=>/search/i.test(attribute.name));
-  }
-  function searchLanguage(input) {
-    const urdu = window.factoryI18n?.language==='ur';
-    input.classList.toggle('factory-name-urdu',urdu);
-    input.dir = urdu?'rtl':'ltr'; input.lang = urdu?'ur':'en';
-  }
   function attach(input) {
-    const search = isSearchInput(input);
-    if (attached.has(input) || (!search && !ids.has(input.id)) || input.readOnly || input.disabled) return;
+    if (attached.has(input) || !ids.has(input.id) || input.readOnly || input.disabled) return;
     attached.add(input);
-    if (search) {
-      input.addEventListener('keydown',event=>{
-        if (window.factoryI18n?.language!=='ur'||event.isComposing||event.ctrlKey||event.metaKey||event.altKey||!keys[event.key]) return;
-        event.preventDefault(); insert(keys[event.key]);
-      });
-      input.addEventListener('beforeinput',event=>{
-        if (window.factoryI18n?.language==='ur'&&!event.isComposing&&event.cancelable&&event.inputType==='insertText'&&keys[event.data]) {
-          event.preventDefault(); insert(keys[event.data]);
-        }
-      });
-      searchLanguage(input);
-      return;
-    }
     const controls = document.createElement('div');
     controls.className = 'factory-name-controls';
     controls.setAttribute('role','group');
@@ -102,8 +77,5 @@
   }
   const observer = new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(scan)));
   observer.observe(document.body,{childList:true,subtree:true});
-  window.addEventListener('factory-language-change',()=>document.querySelectorAll('input').forEach(input=>{
-    if (attached.has(input) && isSearchInput(input)) searchLanguage(input);
-  }));
   scan(document.body);
 })();
