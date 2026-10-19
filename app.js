@@ -15255,7 +15255,7 @@ function pageBackup(){
 }
 
 function doExport(){
-  const data = {settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, exportedAt:new Date().toISOString()};
+  const data = {settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, gasVouchers, exportedAt:new Date().toISOString()};
   const dateTag = new Date().toISOString().slice(0,10);
 
   const jsonBlob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
@@ -15284,6 +15284,9 @@ function doImport(file){
     try{
       const data = JSON.parse(e.target.result);
       if(!data.settings || !data.materials || !data.workers || !data.transactions) throw new Error('bad file');
+      if(Object.prototype.hasOwnProperty.call(data,'gasVouchers')){if(!Array.isArray(data.gasVouchers))throw new Error('Invalid Gas vouchers in backup.');}
+      else{const gasKey=key=>/^(gas|nextGas)/.test(key),preserved=Object.fromEntries(Object.entries(settings).filter(([key])=>gasKey(key)));data.settings={...Object.fromEntries(Object.entries(data.settings||{}).filter(([key])=>!gasKey(key))),...preserved};}
+
       try{
         if(!await saveBackupVersion())throw new Error('Safety backup was not confirmed.');
       }catch(err){
@@ -15292,6 +15295,7 @@ function doImport(file){
         return;
       }
       const before=captureCloudState(); // rollback if runtime save fails
+      if(Array.isArray(data.gasVouchers))gasVouchers=data.gasVouchers;
       settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials; workers = data.workers;
       transactions = data.transactions; stockMovements = data.stockMovements || []; articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
        articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
@@ -18705,6 +18709,7 @@ document.getElementById('gasBillSave').onclick=async()=>{
   const openingAmount=Number(document.getElementById('gasBillOpening').value),rate=Number(document.getElementById('gasBillRate').value),paidAmount=Number(document.getElementById('gasBillPaid').value);
   const amount=Math.round((kg*rate+Number.EPSILON)*100)/100;
   if(![openingAmount,rate,amount,paidAmount].every(n=>Number.isFinite(n)&&n>=0)){toast('Enter valid Opening Amount, Rate and Paid Amount');return;}
+  if(!bill&&kg>0&&rate<=0){toast('Enter a positive Price Per KG before saving gas receiving.');return;}
   const remainingBalance=(Math.round(gasSupplierBillGrandTotal({openingAmount,gasAmount:amount,extraBalanceAmount:extra})*100)-Math.round(paidAmount*100))/100;
   if(!Number.isSafeInteger(Math.round(remainingBalance*100))){toast('Bill balance is too large');return;}
   if(remainingBalance<0){toast('Paid Amount cannot exceed Grand Total');return;}
@@ -19333,15 +19338,20 @@ function openCreateGasVoucherModal(){
     gasVoucherSubmitted=true;gasSaveBtn.dataset.saved='true';
     closeModal();
     render();
-    showGasVoucherReceipt(voucher);
+    showGasVoucherReceipt(voucher, true);
     }finally{openCreateGasVoucherModal.saving=false;if(entryModal)entryModal.inert=false;if(!gasSaveBtn.dataset.saved)gasSaveBtn.disabled=false;}
   };
 }
 
-function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHER'){
+function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHER', unbilledCycle=false){
   const enabledFields = (settings.gasVoucherFields||[]).filter(f=>f.enabled);
   const rows = enabledFields.map(f=>{
-    const val = gasFieldValue(voucher, f.id, previewMode);
+    let val;
+    if(f.id==='totalGasKg'&&(previewMode||unbilledCycle)){
+      const receiving=gasUnbilledReceivingState(),draftQty=Number(voucher?.qtyKg);
+      const extra=previewMode&&!receiving.ids?.includes(String(voucher?.id))&&Number.isFinite(draftQty)&&draftQty>0?draftQty:0;
+      val=receiving.safe?String(Math.round((receiving.qty+extra+Number.EPSILON)*100)/100)+' KG':'Unverified';
+    }else val=gasFieldValue(voucher, f.id, previewMode);
     if(!val) return '';
 
     const boldStyle = f.bold===true ? 'font-weight:900;' : '';
@@ -19448,11 +19458,11 @@ function openGasVoucherPreviewModal(){
   document.getElementById('gvPreviewPrint').onclick=()=>printElement('gasVoucherPreviewArea');
 }
 
-function showGasVoucherReceipt(voucher){
+function showGasVoucherReceipt(voucher, unbilledCycle=false){
   const enabledFields = (settings.gasVoucherFields||[]).filter(f=>f.enabled);
   modal(`<h3 style="margin-top:0;">Gas Voucher #${voucher.voucherNo}</h3>
     <div id="gasVoucherPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">
-      ${renderGasVoucherPaper(voucher, false)}
+      ${renderGasVoucherPaper(voucher, false, 'GAS VOUCHER', unbilledCycle)}
     </div>
     <div class="modal-actions">
       <button class="btn brass" id="gvPrint">🖨️ Print Voucher</button>
@@ -22074,7 +22084,7 @@ async function loadAuthoritativeBackups(force=false){
 }
 async function saveBackupVersion(automaticDay=null){
   if(!cloudReady)throw new Error('D1 is not ready.');
-  const data={settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, savedAt:new Date().toISOString()};
+  const data={settings, materials, workers, transactions, stockMovements, articles, shopkeepers, bills, auditLog, gasVouchers, savedAt:new Date().toISOString()};
   const version=JSON.parse(JSON.stringify({id:uid(), timestamp:data.savedAt, data}));
   authoritativeBackupsLoaded=false; // append makes cached references incomplete
   let res;
@@ -22117,9 +22127,13 @@ async function restoreBackupVersion(versionId){
       const version=versions.find(x=>x.id===versionId);
       if(!version){toast('Version not found');return;}
       data=JSON.parse(JSON.stringify(version.data));
+      if(Object.prototype.hasOwnProperty.call(data,'gasVouchers')){if(!Array.isArray(data.gasVouchers))throw new Error('Invalid Gas vouchers in backup.');}
+      else{const gasKey=key=>/^(gas|nextGas)/.test(key),preserved=Object.fromEntries(Object.entries(settings).filter(([key])=>gasKey(key)));data.settings={...Object.fromEntries(Object.entries(data.settings||{}).filter(([key])=>!gasKey(key))),...preserved};}
+
       await saveBackupVersion();
     }catch(err){toast('Backups could not be read or the safety backup could not be saved. Restore cancelled.');return;}
     const before=captureCloudState();
+    if(Array.isArray(data.gasVouchers))gasVouchers=data.gasVouchers;
     settings = data.settings || {}; settings.ownerPin=settings.ownerPin||'1234'; settings.nextBillNo=Number(settings.nextBillNo)||1001; normalizeUpperFeatureState(); materials = data.materials || []; workers = data.workers || [];
     transactions = data.transactions || []; stockMovements = data.stockMovements || [];
     articles = data.articles || []; shopkeepers = data.shopkeepers || []; bills = data.bills || []; auditLog = data.auditLog || [];
