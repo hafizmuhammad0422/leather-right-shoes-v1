@@ -11692,76 +11692,6 @@ function bindTfsBottomProduction(){
   document.getElementById('tfsBottomPrintButton').onclick=()=>printAggregateThermal(document.getElementById('tfsBottomPrint').outerHTML,'Bottom Man Production','element',{portraitSafe:true});document.getElementById('tfsBottomClose').onclick=()=>goto('todayFactorySummary');
 }
 
-function tfsLaborWeeklyData(now=new Date()){
-  const {start,end}=getUpperWorkWeekRange(now),through=new Date(now);through.setHours(24,0,0,0);
-  const active=r=>!r.deletedAt&&r.deleted!==true,dateOf=r=>r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date||r.createdAt),inWeek=r=>{const date=dateOf(r);return date>=start&&date<end&&date<through&&date.getDay()!==5;},groups=new Map();
-  const titles=['تمام اپر مین کی مزدوری','تمام باٹم مین کی مزدوری','تمام فنش مین کی مزدوری','تمام پریس مین کی مزدوری','تمام سلائی مین کی مزدوری','شوز مغزی ڈوری کی مزدوری','تمام شوز لیزر مین کی مزدوری','تمام اپر کٹنگ اور پروئی کی مزدوری','تمام شوز داب کی مزدوری'];
-  const add=(module,category,workerId,qty,rate,source=settings,sourceWorkers=workers,sourceKey='main',name='')=>{
-    if(!(qty>0))return;const key=JSON.stringify([sourceKey,module,category]),group=groups.get(key)||{module,category,title:titles[category],source,rows:new Map()},id=String(workerId),worker=sourceWorkers.find(w=>String(w.id)===id),row=group.rows.get(id)||{workerId:id,name:worker?.name||name,amount:0,kharcha:0,missing:false};
-    row.amount+=qty*(rate??0);row.missing ||= rate===null;group.rows.set(id,row);groups.set(key,group);
-  };
-  const upper=(settings.upperDistributions||[]).filter(r=>active(r)&&inWeek(r));
-  upper.filter(r=>r.workflowVersion===1).forEach(r=>{
-    const key=workerCategoryCompareKey(upperProductionRecordCategory(r)),category=key==='upper mans'?0:key==='shoes, magzi dori & batawa suppliers'?5:null;if(category===null)return;
-    const worker=workers.find(w=>String(w.id)===String(r.workerId));(r.lines||[]).forEach(line=>{
-      if(!line.articleId&&!line.articleName)return;const display=upperLineDisplay(line),savedRate=line.laminationUnit===true||line.unit==='ATOMS'||line.unit==='SET'?line.rateSnapshot:line.rate,rate=category===0?productionDisplayLabourRate(worker,'upper',line.articleId):savedRate!==undefined&&savedRate!==null&&savedRate!==''&&Number.isFinite(Number(savedRate))?display.rate:null;
-      add('upper',category,r.workerId,display.received,rate,settings,workers,'main',r.workerName);
-    });
-  });
-  // Isolated modules own their workers, voucher lines and kharcha adjustments.
-  [['shoesPressManProduction',3],['shoesLaserManProduction',6],['homeLaserAndStitchManProduction',7],['shoesLabelManProduction',8]].forEach(([sourceKey,category])=>{
-    const state=settings[sourceKey];if(!state?.settings)return;const source=state.settings,sourceWorkers=state.workers||[];
-    (source.upperDistributions||[]).filter(r=>active(r)&&inWeek(r)&&r.workflowVersion===1&&(category!==3||r.pressCutting===true)).forEach(r=>{
-      const worker=sourceWorkers.find(w=>String(w.id)===String(r.workerId)),section=category===3&&(worker||r).pressWorkerCategory==='Stitch Man'?4:category;
-      (r.lines||[]).forEach(line=>{if(!line.articleId&&!line.articleName)return;const display=upperLineDisplay(line),savedRate=line.laminationUnit===true||line.unit==='ATOMS'||line.unit==='SET'?line.rateSnapshot:line.rate,rate=savedRate!==undefined&&savedRate!==null&&savedRate!==''&&Number.isFinite(Number(savedRate))?display.rate:null;
-        add('upper',section,r.workerId,display.received,rate,source,sourceWorkers,sourceKey,r.workerName);
-      });
-    });
-  });
-  ['batam','finished'].forEach(module=>{
-    const vouchers=settings[module+'MansProductionVouchers']||[];
-    (settings[module+'MansProduction']||[]).filter(active).forEach(r=>{
-      const parent=r.voucherId?vouchers.find(v=>String(v.id)===String(r.voucherId)):null;
-      if(r.voucherId&&(!parent||!active(parent)||String(parent.workerId)!==String(r.workerId)))return;
-      if(!inWeek(r.workDate?r:parent||r))return;const worker=workers.find(w=>String(w.id)===String(r.workerId));
-      add(module,module==='batam'?1:2,r.workerId,Math.max(0,Number(r.reportedQty)||0),productionDisplayLabourRate(worker,module,r.articleId));
-    });
-  });
-  const categories=[...groups.values()].map(group=>{
-    const rows=[...group.rows.values()];rows.forEach(row=>{
-      const belongs=r=>String(r.workerId)===row.workerId&&(group.source!==settings||group.module!=='upper'||workerCategoryCompareKey(upperProductionRecordCategory(r))===(group.category===0?'upper mans':'shoes, magzi dori & batawa suppliers'));
-      const records=(group.module==='upper'?group.source.upperDistributions||[]:group.source[group.module+'MansProductionVouchers']||[]).filter(r=>active(r)&&inWeek(r)&&belongs(r));
-      row.kharcha=records.reduce((sum,r)=>sum+(Number(group.module==='upper'?r.totalAmount:r.expenseAmount)||0),0)+(group.source.productionKharchaAdjustments||[]).filter(r=>r.module===group.module&&belongs(r)&&inWeek(r)).reduce((sum,r)=>sum+(Number(r.delta)||0),0);
-    });
-    rows.sort((a,b)=>a.name.localeCompare(b.name));return {module:group.module,category:group.category,title:group.title,rows,amount:rows.reduce((n,r)=>n+r.amount,0),kharcha:rows.reduce((n,r)=>n+r.kharcha,0),missing:rows.some(r=>r.missing)};
-  });
-  categories.sort((a,b)=>a.category-b.category);
-  return {now,categories,amount:categories.reduce((n,c)=>n+c.amount,0),kharcha:categories.reduce((n,c)=>n+c.kharcha,0),missing:categories.some(c=>c.missing),balance:workers.reduce((n,w)=>n+(Number(getWorkerSummaryAmount(w,'baqi'))||0),0)};
-}
-function tfsLaborWeeklyVoucherHtml(data){
-  const money=value=>esc(Number(value).toLocaleString('en-US',{maximumFractionDigits:2})),total=(value,missing)=>money(value)+(missing?' *':''),combined=(labour,kharcha)=>(Math.round(Number(labour)*100)+Math.round(Number(kharcha)*100))/100;
-  const range=getUpperWorkWeekRange(data.now),lastDay=new Date(range.end);lastDay.setDate(lastDay.getDate()-1);
-  const date=value=>value.toLocaleDateString('ur-PK',{day:'numeric',month:'long',year:'numeric'}),weeklyRange=date(range.start)+' تا '+date(lastDay);
-  const moneyRow=(label,value,missing=false,highlight=false)=>'<div class="tls-summary-row'+(highlight?' tls-highlight':'')+'"><span>'+esc(label)+'</span><bdi dir="ltr">'+total(value,missing)+'</bdi></div>';
-  const sections=data.categories.map(category=>{
-    const count=new Set(category.rows.map(row=>String(row.workerId))).size,title=count+' '+String(category.title||'').replace(/^تمام\s+/,'');
-    return '<section class="tls-category" dir="rtl"><div class="tls-category-heading">'+esc(title)+'</div>'+moneyRow('ہفتہ وار مزدوری',category.amount,category.missing)+moneyRow('ہفتہ وار خرچہ',category.kharcha)+moneyRow('کل رقم',combined(category.amount,category.kharcha),category.missing,true)+'</section>';
-  }).join('');
-  return `<div class="tfs-labor-weekly" lang="ur" dir="rtl"><style>
-  .tfs-labor-weekly{box-sizing:border-box;width:80mm;max-width:100%;margin:0 auto;padding:0 1.5mm;background:#fff;color:#000;font-family:'Noto Naskh Arabic',serif;font-size:4mm;font-weight:700;line-height:1.25;text-align:center}
-  .tfs-labor-weekly *{box-sizing:border-box}.tfs-labor-weekly .tls-brand{margin:0;font:700 5.2mm/1.2 'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif;white-space:nowrap;direction:ltr}.tfs-labor-weekly .tls-range{font-size:3.8mm;margin:.3mm 0;padding-bottom:.3mm;border-bottom:1px dashed #000}
-  .tfs-labor-weekly .tls-category{margin:0;padding:.4mm 0;border-bottom:.5px solid #000;break-inside:avoid;page-break-inside:avoid}.tfs-labor-weekly .tls-category-heading{font-size:4mm;line-height:1.25;font-weight:700;margin:0;padding:.15mm 0;overflow-wrap:break-word;word-break:normal}
-  .tfs-labor-weekly .tls-summary-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1mm;align-items:baseline;padding:.05mm .7mm;text-align:right}.tfs-labor-weekly .tls-summary-row>span{min-width:0;overflow-wrap:break-word;word-break:normal}.tfs-labor-weekly .tls-summary-row>bdi{font:700 4mm/1.25 'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif;white-space:nowrap;font-variant-numeric:tabular-nums;text-align:left}.tfs-labor-weekly .tls-highlight{border:.5px solid #000;margin-top:.15mm}
-  .tfs-labor-weekly .tls-factory{margin:.5mm 0 0;break-inside:avoid;page-break-inside:avoid}.tfs-labor-weekly .tls-factory-heading{font-size:4mm;font-weight:700;margin:0;padding:.2mm 0;border-bottom:1px solid #000}.tfs-labor-weekly .tls-warning{font-size:3.4mm;line-height:1.3;margin:.3mm 0;overflow-wrap:break-word}@media print{#aggregateThermalReceipt:has(> .tfs-labor-weekly){padding-top:0}}
-  </style><div class="tls-brand">LEATHER RIGHT SHOES BY ABID</div><div class="tls-range">ہفتہ وار مدت: ${esc(weeklyRange)}</div>${sections||'<p class="tls-warning">اس ہفتے کی پیداوار موجود نہیں۔</p>'}<section class="tls-factory"><div class="tls-factory-heading">فیکٹری کا ہفتہ وار خلاصہ</div>${moneyRow('ٹوٹل مزدوری',data.amount,data.missing)}${moneyRow('ٹوٹل ہفتہ وار خرچہ',data.kharcha)}${moneyRow('گرینڈ ٹوٹل',combined(data.amount,data.kharcha),data.missing,true)}</section>${data.missing?'<p class="tls-warning">* محفوظ اجرت موجود نہیں، ٹوٹل نامکمل ہے۔</p>':''}</div>`;
-}
-function openTfsLaborWeeklyVoucher(){
-  const html=tfsLaborWeeklyVoucherHtml(tfsLaborWeeklyData());
-  modal('<div id="tfsLaborWeeklyPreview">'+html+'</div><div class="modal-actions"><button type="button" class="btn brass" id="tfsLaborWeeklyPrint">پرنٹ</button><button type="button" class="btn ghost" id="tfsLaborWeeklyClose">بند کریں</button></div>');
-  const dialog=document.querySelector('#modalRoot .modal');if(dialog){dialog.style.width='min(440px, calc(100vw - 24px))';dialog.style.maxHeight='90dvh';dialog.style.overflow='auto';}
-  document.getElementById('tfsLaborWeeklyPrint').onclick=()=>printAggregateThermal(html,'LABOR SALARY WEEKLY VOUCHER','element',{settledSizing:true,continuousReceipt:true});
-  document.getElementById('tfsLaborWeeklyClose').onclick=closeModal;
-}
 function todayFactorySummaryCardOrder(){
   try{const order=JSON.parse(localStorage.getItem('fac_today_factory_summary_card_order_v1'));if(Array.isArray(order)&&order.length===30&&new Set(order).size===30&&order.every(id=>Number.isInteger(id)&&id>=1&&id<=30))return order;}catch(error){}
   return Array.from({length:30},(_,index)=>index+1);
@@ -11769,7 +11699,6 @@ function todayFactorySummaryCardOrder(){
 function bindTodayFactorySummaryCards(){
   const grid=document.querySelector('.tfs-placeholder-page .tfs-grid');if(!grid)return;let source=null;
   grid.querySelectorAll('[data-tfs-card]').forEach(card=>{
-    if(card.dataset.tfsCard==='3'){card.addEventListener('click',()=>{if(!source)openTfsLaborWeeklyVoucher();});card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openTfsLaborWeeklyVoucher();}});}
     if(card.dataset.tfsCard==='1'){card.addEventListener('click',()=>{if(!source)openTfsUpperProduction();});card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openTfsUpperProduction();}});}
     if(card.dataset.tfsCard==='2'){card.addEventListener('click',()=>{if(!source)openTfsBottomProduction();});card.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openTfsBottomProduction();}});}
     card.addEventListener('dragstart',event=>{source=card;event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',card.dataset.tfsCard);});
@@ -11800,7 +11729,7 @@ function pageTodayFactorySummary(){
 .tfs-placeholder-page .tfs-card{height:clamp(44px,calc((100dvh - 230px)/5),76px);min-width:0;box-sizing:border-box;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--card);display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px;font-weight:700;overflow-wrap:anywhere}
 @media(max-width:700px){.tfs-placeholder-page .tfs-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.tfs-placeholder-page .tfs-card{height:64px}}
 @media(max-width:400px){.tfs-placeholder-page .tfs-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-</style><div class="tfs-heading"><h2 data-i18n=ui_Today_20_Factory_20_Summary>Today Factory Summary</h2></div><div class="tfs-grid">${todayFactorySummaryCardOrder().map(id=>id===1?tfsUpperProductionCard():id===2?tfsBottomProductionCard():id===3?'<div class="tfs-card" draggable="true" data-tfs-card="3" role="button" tabindex="0" style="cursor:pointer">ہفتہ وار مزدوری واؤچر</div>':'<div class="tfs-card" draggable="true" data-tfs-card="'+id+'">Card '+id+'</div>').join('')}</div></section>`;
+</style><div class="tfs-heading"><h2 data-i18n=ui_Today_20_Factory_20_Summary>Today Factory Summary</h2></div><div class="tfs-grid">${todayFactorySummaryCardOrder().map(id=>id===1?tfsUpperProductionCard():id===2?tfsBottomProductionCard():'<div class="tfs-card" draggable="true" data-tfs-card="'+id+'">Card '+id+'</div>').join('')}</div></section>`;
 }
 
 function pageDashboard(){
@@ -12769,13 +12698,7 @@ function upperProductionRecordCategory(record){
   return workerCategoryCompareKey(worker?.category)?worker.category:'UPPER MANS';
 }
 function upperProductionRecordMatches(record){return workerCategoryCompareKey(upperProductionRecordCategory(record))===workerCategoryCompareKey(upperProductionCategory);}
-function upperProductionRecords(records=settings.upperDistributions||[]){
-  if(upperManContext()){
-    const supplierScope=supplierProductionContextScope(),supplierId=supplierScope?String(supplierProductionActiveWorker()?.id||''):'';
-    return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierScope||String(record.workerId)===supplierId));
-  }
-  return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));
-}
+function upperProductionRecords(records=settings.upperDistributions||[]){return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));}
 function upperProductionPendingAccountMatches(account){
   const worker=workers.find(w=>String(w.id)===String(account.workerId));
   const category=workerCategoryCompareKey(worker?.category)?worker.category:upperProductionRecordCategory(account);
@@ -21440,7 +21363,7 @@ function sizeCurrentWeekWorkerVoucherPreview(){
  box.style.setProperty('box-sizing','border-box','important');box.style.setProperty('width','min(480px, calc(100vw - 24px))','important');box.style.setProperty('max-width','480px','important');box.style.setProperty('height','calc(100dvh - 32px)','important');box.style.setProperty('max-height','calc(100dvh - 32px)','important');box.style.setProperty('overflow','auto','important');
 }
 function openCurrentWeekUpperManCardVoucher(workerId){
- const range=getUpperWorkWeekRange(new Date()),vouchers=(settings.upperDistributions||[]).filter(record=>!record.deletedAt&&record.deleted!==true&&upperManRecord(record)&&String(record.workerId)===String(workerId)&&upperWorkTimestamp(record)>=range.start&&upperWorkTimestamp(record)<range.end).sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
+ const range=getUpperWorkWeekRange(new Date()),vouchers=(settings.upperDistributions||[]).filter(record=>upperManRecord(record)&&String(record.workerId)===String(workerId)&&upperWorkTimestamp(record)>=range.start&&upperWorkTimestamp(record)<range.end).sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
  const voucher=vouchers[vouchers.length-1];if(!voucher){toast('No current-week Upper Man voucher found for this worker.');return;}showUpperVoucher(voucher,false);sizeCurrentWeekWorkerVoucherPreview();
 }
 function openCurrentWeekBfWorkerCardVoucher(module,workerId){
