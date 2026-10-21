@@ -5,7 +5,7 @@
     'rollStockEntrySupplier','rollStockEntryMaterial','rollStockName','hlm-worker-name',
     'hlm-article-name','wfm_sssName','wfm_sspName','pressMeterMaterialName','upperMaterialName',
     'mName','aName','sbsName','sbpName','lmProfileName','sssName','sspName','gsName','gsOwner',
-    'bmpaName','bmpmName','fmpaName','fmpmName','mb20ProductName','mb20ShopName','mb20OwnerName','fsGlobalArticleName','fs_sssName','fs_sspName','fsManualName']);
+    'bmpaName','bmpmName','fmpaName','fmpmName','mb20ProductName','mb20ShopName','mb20OwnerName','fsGlobalArticleName','fs_sssName','fs_sspName','fsManualName','fsDeliveryShopName']);
   const attached = new WeakSet();
   const keys = {a:'ا',b:'ب',c:'چ',d:'د',e:'ع',f:'ف',g:'گ',h:'ہ',i:'ی',j:'ج',k:'ک',l:'ل',
     m:'م',n:'ن',o:'و',p:'پ',q:'ق',r:'ر',s:'س',t:'ت',u:'ء',v:'ط',w:'و',x:'ش',y:'ے',z:'ز',

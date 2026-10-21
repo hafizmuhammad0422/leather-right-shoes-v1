@@ -215,7 +215,7 @@ function pageShoeSoleSuppliers(){
   const shopkeepers=getShoeSoleSuppliers(),index=shoeSoleSelectedIndex(),selected=shopkeepers[index];
   const now=new Date(),supplierCards=shopkeepers.map((shopkeeper,i)=>({shopkeeper,i,rows:shoeSoleTodayRows(shopkeeper,now)})).sort((a,b)=>Number(b.rows.length>0)-Number(a.rows.length>0)||a.i-b.i),todayTotal=factorySaleTotals(shopkeepers.flatMap(s=>shoeSoleTodayRows(s,now)));
   return `<div class="fs_sole-shopkeeper-page">
-    <div class="card fs_sole-shopkeeper-actions"><button class="btn ghost small" id="fs_soleBack">Back</button><button class="btn ghost small" id="fs_soleDashboard">Back to Dashboard</button><button class="btn brass small" id="fs_soleAddSupplier">+ Add Shopkeeper</button><button class="btn brass small" id="fs_soleAddArticle">+ Add Article</button><button class="btn ghost small" id="fs_soleToday">Today Dispatch Articles <strong>${esc(todayTotal)}</strong></button><button type="button" class="btn brass small" id="fsManualCreate">Manual Create Bill</button><button type="button" class="btn ghost small" id="fsManualBills">Manual Bill History</button></div>
+    <div class="card fs_sole-shopkeeper-actions"><button class="btn ghost small" id="fs_soleBack">Back</button><button class="btn ghost small" id="fs_soleDashboard">Back to Dashboard</button><button class="btn brass small" id="fs_soleAddSupplier">+ Add Shopkeeper</button><button class="btn brass small" id="fs_soleAddArticle">+ Add Article</button><button class="btn ghost small" id="fs_soleToday">Today Dispatch Articles <strong>${esc(todayTotal)}</strong></button><button type="button" class="btn brass small" id="fsManualCreate">Manual Create Bill</button><button type="button" class="btn ghost small" id="fsManualBills">Manual Bill History</button><button type="button" class="btn brass small" id="fsDeliveryShopkeepers" title="Delivery Voucher Shopkeepers">Add Shopkeeper</button><button type="button" class="btn brass small" id="fsDeliveryCreateVoucher">Create Voucher</button></div>
     <div class="card"><h3>Select Shopkeeper</h3><div class="fs_sole-shopkeeper-grid">${shopkeepers.length?supplierCards.map(({shopkeeper,i,rows})=>{const qty=factorySaleTotals(rows,shopkeeper);return `<div style="min-width:0;display:flex;flex-direction:column;gap:4px;"><button type="button" class="fs_sole-shopkeeper-card ${i===index?'selected':''}" data-fs_sole-select="${esc(shopkeeper.id)}" aria-pressed="${i===index}"><strong title="${esc(shoeSoleSupplierDisplayName(shopkeeper,i))}">${esc(shoeSoleSupplierDisplayName(shopkeeper,i))}</strong><span>Today: ${esc(qty)}</span>${rows.length?'<span class="fs_sole-shopkeeper-completed">Completed</span>':''}</button><button type="button" class="btn ghost small" data-fs_sole-create-bill="${esc(shopkeeper.id)}">Create Bill</button></div>`;}).join(''):'<div class="empty">Add a Shopkeeper to begin.</div>'}</div></div>
     ${selected?`<div class="card"><div class="fs_sole-entry-heading"><h3>Dispatch Articles - ${esc(shoeSoleSupplierDisplayName(selected,index))}</h3><button class="btn ghost small" id="fs_soleShopkeeperDetails">Shopkeeper Details / History</button></div><div class="fs_sole-dispatch-entry"><div><label for="fs_soleReceiveDate">Date</label><input id="fs_soleReceiveDate" type="date" value="${shoeSoleReportDateKey()}"></div><div><label for="fs_soleArticle">Select Article</label><select id="fs_soleArticle"><option value="">Select Article</option>${factorySaleShopArticles(selected).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} - ${shoeSoleQuantityDisplay(shoeSoleProductStockItems(p))} ${esc(shoeSoleProductDisplayUnit(p))} sent</option>`).join('')}</select></div><div><label for="fs_soleQuantity" id="fs_soleReceiveUnitLabel">Quantity / saved unit</label><input id="fs_soleQuantity" type="number" min="0" step="any" placeholder="Quantity"></div><button class="btn brass" id="fs_soleReceive">Dispatch / Save</button></div>${factorySaleShopArticles(selected).length?'':'<div class="fs_sole-entry-hint">Add Global Articles before dispatch.</div>'}</div>`:'<div class="card empty">Select a shopkeeper to dispatch fs_soles.</div>'}
   </div>`;
@@ -259,6 +259,8 @@ async function saveShoeSoleReceiving(shopkeeperId,articleId,atoms,date,notes='',
   }finally{request.saving=false;window.__soleReceiveSaving=false;}
 }
 function bindShoeSoleLanding(){
+  document.getElementById('fsDeliveryShopkeepers')?.addEventListener('click',factorySaleDeliveryShopkeeperModal);
+  document.getElementById('fsDeliveryCreateVoucher')?.addEventListener('click',()=>factorySaleDeliveryEditor());
   document.getElementById('fs_soleBack')?.addEventListener('click',()=>goBack());
   document.getElementById('fs_soleDashboard')?.addEventListener('click',()=>goto('dashboard'));
   document.getElementById('fs_soleAddSupplier')?.addEventListener('click',()=>openShoeSoleSupplierModal());
@@ -1344,6 +1346,140 @@ function bind(){
   document.querySelectorAll('[data-lightboxphoto="shoeSoleSupplier"]').forEach(el=>el.onclick=()=>{const shopkeeper=getShoeSoleSuppliers()[Number(el.dataset.fs_sssindex)];if(shopkeeper?.photo)openImageLightbox(shopkeeper.photo);});
 }
 
+
+/* Factory Sale delivery vouchers: isolated directory and immutable saved snapshots. */
+let factorySaleDeliverySaving=false;
+function factorySaleDeliveryData(key){return factorySaleServices.read()?.[key]||[];}
+async function factorySaleDeliveryStore(key,record){
+  if(factorySaleDeliverySaving||writeDepth){toast('Please wait for the current save.');return false;}
+  const previous=factorySaleServices.read(),existed=factorySaleServices.exists(),records=factorySaleDeliveryData(key);
+  if(records.some(row=>row.id===record.id))return true;
+  factorySaleDeliverySaving=true;
+  try{
+    // Publish only the new field against raw saved data, without persisting load() normalizations.
+    const next={...(previous||factorySaleServices.common()),[key]:[...records,record]};
+    writeDepth++;
+    try{
+      factorySaleServices.publish(next);
+      if(!await factorySaleServices.critical())throw Error('Save failed');
+    }finally{writeDepth--;}
+    settings[key]=next[key];
+    return true;
+  }catch(error){
+    factorySaleServices.restore(previous,existed);
+    try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}
+    // An acknowledgement can fail after D1 accepted this same draft ID.
+    const latest=factorySaleServices.read();
+    for(const field of ['deliveryShopkeepers','deliveryVouchers']){
+      if(latest&&Object.prototype.hasOwnProperty.call(latest,field))settings[field]=latest[field];
+      else delete settings[field];
+    }
+    if(factorySaleDeliveryData(key).some(row=>row.id===record.id))return true;
+    toast('Save failed. Your inputs are preserved; please retry.');
+    return false;
+  }finally{factorySaleDeliverySaving=false;}
+}
+function factorySaleDeliveryTotals(lines){
+  const totals={ATOM:0,SET:0};
+  for(const line of lines){
+    if(!['ATOM','SET'].includes(line.unit))throw Error('Unit must be ATOM or SET.');
+    totals[line.unit]+=Math.round(line.qty*1000000);
+    if(!Number.isSafeInteger(totals[line.unit]))throw Error('Total quantity is too large.');
+  }
+  return {ATOM:totals.ATOM/1000000,SET:totals.SET/1000000};
+}
+function factorySaleDeliveryLines(rows,shopkeepers){
+  if(!rows.length)throw Error('Select at least one Shopkeeper.');
+  const seen=new Set(),lines=rows.map(row=>{
+    const shopkeeper=shopkeepers.find(shop=>shop.id===row.shopkeeperId),qty=Number(row.qty);
+    if(!shopkeeper||!['ATOM','SET'].includes(shopkeeper.unit))throw Error('Select a saved Shopkeeper with ATOM or SET.');
+    if(seen.has(shopkeeper.id))throw Error('Select each Shopkeeper only once.');
+    seen.add(shopkeeper.id);
+    if(!Number.isFinite(qty)||qty<=0||!Number.isSafeInteger(Math.round(qty*1000000))||Number(qty.toFixed(6))!==qty)throw Error('Enter a positive Quantity (up to 6 decimal places).');
+    return {shopkeeperId:shopkeeper.id,shopkeeperName:shopkeeper.name,qty,unit:shopkeeper.unit};
+  });
+  factorySaleDeliveryTotals(lines);
+  return lines;
+}
+function factorySaleDeliveryShopkeeperModal(){
+  const shops=factorySaleDeliveryData('deliveryShopkeepers'),draftId=uid();let saving=false;
+  modal('<h3>Add Shopkeeper</h3><label>Select Shopkeeper<select id="fsDeliveryShopSelect"><option value="">Add new Shopkeeper</option>'+shops.map(shop=>'<option value="'+esc(shop.id)+'">'+esc(shop.name)+' — '+esc(shop.unit)+'</option>').join('')+'</select></label><label>Shopkeeper Name<input id="fsDeliveryShopName" dir="auto"></label><label>Unit<select id="fsDeliveryShopUnit"><option value="ATOM">ATOM</option><option value="SET">SET</option></select></label><div class="modal-actions"><button type="button" class="btn brass" id="fsDeliveryShopSave">Save Shopkeeper</button><button type="button" class="btn ghost" id="fsDeliveryShopClose">Close</button></div>');
+  const select=document.getElementById('fsDeliveryShopSelect'),name=document.getElementById('fsDeliveryShopName'),unit=document.getElementById('fsDeliveryShopUnit'),button=document.getElementById('fsDeliveryShopSave');
+  select.onchange=()=>{const shop=shops.find(row=>row.id===select.value);name.value=shop?.name||'';unit.value=shop?.unit||'ATOM';name.disabled=unit.disabled=!!shop;button.textContent=shop?'Use Shopkeeper':'Save Shopkeeper';};
+  document.getElementById('fsDeliveryShopClose').onclick=closeModal;
+  button.onclick=async()=>{
+    if(saving||factorySaleDeliverySaving)return;
+    if(select.value){factorySaleDeliveryEditor(select.value);return;}
+    const shop={id:draftId,name:name.value.trim(),unit:unit.value};
+    if(!shop.name||!['ATOM','SET'].includes(shop.unit)){toast('Enter Shopkeeper Name and select ATOM or SET.');return;}
+    if(factorySaleDeliveryData('deliveryShopkeepers').some(row=>row.id!==draftId&&row.name.trim().toLocaleLowerCase()===shop.name.toLocaleLowerCase())){toast('This Shopkeeper is already saved. Select the saved name.');return;}
+    saving=true;button.disabled=true;
+    const ok=await factorySaleDeliveryStore('deliveryShopkeepers',shop);
+    saving=false;if(button.isConnected)button.disabled=false;
+    if(ok)factorySaleDeliveryEditor(shop.id);
+  };
+}
+function factorySaleDeliveryEditor(selectedId=''){
+  const shops=factorySaleDeliveryData('deliveryShopkeepers'),draftId=uid();let saving=false;
+  modal('<h3>Create Voucher</h3><div style="overflow-x:auto"><table style="width:100%;min-width:0;table-layout:fixed"><colgroup><col style="width:52%"><col style="width:28%"><col style="width:20%"></colgroup><thead><tr><th>Shopkeeper Name</th><th>Quantity</th><th>Unit</th></tr></thead><tbody id="fsDeliveryRows">'+shops.map(shop=>'<tr data-fs-delivery-shop="'+esc(shop.id)+'"><td><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-fs-delivery-selected style="width:auto;flex-shrink:0" '+(shop.id===selectedId?'checked':'')+'><bdi dir="auto" style="overflow-wrap:anywhere">'+esc(shop.name)+'</bdi></label></td><td><input type="number" data-fs-delivery-qty min="0" step="any" aria-label="Quantity" '+(shop.id===selectedId?'':'disabled')+'></td><td><strong data-fs-delivery-unit>'+esc(shop.unit)+'</strong></td></tr>').join('')+(shops.length?'':'<tr><td colspan="3">Add a Shopkeeper to create a voucher.</td></tr>')+'</tbody></table></div><div class="modal-actions"><button type="button" class="btn brass" id="fsDeliverySave" '+(shops.length?'':'disabled')+'>Save Voucher</button><button type="button" class="btn ghost" id="fsDeliveryAddShop">Add Shopkeeper</button><button type="button" class="btn ghost" id="fsDeliveryHistory">Saved Vouchers</button><button type="button" class="btn ghost" id="fsDeliveryClose">Close</button></div>');
+  const host=document.getElementById('fsDeliveryRows'),button=document.getElementById('fsDeliverySave');
+  host.querySelectorAll('[data-fs-delivery-shop]').forEach(row=>{row.querySelector('[data-fs-delivery-selected]').onchange=event=>{const input=row.querySelector('[data-fs-delivery-qty]');input.disabled=!event.target.checked;if(event.target.checked)input.focus();};});
+  document.getElementById('fsDeliveryAddShop').onclick=factorySaleDeliveryShopkeeperModal;
+  document.getElementById('fsDeliveryHistory').onclick=factorySaleDeliveryHistory;
+  document.getElementById('fsDeliveryClose').onclick=closeModal;
+  button.onclick=async()=>{
+    if(saving||factorySaleDeliverySaving)return;
+    if(factorySaleDeliveryData('deliveryVouchers').some(row=>row.id===draftId)){factorySaleDeliveryView(draftId);return;}
+    let lines;
+    try{lines=factorySaleDeliveryLines([...host.querySelectorAll('[data-fs-delivery-shop]')].filter(row=>row.querySelector('[data-fs-delivery-selected]').checked).map(row=>({shopkeeperId:row.dataset.fsDeliveryShop,qty:row.querySelector('[data-fs-delivery-qty]').value})),factorySaleDeliveryData('deliveryShopkeepers'));}catch(error){toast(error.message);return;}
+    const voucher={id:draftId,date:new Date().toISOString(),lines};
+    saving=true;button.disabled=true;
+    const ok=await factorySaleDeliveryStore('deliveryVouchers',voucher);
+    saving=false;if(button.isConnected)button.disabled=false;
+    if(ok)factorySaleDeliveryView(draftId);
+  };
+}
+function factorySaleDeliveryDate(value){return new Date(value).toLocaleString('ur-PK-u-nu-arabext',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});}
+function factorySaleDeliveryVoucherHtml(voucher){
+  const totals=factorySaleDeliveryTotals(voucher.lines),number=value=>Number(value).toLocaleString('ur-PK-u-nu-arabext',{useGrouping:false,maximumFractionDigits:6}),nameText=value=>typeof productionWeeklyUrduText==='function'?productionWeeklyUrduText(value,true):String(value??'');
+  return `<div id="fsDeliveryPrintArea" class="receipt-paper" lang="ur" dir="rtl"><style>
+    @font-face{font-family:"FS Delivery Urdu";src:url("./fonts/factory-sale-delivery/NotoNastaliqUrdu.ttf") format("truetype");font-style:normal;font-weight:400 700;font-display:swap;}
+    #fsDeliveryPrintArea{width:80mm;max-width:100%;box-sizing:border-box;margin:auto;padding:2mm 4mm 1mm;border:0;font-family:"FS Delivery Urdu",serif;font-size:4mm;font-weight:700;line-height:2.05;letter-spacing:0;color:#000;background:#fff;direction:rtl;}
+    #fsDeliveryPrintArea *{box-sizing:border-box;}
+    #fsDeliveryPrintArea .fs-delivery-brand{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-size:4.3mm;font-weight:800;line-height:1.1;direction:ltr;unicode-bidi:isolate;text-align:center;white-space:nowrap;margin:0 0 .7mm;}
+    #fsDeliveryPrintArea h3{display:flex;align-items:center;gap:1mm;font:inherit;font-size:4.5mm;font-weight:700;text-align:center;margin:0;}
+    #fsDeliveryPrintArea h3:before,#fsDeliveryPrintArea h3:after{content:"";flex:1;border-top:1px solid #000;}
+    #fsDeliveryPrintArea .fs-delivery-date{display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:.8mm;text-align:center;font-size:3.3mm;line-height:2.05;margin:.5mm 0 1mm;}
+    #fsDeliveryPrintArea .fs-delivery-date bdi{white-space:nowrap;}
+    #fsDeliveryPrintArea .fs-delivery-frame{border:1px solid #000;border-radius:1mm;overflow:hidden;}
+    #fsDeliveryPrintArea table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse;margin:0;border:0;font:inherit;direction:rtl;}
+    #fsDeliveryPrintArea th,#fsDeliveryPrintArea td{height:auto;padding:.7mm .65mm;border:0;border-bottom:1px solid #000;text-align:center;vertical-align:middle;font-family:"FS Delivery Urdu",serif;font-size:4mm;font-weight:700;line-height:2.05;white-space:normal;overflow-wrap:anywhere;word-break:normal;}
+    #fsDeliveryPrintArea th+th,#fsDeliveryPrintArea td+td,#fsDeliveryPrintArea th+td{border-right:1px solid #000;}
+    #fsDeliveryPrintArea tbody tr:last-child>*{border-bottom:0;}
+    #fsDeliveryPrintArea thead th{font-weight:800;white-space:nowrap;overflow-wrap:normal;}
+    #fsDeliveryPrintArea td.fs-delivery-name{text-align:center;direction:rtl;font-weight:800;}
+    #fsDeliveryPrintArea bdi{unicode-bidi:isolate;font-variant-numeric:tabular-nums;}
+    #fsDeliveryPrintArea .fs-delivery-summary{margin-top:1mm;}
+    #fsDeliveryPrintArea .fs-delivery-totals th,#fsDeliveryPrintArea .fs-delivery-totals td{padding:.2mm 1mm;font-weight:800;}
+    #fsDeliveryPrintArea .fs-delivery-totals th{text-align:right;direction:rtl;}
+    #fsDeliveryPrintArea tr{break-inside:avoid;}
+    @media print{#fsDeliveryPrintArea{padding:2mm 0 1mm!important;overflow:visible;height:auto;min-height:0;}}
+  </style><div class="fs-delivery-brand" lang="en" dir="ltr">LEATHER RIGHT SHOES BY ABID</div><h3>آج ڈیلیور کیا گیا مال</h3><div class="fs-delivery-date"><span>تاریخ و وقت:</span><bdi dir="ltr">${esc(factorySaleDeliveryDate(voucher.date))}</bdi></div><div class="fs-delivery-frame"><table><colgroup><col style="width:14%"><col style="width:52%"><col style="width:34%"></colgroup><thead><tr><th>نمبر</th><th>دکاندار کا نام</th><th>بھیجا گیا مال</th></tr></thead><tbody>${voucher.lines.map((line,index)=>'<tr><td>'+number(index+1)+'</td><td class="fs-delivery-name"><bdi dir="auto">'+esc(nameText(line.shopkeeperName))+'</bdi></td><td><bdi>'+number(line.qty)+'</bdi> '+(line.unit==='ATOM'?'ایٹم':'سیٹ')+'</td></tr>').join('')}</tbody></table></div><div class="fs-delivery-frame fs-delivery-summary"><table class="fs-delivery-totals"><colgroup><col style="width:65%"><col style="width:35%"></colgroup><tbody><tr><th>کل دکاندار</th><td>${number(voucher.lines.length)}</td></tr><tr><th>کل ایٹم</th><td>${number(totals.ATOM)}</td></tr><tr><th>کل سیٹ</th><td>${number(totals.SET)}</td></tr></tbody></table></div></div>`;
+}
+function factorySaleDeliveryView(id){
+  const voucher=factorySaleDeliveryData('deliveryVouchers').find(row=>row.id===id);if(!voucher)return;
+  modal(factorySaleDeliveryVoucherHtml(voucher)+'<div class="modal-actions" lang="ur" dir="rtl"><button type="button" class="btn brass" id="fsDeliveryPrint">پرنٹ کریں</button><button type="button" class="btn ghost" id="fsDeliveryViewHistory">محفوظ واؤچر</button><button type="button" class="btn ghost" id="fsDeliveryViewClose">بند کریں</button></div>');
+  document.getElementById('fsDeliveryPrint').onclick=()=>printElement('fsDeliveryPrintArea',{settledSizing:true});
+  document.getElementById('fsDeliveryViewHistory').onclick=factorySaleDeliveryHistory;
+  document.getElementById('fsDeliveryViewClose').onclick=closeModal;
+}
+function factorySaleDeliveryHistory(){
+  const vouchers=factorySaleDeliveryData('deliveryVouchers');
+  modal('<div lang="ur" dir="rtl"><h3>محفوظ واؤچر</h3>'+vouchers.slice().reverse().map(voucher=>'<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;margin:6px 0"><span>'+esc(factorySaleDeliveryDate(voucher.date))+' — کل دکاندار: '+voucher.lines.length.toLocaleString('ur-PK-u-nu-arabext')+'</span><button type="button" class="btn ghost small" data-fs-delivery-view="'+esc(voucher.id)+'">دیکھیں / پرنٹ</button></div>').join('')+(vouchers.length?'':'<p>ابھی کوئی واؤچر محفوظ نہیں۔</p>')+'<div class="modal-actions"><button type="button" class="btn brass" id="fsDeliveryHistoryNew">نیا واؤچر</button><button type="button" class="btn ghost" id="fsDeliveryHistoryClose">بند کریں</button></div></div>');
+  document.querySelectorAll('[data-fs-delivery-view]').forEach(button=>{button.onclick=()=>factorySaleDeliveryView(button.dataset.fsDeliveryView);});
+  document.getElementById('fsDeliveryHistoryNew').onclick=()=>factorySaleDeliveryEditor();
+  document.getElementById('fsDeliveryHistoryClose').onclick=closeModal;
+}
 
 let factorySaleManualSaving=false;
 function factorySaleManualArticles(){return factorySaleArticles().map(article=>({key:String(article.id),articleId:String(article.id),articleName:article.name,shopkeeperName:'Global Article',unit:shoeSoleProductDisplayUnit(article),rate:article.ratePerUnit}));}
