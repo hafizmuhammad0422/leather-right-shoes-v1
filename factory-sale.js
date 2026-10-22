@@ -1421,7 +1421,7 @@ function factorySaleDeliveryShopkeeperModal(){
 }
 function factorySaleDeliveryEditor(selectedId=''){
   const shops=factorySaleDeliveryData('deliveryShopkeepers'),draftId=uid();let saving=false;
-  modal('<h3>Create Voucher</h3><div style="overflow-x:auto"><table style="width:100%;min-width:0;table-layout:fixed"><colgroup><col style="width:52%"><col style="width:28%"><col style="width:20%"></colgroup><thead><tr><th>Shopkeeper Name</th><th>Quantity</th><th>Unit</th></tr></thead><tbody id="fsDeliveryRows">'+shops.map(shop=>'<tr data-fs-delivery-shop="'+esc(shop.id)+'"><td><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-fs-delivery-selected style="width:auto;flex-shrink:0" '+(shop.id===selectedId?'checked':'')+'><bdi dir="auto" style="overflow-wrap:anywhere">'+esc(shop.name)+'</bdi></label></td><td><input type="number" data-fs-delivery-qty min="0" step="any" aria-label="Quantity" '+(shop.id===selectedId?'':'disabled')+'></td><td><strong data-fs-delivery-unit>'+esc(shop.unit)+'</strong></td></tr>').join('')+(shops.length?'':'<tr><td colspan="3">Add a Shopkeeper to create a voucher.</td></tr>')+'</tbody></table></div><div class="modal-actions"><button type="button" class="btn brass" id="fsDeliverySave" '+(shops.length?'':'disabled')+'>Save Voucher</button><button type="button" class="btn ghost" id="fsDeliveryAddShop">Add Shopkeeper</button><button type="button" class="btn ghost" id="fsDeliveryHistory">Saved Vouchers</button><button type="button" class="btn ghost" id="fsDeliveryClose">Close</button></div>');
+  modal('<h3>Create Voucher</h3><label lang="ur" dir="rtl">اڈے کا نام<input id="fsDeliveryAddaName" lang="ur" dir="rtl"></label><div style="overflow-x:auto"><table style="width:100%;min-width:0;table-layout:fixed"><colgroup><col style="width:52%"><col style="width:28%"><col style="width:20%"></colgroup><thead><tr><th>Shopkeeper Name</th><th>Quantity</th><th>Unit</th></tr></thead><tbody id="fsDeliveryRows">'+shops.map(shop=>'<tr data-fs-delivery-shop="'+esc(shop.id)+'"><td><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-fs-delivery-selected style="width:auto;flex-shrink:0" '+(shop.id===selectedId?'checked':'')+'><bdi dir="auto" style="overflow-wrap:anywhere">'+esc(shop.name)+'</bdi></label></td><td><input type="number" data-fs-delivery-qty min="0" step="any" aria-label="Quantity" '+(shop.id===selectedId?'':'disabled')+'></td><td><strong data-fs-delivery-unit>'+esc(shop.unit)+'</strong></td></tr>').join('')+(shops.length?'':'<tr><td colspan="3">Add a Shopkeeper to create a voucher.</td></tr>')+'</tbody></table></div><div class="modal-actions"><button type="button" class="btn brass" id="fsDeliverySave" '+(shops.length?'':'disabled')+'>Save Voucher</button><button type="button" class="btn ghost" id="fsDeliveryAddShop">Add Shopkeeper</button><button type="button" class="btn ghost" id="fsDeliveryHistory">Saved Vouchers</button><button type="button" class="btn ghost" id="fsDeliveryClose">Close</button></div>');
   const host=document.getElementById('fsDeliveryRows'),button=document.getElementById('fsDeliverySave');
   host.querySelectorAll('[data-fs-delivery-shop]').forEach(row=>{row.querySelector('[data-fs-delivery-selected]').onchange=event=>{const input=row.querySelector('[data-fs-delivery-qty]');input.disabled=!event.target.checked;if(event.target.checked)input.focus();};});
   document.getElementById('fsDeliveryAddShop').onclick=factorySaleDeliveryShopkeeperModal;
@@ -1432,7 +1432,7 @@ function factorySaleDeliveryEditor(selectedId=''){
     if(factorySaleDeliveryData('deliveryVouchers').some(row=>row.id===draftId)){factorySaleDeliveryView(draftId);return;}
     let lines;
     try{lines=factorySaleDeliveryLines([...host.querySelectorAll('[data-fs-delivery-shop]')].filter(row=>row.querySelector('[data-fs-delivery-selected]').checked).map(row=>({shopkeeperId:row.dataset.fsDeliveryShop,qty:row.querySelector('[data-fs-delivery-qty]').value})),factorySaleDeliveryData('deliveryShopkeepers'));}catch(error){toast(error.message);return;}
-    const voucher={id:draftId,date:new Date().toISOString(),lines};
+    const voucher={id:draftId,date:new Date().toISOString(),addaName:factoryReadName('fsDeliveryAddaName').trim(),lines};
     saving=true;button.disabled=true;
     const ok=await factorySaleDeliveryStore('deliveryVouchers',voucher);
     saving=false;if(button.isConnected)button.disabled=false;
@@ -1441,35 +1441,41 @@ function factorySaleDeliveryEditor(selectedId=''){
 }
 function factorySaleDeliveryDate(value){return new Date(value).toLocaleString('ur-PK-u-nu-arabext',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});}
 function factorySaleDeliveryVoucherHtml(voucher){
-  const totals=factorySaleDeliveryTotals(voucher.lines),number=value=>Number(value).toLocaleString('ur-PK-u-nu-arabext',{useGrouping:false,maximumFractionDigits:6}),nameText=value=>typeof productionWeeklyUrduText==='function'?productionWeeklyUrduText(value,true):String(value??'');
+  const totals=factorySaleDeliveryTotals(voucher.lines),number=value=>Number(value).toLocaleString('en-US',{useGrouping:false,maximumFractionDigits:6}),nameText=value=>typeof productionWeeklyUrduText==='function'?productionWeeklyUrduText(value,true):String(value??'');
+  const stamp=new Date(voucher.date),date=stamp.toLocaleDateString('ur-PK',{weekday:'long'})+'، '+stamp.getDate()+' '+stamp.toLocaleDateString('ur-PK',{month:'long'})+' '+stamp.getFullYear(),time=stamp.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}).replace(/AM/i,'صبح').replace(/PM/i,'شام');
+  const delivered=['ATOM','SET'].filter(unit=>totals[unit]>0).map(unit=>number(totals[unit])+' '+(unit==='ATOM'?'ایٹم':'سیٹ')).join(' / ')||number(0);
   return `<div id="fsDeliveryPrintArea" class="receipt-paper" lang="ur" dir="rtl"><style>
-    @font-face{font-family:"FS Delivery Urdu";src:url("./fonts/factory-sale-delivery/NotoNastaliqUrdu.ttf") format("truetype");font-style:normal;font-weight:400 700;font-display:swap;}
-    #fsDeliveryPrintArea{width:80mm;max-width:100%;box-sizing:border-box;margin:auto;padding:2mm 4mm 1mm;border:0;font-family:"FS Delivery Urdu",serif;font-size:4mm;font-weight:700;line-height:2.05;letter-spacing:0;color:#000;background:#fff;direction:rtl;}
-    #fsDeliveryPrintArea *{box-sizing:border-box;}
-    #fsDeliveryPrintArea .fs-delivery-brand{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-size:4.3mm;font-weight:800;line-height:1.1;direction:ltr;unicode-bidi:isolate;text-align:center;white-space:nowrap;margin:0 0 .7mm;}
-    #fsDeliveryPrintArea h3{display:flex;align-items:center;gap:1mm;font:inherit;font-size:4.5mm;font-weight:700;text-align:center;margin:0;}
-    #fsDeliveryPrintArea h3:before,#fsDeliveryPrintArea h3:after{content:"";flex:1;border-top:1px solid #000;}
-    #fsDeliveryPrintArea .fs-delivery-date{display:flex;align-items:baseline;justify-content:center;flex-wrap:wrap;gap:.8mm;text-align:center;font-size:3.3mm;line-height:2.05;margin:.5mm 0 1mm;}
-    #fsDeliveryPrintArea .fs-delivery-date bdi{white-space:nowrap;}
-    #fsDeliveryPrintArea .fs-delivery-frame{border:1px solid #000;border-radius:1mm;overflow:hidden;}
-    #fsDeliveryPrintArea table{width:100%!important;min-width:0!important;max-width:100%!important;table-layout:fixed!important;border-collapse:collapse;margin:0;border:0;font:inherit;direction:rtl;}
-    #fsDeliveryPrintArea th,#fsDeliveryPrintArea td{height:auto;padding:.7mm .65mm;border:0;border-bottom:1px solid #000;text-align:center;vertical-align:middle;font-family:"FS Delivery Urdu",serif;font-size:4mm;font-weight:700;line-height:2.05;white-space:normal;overflow-wrap:anywhere;word-break:normal;}
-    #fsDeliveryPrintArea th+th,#fsDeliveryPrintArea td+td,#fsDeliveryPrintArea th+td{border-right:1px solid #000;}
-    #fsDeliveryPrintArea tbody tr:last-child>*{border-bottom:0;}
-    #fsDeliveryPrintArea thead th{font-weight:800;white-space:nowrap;overflow-wrap:normal;}
-    #fsDeliveryPrintArea td.fs-delivery-name{text-align:center;direction:rtl;font-weight:800;}
-    #fsDeliveryPrintArea bdi{unicode-bidi:isolate;font-variant-numeric:tabular-nums;}
-    #fsDeliveryPrintArea .fs-delivery-summary{margin-top:1mm;}
-    #fsDeliveryPrintArea .fs-delivery-totals th,#fsDeliveryPrintArea .fs-delivery-totals td{padding:.2mm 1mm;font-weight:800;}
-    #fsDeliveryPrintArea .fs-delivery-totals th{text-align:right;direction:rtl;}
-    #fsDeliveryPrintArea tr{break-inside:avoid;}
-    @media print{#fsDeliveryPrintArea{padding:2mm 0 1mm!important;overflow:visible;height:auto;min-height:0;}}
-  </style><div class="fs-delivery-brand" lang="en" dir="ltr">LEATHER RIGHT SHOES BY ABID</div><h3>آج ڈیلیور کیا گیا مال</h3><div class="fs-delivery-date"><span>تاریخ و وقت:</span><bdi dir="ltr">${esc(factorySaleDeliveryDate(voucher.date))}</bdi></div><div class="fs-delivery-frame"><table><colgroup><col style="width:14%"><col style="width:52%"><col style="width:34%"></colgroup><thead><tr><th>نمبر</th><th>دکاندار کا نام</th><th>بھیجا گیا مال</th></tr></thead><tbody>${voucher.lines.map((line,index)=>'<tr><td>'+number(index+1)+'</td><td class="fs-delivery-name"><bdi dir="auto">'+esc(nameText(line.shopkeeperName))+'</bdi></td><td><bdi>'+number(line.qty)+'</bdi> '+(line.unit==='ATOM'?'ایٹم':'سیٹ')+'</td></tr>').join('')}</tbody></table></div><div class="fs-delivery-frame fs-delivery-summary"><table class="fs-delivery-totals"><colgroup><col style="width:65%"><col style="width:35%"></colgroup><tbody><tr><th>کل دکاندار</th><td>${number(voucher.lines.length)}</td></tr><tr><th>کل ایٹم</th><td>${number(totals.ATOM)}</td></tr><tr><th>کل سیٹ</th><td>${number(totals.SET)}</td></tr></tbody></table></div></div>`;
+    #fsDeliveryPrintArea{width:80mm;max-width:100%;margin:auto;}
+    #fsDeliveryPrintArea .fs-delivery-weekly-voucher{box-sizing:border-box;width:100%;padding:4mm 0 1mm;color:#000;background:#fff;font-family:'Noto Naskh Arabic',serif;font-weight:600;line-height:1.1;text-align:center;direction:rtl;}
+    #fsDeliveryPrintArea .fs-delivery-weekly-voucher *{box-sizing:border-box;font-family:'Noto Naskh Arabic',serif!important;line-height:1.6!important;letter-spacing:0;}
+    #fsDeliveryPrintArea .um-brand{font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif!important;font-weight:700;font-size:5.2mm;white-space:nowrap;direction:ltr;unicode-bidi:isolate;line-height:1.1!important;}
+    #fsDeliveryPrintArea .um-title{font-weight:600;display:flex;align-items:center;gap:1.5mm;font-size:4.25mm;margin:1.5mm 0 2mm;white-space:nowrap;line-height:1.1!important;}
+    #fsDeliveryPrintArea .um-title:before,#fsDeliveryPrintArea .um-title:after{content:'';flex:1;border-top:1px solid #000;}
+    #fsDeliveryPrintArea .um-person{font-weight:600;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1mm;font-size:4.6mm;min-height:7mm;align-items:center;}
+    #fsDeliveryPrintArea .um-person span{min-width:0;white-space:normal;text-align:start;}
+    #fsDeliveryPrintArea .um-person span+span{padding-right:2mm;text-align:right;border-right:1px solid #000;}
+    #fsDeliveryPrintArea .um-stamp{font-weight:600;display:flex;justify-content:space-between;align-items:center;font-size:3.6mm;margin:2mm 0;}
+    #fsDeliveryPrintArea .um-stamp span{unicode-bidi:isolate;}
+    #fsDeliveryPrintArea .um-rule{border:0;border-top:1px dashed #000;margin:2mm 0;}
+    #fsDeliveryPrintArea .um-frame{border:1.5px solid #000;border-radius:1.2mm;overflow:hidden;margin-top:1mm;}
+    #fsDeliveryPrintArea table{border-collapse:collapse;table-layout:fixed;width:100%;min-width:0;margin:0;color:#000;font-size:4.4mm;}
+    #fsDeliveryPrintArea th,#fsDeliveryPrintArea td{padding:0 1mm;height:6.25mm;text-align:center;border:0;border-bottom:1px solid #000;font-weight:600;background:#fff;overflow-wrap:anywhere;word-break:normal;}
+    #fsDeliveryPrintArea tr:last-child td{border-bottom:0;}
+    #fsDeliveryPrintArea th+th,#fsDeliveryPrintArea td+td{border-right:1px solid #000;}
+    #fsDeliveryPrintArea th{background:#fff!important;color:#000!important;font-weight:700;height:7.5mm;font-size:4.3mm;}
+    #fsDeliveryPrintArea td[dir=rtl],#fsDeliveryPrintArea th[dir=rtl]{font-size:4.8mm;}
+    #fsDeliveryPrintArea .um-total-single{display:flex;justify-content:space-between;align-items:center;gap:1mm;padding:1mm 2mm;min-height:7mm;font-size:3.8mm;font-weight:600;}
+    #fsDeliveryPrintArea .um-total-single span:first-child{font-weight:700;}
+    #fsDeliveryPrintArea .um-money td:first-child{text-align:start;padding-left:2mm;}
+    #fsDeliveryPrintArea .um-money td{font-size:4mm;height:6mm;}
+    #fsDeliveryPrintArea .um-money .um-remaining td{height:8mm;font-size:5.5mm;font-weight:700;}
+    #fsDeliveryPrintArea .um-footer{font-size:3mm;font-weight:700;}
+  </style><div class="fs-delivery-weekly-voucher"><div class="um-brand" lang="en" dir="ltr">LEATHER RIGHT SHOES BY ABID</div><div class="um-title">آج ڈیلیور کیا گیا مال</div><div class="um-person"><span>تمام دکاندار</span><span><bdi dir="auto">${esc(voucher.addaName||'—')}</bdi></span></div><div class="um-stamp"><span dir="rtl">${esc(date)}</span><span>●</span><span>${esc(time)}</span></div><hr class="um-rule"><div class="um-frame"><table><colgroup><col style="width:52%"><col style="width:48%"></colgroup><thead><tr><th dir="rtl">دکاندار کا نام</th><th>بھیجا گیا مال</th></tr></thead><tbody>${voucher.lines.map(line=>'<tr><td dir="rtl"><bdi dir="auto">'+esc(nameText(line.shopkeeperName))+'</bdi></td><td>'+number(line.qty)+' '+(line.unit==='ATOM'?'ایٹم':'سیٹ')+'</td></tr>').join('')}</tbody></table></div><div class="um-frame um-total-single"><span>کل بھیجا گیا مال</span><span>${esc(delivered)}</span></div><div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr><td>کل دکاندار</td><td>${number(voucher.lines.length)}</td></tr><tr><td>کل ایٹم</td><td>${number(totals.ATOM)}</td></tr><tr class="um-remaining"><td>کل سیٹ</td><td>${number(totals.SET)}</td></tr></tbody></table></div><hr class="um-rule"><div class="um-footer">رابطے کے لیے ڈائل کریں 03226574565</div></div></div>`;
 }
 function factorySaleDeliveryView(id){
   const voucher=factorySaleDeliveryData('deliveryVouchers').find(row=>row.id===id);if(!voucher)return;
   modal(factorySaleDeliveryVoucherHtml(voucher)+'<div class="modal-actions" lang="ur" dir="rtl"><button type="button" class="btn brass" id="fsDeliveryPrint">پرنٹ کریں</button><button type="button" class="btn ghost" id="fsDeliveryViewHistory">محفوظ واؤچر</button><button type="button" class="btn ghost" id="fsDeliveryViewClose">بند کریں</button></div>');
-  document.getElementById('fsDeliveryPrint').onclick=()=>printElement('fsDeliveryPrintArea',{settledSizing:true});
+  document.getElementById('fsDeliveryPrint').onclick=()=>printFinishedMansHtml(factorySaleDeliveryVoucherHtml(voucher),'آج ڈیلیور کیا گیا مال');
   document.getElementById('fsDeliveryViewHistory').onclick=factorySaleDeliveryHistory;
   document.getElementById('fsDeliveryViewClose').onclick=closeModal;
 }
