@@ -8247,8 +8247,14 @@ function openPressMeterRowEditor(row,deleting=false){
   document.getElementById('pressMeterEditSave').onclick=async()=>{const button=document.getElementById('pressMeterEditSave');button.disabled=true;try{await pressSaveMeterEntry(selected,snapshot,[...document.querySelectorAll('[data-press-meter-edit-quantity]')].map(input=>input.validity?.badInput?'invalid':input.value),deleting);}finally{button.disabled=false;}};
 }
 function pressOpenLatestWorkerVoucher(workerId){
-  const latest=(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(workerId)&&upperProductionRecordMatches(record)&&!record.deletedAt&&record.deleted!==true).sort((a,b)=>(new Date(b.createdAt||b.date).getTime()||0)-(new Date(a.createdAt||a.date).getTime()||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0))[0];
-  if(!latest){toast('No saved voucher for this worker.');return;}showUpperVoucher(latest);
+  const {start,end}=getUpperWorkWeekRange(new Date());
+  const latest=(settings.upperDistributions||[]).filter(record=>{
+    if(String(record.workerId)!==String(workerId)||!upperProductionRecordMatches(record)||record.deletedAt||record.deleted===true)return false;
+    const dt=upperWorkTimestamp(record);
+    return dt>=start&&dt<end;
+  }).sort((a,b)=>(new Date(b.createdAt||b.date).getTime()||0)-(new Date(a.createdAt||a.date).getTime()||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0))[0];
+  if(!latest){toast('No production voucher exists for the current Saturday-Thursday week.');return;}
+  showUpperVoucher(latest);
 }
 let pressWorkerCardClickTimer;
 function bindPressWorkerCards(){
