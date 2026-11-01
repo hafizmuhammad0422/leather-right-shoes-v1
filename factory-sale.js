@@ -180,7 +180,7 @@ function openShoeSoleProductAtomPayModal(supplierIndex,articleId){
 
 function factorySaleArticles(){const catalog=new Map();(settings.articles||[]).forEach(article=>catalog.set(String(article.id),article));getShoeSoleSuppliers().forEach(shopkeeper=>(shopkeeper.articles||[]).forEach(article=>{if(!catalog.has(String(article.id)))catalog.set(String(article.id),article);}));return [...catalog.values()];}
 function factorySaleShopArticles(shopkeeper){return factorySaleArticles().map(article=>{const own=(shopkeeper?.articles||[]).find(a=>String(a.id)===String(article.id));if(own===article)return own;const sent=(shopkeeper?.dispatches||[]).filter(row=>String(row.articleId)===String(article.id)).reduce((sum,row)=>sum+(Number(row.atoms??row.items??row.boxes)||0),0);return {...article,stockItems:sent,stockBoxes:sent};});}
-function factorySaleGlobalArticleModal(articleId=''){const original=factorySaleArticles().find(article=>String(article.id)===String(articleId));const savedUnit=original?shoeSoleProductDisplayUnit(original):'ATOMS',unitType=['ATOMS','SET'].includes(savedUnit)?savedUnit:'Custom';let saving=false;modal('<h3>'+ (original?'Edit Global Article':'Add Global Article')+'</h3><label>Article Name<input id="fsGlobalArticleName" value="'+esc(original?.name||'')+'"></label><label>Unit<select id="fsGlobalArticleUnit"><option value="ATOMS" '+(unitType==='ATOMS'?'selected':'')+'>ATOMS</option><option value="SET" '+(unitType==='SET'?'selected':'')+'>SET</option><option value="Custom" '+(unitType==='Custom'?'selected':'')+'>Custom Unit</option></select></label><label id="fsGlobalCustomUnitLabel" style="display:'+(unitType==='Custom'?'block':'none')+'">Custom Unit<input id="fsGlobalCustomUnit" value="'+esc(unitType==='Custom'?savedUnit:'')+'"></label><label>Unit Price<input id="fsGlobalArticleRate" type="number" min="0" step="any" value="'+esc(original?.ratePerUnit??0)+'"></label><div class="modal-actions"><button class="btn brass" id="fsGlobalArticleSave">Save Article</button><button class="btn ghost" id="fsGlobalArticleCancel">Cancel</button></div>');document.getElementById('fsGlobalArticleUnit').onchange=()=>{document.getElementById('fsGlobalCustomUnitLabel').style.display=document.getElementById('fsGlobalArticleUnit').value==='Custom'?'block':'none';};document.getElementById('fsGlobalArticleCancel').onclick=closeModal;document.getElementById('fsGlobalArticleSave').onclick=async()=>{if(saving)return;const name=document.getElementById('fsGlobalArticleName').value.trim(),selectedUnit=document.getElementById('fsGlobalArticleUnit').value,unit=selectedUnit==='Custom'?document.getElementById('fsGlobalCustomUnit').value.trim():selectedUnit,raw=document.getElementById('fsGlobalArticleRate').value,ratePerUnit=Number(raw);if(!name||!unit||raw===''||!Number.isFinite(ratePerUnit)||ratePerUnit<0){toast('Enter Article Name, Unit and valid Unit Price.');return;}if(factorySaleArticles().some(a=>String(a.id)!==String(original?.id)&&a.name.trim().toLowerCase()===name.toLowerCase()&&shoeSoleProductDisplayUnit(a).toLowerCase()===unit.toLowerCase())){toast('This Article and Unit already exist.');return;}const previous=settings.articles,existed=Object.prototype.hasOwnProperty.call(settings,'articles'),article={...original,id:original?.id||uid(),name,unit:selectedUnit,customUnit:selectedUnit==='Custom'?unit:'',ratePerUnit};saving=true;document.getElementById('fsGlobalArticleSave').disabled=true;settings.articles=original?(previous||[]).filter(a=>String(a.id)!==String(original.id)).concat(article):[...(previous||[]),article];try{if(!await saveCriticalCloudState())throw Error('Save failed');}catch(error){if(existed)settings.articles=previous;else delete settings.articles;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}saving=false;document.getElementById('fsGlobalArticleSave')?.removeAttribute('disabled');toast('Global Article was not saved.');return;}closeModal();render();toast('Global Article saved.');};}
+function factorySaleGlobalArticleModal(articleId=''){const original=factorySaleArticles().find(article=>String(article.id)===String(articleId));const savedUnit=original?shoeSoleProductDisplayUnit(original):'ATOMS',unitType=['ATOMS','SET'].includes(savedUnit)?savedUnit:'Custom';let saving=false;modal('<h3>'+ (original?'Edit Global Article':'Add Global Article')+'</h3><div id="fsGlobalArticleGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:4px 14px;align-items:end;"><label>Article Name<input id="fsGlobalArticleName" value="'+esc(original?.name||'')+'"></label><label>Unit<select id="fsGlobalArticleUnit"><option value="ATOMS" '+(unitType==='ATOMS'?'selected':'')+'>ATOMS</option><option value="SET" '+(unitType==='SET'?'selected':'')+'>SET</option><option value="Custom" '+(unitType==='Custom'?'selected':'')+'>Custom Unit</option></select></label><label id="fsGlobalCustomUnitLabel" style="display:'+(unitType==='Custom'?'block':'none')+'">Custom Unit<input id="fsGlobalCustomUnit" value="'+esc(unitType==='Custom'?savedUnit:'')+'"></label><label>Unit Price / Rate<input id="fsGlobalArticleRate" type="number" min="0" step="any" value="'+esc(original?.ratePerUnit??0)+'"></label><label>Mal Bhejne ka Adda / Transport Destination<input id="fsGlobalArticleAdda" placeholder="e.g. Lari Adda, Lahore" value="'+esc(original?.adda||'')+'"></label><label>Size Run<input id="fsGlobalArticleSize" placeholder="e.g. 6-10" value="'+esc(original?.size||'')+'"></label><label>Unit Pairs / Packing Details<input id="fsGlobalArticleUnitPairs" type="number" min="0" step="any" placeholder="e.g. 12" value="'+esc(original?.unitPairs??'')+'"></label></div><div class="modal-actions"><button class="btn brass" id="fsGlobalArticleSave">Save Article</button><button class="btn ghost" id="fsGlobalArticleCancel">Cancel</button></div>');const fsGlobalModalBox=document.querySelector('#modalBg .modal');if(fsGlobalModalBox){fsGlobalModalBox.style.maxWidth='920px';fsGlobalModalBox.style.width='min(920px, calc(100vw - 28px))';}document.getElementById('fsGlobalArticleUnit').onchange=()=>{document.getElementById('fsGlobalCustomUnitLabel').style.display=document.getElementById('fsGlobalArticleUnit').value==='Custom'?'block':'none';};document.getElementById('fsGlobalArticleCancel').onclick=closeModal;document.getElementById('fsGlobalArticleSave').onclick=async()=>{if(saving)return;const name=document.getElementById('fsGlobalArticleName').value.trim(),selectedUnit=document.getElementById('fsGlobalArticleUnit').value,unit=selectedUnit==='Custom'?document.getElementById('fsGlobalCustomUnit').value.trim():selectedUnit,raw=document.getElementById('fsGlobalArticleRate').value,ratePerUnit=Number(raw);if(!name||!unit||raw===''||!Number.isFinite(ratePerUnit)||ratePerUnit<0){toast('Enter Article Name, Unit and valid Unit Price.');return;}if(factorySaleArticles().some(a=>String(a.id)!==String(original?.id)&&a.name.trim().toLowerCase()===name.toLowerCase()&&shoeSoleProductDisplayUnit(a).toLowerCase()===unit.toLowerCase())){toast('This Article and Unit already exist.');return;}const rawUnitPairs=document.getElementById('fsGlobalArticleUnitPairs').value.trim(),unitPairs=rawUnitPairs===''?'':Number(rawUnitPairs);if(rawUnitPairs!==''&&(!Number.isFinite(unitPairs)||unitPairs<0)){toast('Enter valid Unit Pairs.');return;}const previous=settings.articles,existed=Object.prototype.hasOwnProperty.call(settings,'articles'),article={...original,id:original?.id||uid(),name,unit:selectedUnit,customUnit:selectedUnit==='Custom'?unit:'',ratePerUnit,adda:document.getElementById('fsGlobalArticleAdda').value.trim(),size:document.getElementById('fsGlobalArticleSize').value.trim(),unitPairs};saving=true;document.getElementById('fsGlobalArticleSave').disabled=true;settings.articles=original?(previous||[]).filter(a=>String(a.id)!==String(original.id)).concat(article):[...(previous||[]),article];try{if(!await saveCriticalCloudState())throw Error('Save failed');}catch(error){if(existed)settings.articles=previous;else delete settings.articles;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}saving=false;document.getElementById('fsGlobalArticleSave')?.removeAttribute('disabled');toast('Global Article was not saved.');return;}closeModal();render();toast('Global Article saved.');};}
 
 function factorySaleRowUnit(row,shopkeeper){const product=factorySaleShopArticles(shopkeeper).find(p=>String(p.id)===String(row.articleId));return row.unit==='Custom'?String(row.customUnit||shoeSoleProductDisplayUnit(product)):String(row.unit||shoeSoleProductDisplayUnit(product));}
 function factorySaleQuantity(row,shopkeeper){return shoeSoleQuantityDisplay(row.atoms??row.items??row.boxes)+' '+factorySaleRowUnit(row,shopkeeper);}
@@ -1143,7 +1143,8 @@ function openSupplierProductionBill(workerId){
   modal(`<h3>Create Bill — ${esc(worker.name)}</h3><div class="row"><div><label>Opening Amount</label><input id="fs_soleBill_supplierBillOpening" type="number" min="0" step="0.01" value="${esc(String(account?.currentBalance??account?.openingAmount??0))}" ${account?.startingBalance!=null?'readonly':''}><button type="button" class="btn ghost small" id="fs_soleBill_supplierBillSaveOpening" ${account?.startingBalance!=null?'disabled':''}>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="fs_soleBill_supplierBillExtra" type="number" min="0" step="0.01" value="0"></div></div><div style="overflow-x:auto;margin-top:10px;"><table><thead><tr><th>Article Name</th><th>Quantity</th><th>Rate Per Unit</th><th>Amount</th></tr></thead><tbody>${lines.map((line,index)=>`<tr><td>${esc(line.articleName)}</td><td><input type="number" min="0" step="any" value="${esc(String(line.qty))}" readonly data-fs_solebill-shopkeeper-bill-qty="${index}" aria-label="${esc(line.articleName)} quantity ${esc(line.unit)}" style="min-width:80px;"> ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td data-fs_solebill-shopkeeper-bill-amount="${index}">${upperMoney(0)}</td></tr>`).join('')||`<tr><td colspan="4">${esc(sent.emptyReason||'No sent records for selected period.')}</td></tr>`}</tbody></table></div><div class="rline"><strong>Weekly Total</strong><strong id="fs_soleBill_supplierBillTotal">${upperMoney(0)}</strong></div><div class="row"><div><label>Paid Amount</label><input id="fs_soleBill_supplierBillPaid" type="number" min="0" step="0.01" value="0"></div><div><label>Remaining Balance</label><input id="fs_soleBill_supplierBillRemaining" readonly></div></div><div class="rline"><strong>Grand Total</strong><strong id="fs_soleBill_supplierBillGrand"></strong></div><div class="modal-actions"><button type="button" class="btn brass" id="fs_soleBill_supplierBillCreate" ${lines.length?'':'disabled'}>Create Bill</button><button type="button" class="btn ghost" id="fs_soleBill_supplierBillCancel">Cancel</button></div>${supplierProductionBillHistoryHtml(worker.id)}`);
   const billModal=document.querySelector('#modalRoot .modal');
   if(billModal){billModal.style.setProperty('width','min(900px, calc(100vw - 28px))','important');billModal.style.setProperty('max-width','900px','important');billModal.style.setProperty('height','85vh','important');billModal.style.setProperty('max-height','85vh','important');}
-  document.querySelectorAll('[data-fs_solebill-shopkeeper-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.billing?.bills||[]).find(v=>String(v.id)===String(button.dataset.fs_solebillShopkeeperBillView)&&String(v.shopkeeperId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
+  document.querySelectorAll('[data-fs_solebill-shopkeeper-bill-view]').forEach(button=>button.addEventListener('click',()=>{const bill=(settings.billing?.bills||[]).find(v=>String(v.id)===String(button.dataset.fs_solebillShopkeeperBillView)&&String(v.shopkeeperId)===String(worker.id));if(bill)showSupplierProductionBill(bill);}));
+
   document.querySelectorAll('[data-fs_solebill-shopkeeper-bill-edit]').forEach(button=>button.addEventListener('click',()=>openSupplierProductionBillEditor(worker.id,button.dataset.fs_solebillShopkeeperBillEdit)));
   document.querySelectorAll('[data-fs_solebill-shopkeeper-bill-delete]').forEach(button=>button.addEventListener('click',()=>deleteSupplierProductionBill(worker.id,button.dataset.fs_solebillShopkeeperBillDelete)));
   const collect=()=>lines.map(line=>({...line}));
@@ -1194,11 +1195,60 @@ function deleteSupplierProductionBill(workerId,billId){const adapter=supplierPro
 function showSupplierProductionBill(bill){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(bill?.shopkeeperId)){toast('Select this Shopkeeper Card first.');return;}
   if(!supplierProductionBillWorker(bill.shopkeeperId))return;
-  modal(`<h3 style="margin-top:0;">Weekly Voucher #${esc(String(bill.voucherNo))}</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="fs_soleBill_soleBill_supplierBillPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">${supplierProductionBillHtml(bill)}</div><div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;"><button type="button" class="btn brass" id="fs_soleBill_supplierBillPrint">Print</button><button type="button" class="btn ghost" id="fs_soleBill_supplierBillShare">Share</button><button type="button" class="btn ghost" id="fs_soleBill_supplierBillClose">Close</button></div></div>`);
+  modal(`<h3 style="margin-top:0;">Weekly Voucher #${esc(String(bill.voucherNo))}</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="fs_soleBill_soleBill_supplierBillPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">${factorySaleManualBillHtml(bill)}</div><div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;"><button type="button" class="btn brass" id="fs_soleBill_supplierBillPrint">Print</button><button type="button" class="btn ghost" id="fs_soleBill_supplierBillShare">Share</button><button type="button" class="btn ghost" id="fs_soleBill_supplierBillClose">Close</button></div></div>`);
   document.getElementById('fs_soleBill_supplierBillPrint').onclick=()=>printElement('fs_soleBill_soleBill_supplierBillPrintArea');
   document.getElementById('fs_soleBill_supplierBillShare').onclick=async()=>{
-    try{const canvas=buildSupplierProductionBillCanvas(bill);canvas.toBlob(async blob=>{try{if(!blob){toast('Could not generate voucher image');return;}await shareImageToWhatsApp(blob,`shopkeeper-weekly-voucher-${bill.voucherNo}.png`,`Weekly Voucher #${bill.voucherNo}`);}catch(error){toast('Could not share voucher image');}},'image/png');}
-    catch(error){toast('Could not generate voucher image');}
+    try{
+      toast('Voucher image tyar ho rahi hai...');
+      const canvas = await buildFactorySaleManualBillCanvas(bill);
+      const fileName = 'Bill_' + (bill.voucherNo || 'voucher') + '.png';
+      const title = 'Weekly Voucher #' + (bill.voucherNo || '');
+
+      canvas.toBlob(async blob => {
+        try{
+          if(!blob){
+            toast('Could not generate receipt image');
+            return;
+          }
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+          let copied = false;
+          try{
+            if(navigator.clipboard && window.ClipboardItem){
+              await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+              copied = true;
+            }
+          }catch(clipErr){}
+
+          const file = new File([blob], fileName, {type: 'image/png'});
+          if(navigator.share && navigator.canShare && navigator.canShare({files: [file]})){
+            try{
+              await navigator.share({files: [file], title});
+              return;
+            }catch(shareErr){
+              if(shareErr?.name === 'AbortError') return;
+            }
+          }
+
+          window.open('https://wa.me/', '_blank');
+          toast(copied
+            ? 'Voucher image copy aur download ho gayi! WhatsApp me Ctrl+V karein.'
+            : 'Voucher image download ho gayi! WhatsApp me attach kar ke bhein.'
+          );
+        }catch(err){
+          toast('Could not share voucher image');
+        }
+      }, 'image/png');
+    }catch(error){
+      toast('Could not share voucher');
+    }
   };
   document.getElementById('fs_soleBill_supplierBillClose').onclick=()=>{closeModal();render();};
 }
@@ -1488,18 +1538,583 @@ function factorySaleDeliveryHistory(){
 }
 
 let factorySaleManualSaving=false;
-function factorySaleManualArticles(){return factorySaleArticles().map(article=>({key:String(article.id),articleId:String(article.id),articleName:article.name,shopkeeperName:'Global Article',unit:shoeSoleProductDisplayUnit(article),rate:article.ratePerUnit}));}
+function factorySaleManualArticles(){return factorySaleArticles().map(article=>({key:String(article.id),articleId:String(article.id),articleName:article.name,shopkeeperName:'Global Article',unit:shoeSoleProductDisplayUnit(article),rate:article.ratePerUnit,adda:article.adda||'',unitPairs:article.unitPairs??''}));}
 function factorySaleManualAmounts(lines){let total=0;const calculated=lines.map(line=>{const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);if(!line.articleName||!line.unit||line.qty===''||line.rate===''||!Number.isFinite(qty)||qty<=0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw Error('Select an Article and enter valid Quantity and Rate.');total+=cents;if(!Number.isSafeInteger(total))throw Error('Bill amount is too large.');return {...line,qty,rate,amount:cents/100};});if(!calculated.length)throw Error('Add at least one Article.');return {lines:calculated,totalAmount:total/100};}
-function factorySaleManualBillHtml(bill){const opening=Number(bill.pendingAmount??bill.openingAmount??0)||0,paid=Number(bill.paidAmount??0)||0;return supplierProductionBillHtml({...bill,pendingAmount:opening,extraBalanceAmount:0,paidAmount:paid,remainingBalance:bill.remainingBalance??Math.round((opening+(Number(bill.totalAmount)||0)-paid)*100)/100});}
-function factorySaleManualPrint(bill){const area=document.createElement('div');area.id='fsManualBillPrintArea';area.className='receipt-paper';area.style.cssText='width:80mm;margin:auto;';area.innerHTML=factorySaleManualBillHtml(bill);document.body.appendChild(area);try{printElement(area.id);}finally{area.remove();}}
-function factorySaleManualView(id){const bill=(settings.manualBills||[]).find(b=>b.id===id);if(!bill)return;modal('<h3>Manual Bill #'+esc(bill.voucherNo)+'</h3><div style="width:80mm;max-width:100%;margin:auto">'+factorySaleManualBillHtml(bill)+'</div><div class="modal-actions"><button class="btn brass" id="fsManualPrint">Print</button><button class="btn ghost" id="fsManualBack">Back</button></div>');document.getElementById('fsManualPrint').onclick=()=>factorySaleManualPrint(bill);document.getElementById('fsManualBack').onclick=factorySaleManualHistory;}
+function factorySaleManualBillHtml(bill){
+  const date=new Date(bill.date||Date.now());
+  const urduDays=['اتوار','پیر','منگل','بدھ','جمعرات','جمعہ','ہفتہ'];
+  const urduMonths=['جنوری','فروری','مارچ','اپریل','مئی','جون','جولائی','اگست','ستمبر','اکتوبر','نومبر','دسمبر'];
+  const dayName=urduDays[date.getDay()]||'';
+  const monthName=urduMonths[date.getMonth()]||'';
+  const dateStr=dayName?(dayName+'، '+date.getDate()+' '+monthName+' '+date.getFullYear()):'';
+  let hours=date.getHours();
+  const minutes=String(date.getMinutes()).padStart(2,'0');
+  const period=hours>=12?'شام':'صبح';
+  hours=hours%12||12;
+  const timeStr=String(hours).padStart(2,'0')+':'+minutes+' '+period;
+
+  const lines=Array.isArray(bill.lines)?bill.lines:[];
+  let totalQty=0;
+  lines.forEach(l=>{const q=Number(l.qty)||0;totalQty+=q;});
+
+  const catalogArticles=factorySaleArticles();
+  let billAdda=bill.cargoAdda||bill.adda||'';
+  if(!billAdda){
+    for(const line of lines){
+      const aId=String(line.articleId||line.articleKey||'');
+      const found=catalogArticles.find(a=>String(a.id)===aId)||catalogArticles.find(a=>a.name===line.articleName);
+      if(found?.adda){billAdda=found.adda;break;}
+      if(line.adda){billAdda=line.adda;break;}
+    }
+  }
+
+  const valOrBlank=(val,isRupay=true)=>{
+    if(val===null||val===undefined||val==='')return '';
+    return isRupay?(upperMoney(val)+' روپے'):upperMoney(val);
+  };
+
+  const formatUrduUnit=u=>{
+    const raw=String(u||'').trim();
+    const map={'ATOMS':'ایٹمز','ATOM':'ایٹمز','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'آئٹم','ITEMS':'آئٹم'};
+    return map[raw.toUpperCase()]||raw;
+  };
+
+  const lineItemsRows=lines.map(line=>{
+    const qtyNum=line.qty!==undefined&&line.qty!==null&&line.qty!==''?String(line.qty):'';
+    let rawUnit=line.unit||'';
+    if(!rawUnit){
+      const aId=String(line.articleId||line.articleKey||'');
+      const found=catalogArticles.find(a=>String(a.id)===aId)||catalogArticles.find(a=>a.name===line.articleName);
+      rawUnit=found?.unit||'';
+    }
+    const unitDisplay=formatUrduUnit(rawUnit);
+    const lineQtyDisplay=qtyNum?(unitDisplay?(qtyNum+' '+unitDisplay):qtyNum):'';
+    let displayRate='';
+    if(line.rate!==undefined&&line.rate!==null&&line.rate!==''){
+      const uRate=Number(line.rate)||0;
+      let uPairs=Number(line.unitPairs);
+      if(!uPairs||uPairs<=0){
+        const aId=String(line.articleId||line.articleKey||'');
+        const found=catalogArticles.find(a=>String(a.id)===aId)||catalogArticles.find(a=>a.name===line.articleName);
+        uPairs=Number(found?.unitPairs);
+      }
+      const calcRate=(uPairs&&uPairs>0)?(uRate/uPairs):uRate;
+      displayRate=upperMoney(calcRate);
+    }
+    const lineAmount=line.amount!==undefined&&line.amount!==null&&line.amount!==''?upperMoney(line.amount):'';
+    return `<tr style="border-bottom:1px solid #000;">
+      <td style="border:1px solid #000;padding:4px 3px;text-align:right;font-weight:700;">${esc(line.articleName||'')}</td>
+      <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;">${esc(lineQtyDisplay)}</td>
+      <td style="border:1px solid #000;padding:4px 3px;text-align:center;white-space:nowrap;">${esc(displayRate)}</td>
+      <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;white-space:nowrap;">${esc(lineAmount)}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div id="fsManualBillPrintArea" class="receipt-paper" style="width:100%;max-width:80mm;margin:0 auto;box-sizing:border-box;direction:rtl;text-align:right;font-family:'Jameel Noori Nastaleeq','Noto Nastaliq Urdu','Segoe UI',Tahoma,Arial,sans-serif;font-size:12px;line-height:1.4;color:#000;background:#fff;padding:8px 6px;">
+    <!-- Brand Header -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:3px;direction:ltr;">
+      <div style="width:46px;height:46px;border:2px solid #000;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:2px;flex-shrink:0;">
+        <div style="width:38px;height:38px;border:1px solid #000;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1px;box-sizing:border-box;">
+          <div style="font-family:Arial,sans-serif;font-weight:900;font-size:5px;letter-spacing:0.5px;line-height:1;text-align:center;">FOOTWEAR</div>
+          <div style="font-family:Arial,sans-serif;font-weight:900;font-size:5px;letter-spacing:0.8px;line-height:1;text-align:center;margin-top:1px;">FIND</div>
+          <div style="font-size:6.5px;line-height:1;margin-top:1px;">👞👟🥿</div>
+        </div>
+      </div>
+      <div style="font-family:'Arial Black',Arial,sans-serif;font-size:18px;font-weight:900;letter-spacing:0.5px;line-height:1.1;text-transform:uppercase;white-space:nowrap;">FOOTWEAR FIND SHOES</div>
+    </div>
+    <div style="text-align:center;font-size:12px;font-weight:700;line-height:1.2;margin-bottom:3px;">• ----- ہول سیل سپلائر شوز قصور ----- •</div>
+    <div style="border-top:1px solid #777;border-bottom:1px solid #777;height:2px;margin:3px 0 6px 0;"></div>
+
+    <!-- Meta Details -->
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;font-size:13px;font-weight:700;">
+      <div>معزز تاجر: <span style="font-weight:800;">${esc(bill.shopkeeperName||'')}</span></div>
+      <div style="direction:ltr;unicode-bidi:isolate;">بل نمبر: #${esc(String(bill.voucherNo||''))}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;font-size:11.5px;color:#222;">
+      <div>${esc(dateStr)}</div>
+      <div style="direction:ltr;unicode-bidi:isolate;">${esc(timeStr)}</div>
+    </div>
+
+    <!-- Adda Box -->
+    <div style="border:1px solid #000;border-radius:4px;padding:5px 7px;margin-bottom:6px;font-size:12px;line-height:1.35;display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-weight:700;">مال بھیجنے کا اڈہ:</span>
+      <span style="font-weight:800;">${esc(billAdda)}</span>
+    </div>
+
+    <!-- Articles Table (4 Columns) -->
+    <table style="width:100%;border-collapse:collapse;border:1px solid #000;margin-bottom:6px;font-size:11px;">
+      <thead>
+        <tr style="background:#fff;border-bottom:1px solid #000;">
+          <th style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:800;width:42%;">آرٹیکل</th>
+          <th style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:800;width:18%;">تعداد</th>
+          <th style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:800;width:18%;">ریٹ</th>
+          <th style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:800;width:22%;">رقم</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${lineItemsRows}
+        <tr style="font-weight:800;border-top:1px solid #000;background:#fff;">
+          <td style="border:1px solid #000;padding:4px 5px;text-align:center;">ٹوٹل</td>
+          <td style="border:1px solid #000;padding:4px 2px;text-align:center;">${totalQty?esc(String(totalQty)):''}</td>
+          <td style="border:1px solid #000;padding:4px 2px;text-align:center;"></td>
+          <td style="border:1px solid #000;padding:4px 2px;text-align:center;">${bill.totalAmount!==undefined&&bill.totalAmount!==null&&bill.totalAmount!==''?upperMoney(bill.totalAmount):''}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Amount Summary Box -->
+    <div style="border:1px solid #000;border-radius:4px;padding:3px 6px;margin-bottom:6px;font-size:12px;">
+      <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
+        <span>ٹوٹل رقم</span>
+        <span style="font-weight:700;">${valOrBlank(bill.totalAmount)}</span>
+      </div>
+      ${Number(bill.discount)>0?`<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
+        <span>ڈسکاؤنٹ</span>
+        <span style="font-weight:700;">${valOrBlank(bill.discount)}</span>
+      </div>`: ''}
+      <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
+        <span>بل کی رقم</span>
+        <span style="font-weight:700;">${valOrBlank(bill.netBillAmount??bill.totalAmount)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
+        <span>وصول رقم</span>
+        <span style="font-weight:700;">${valOrBlank(bill.paidAmount)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
+        <span>اس بل کی باقی رقم</span>
+        <span style="font-weight:700;">${valOrBlank(bill.remainingBalance)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0;">
+        <span>پچھلا بقایا</span>
+        <span style="font-weight:700;">${valOrBlank(bill.pendingAmount??bill.openingAmount)}</span>
+      </div>
+    </div>
+
+    <!-- Prominent Remaining Balance Box -->
+    <div style="border:2px solid #000;border-radius:8px;padding:5px 8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-size:14px;font-weight:900;">ٹوٹل باقی رقم</div>
+      <div style="font-size:16px;font-weight:900;">${valOrBlank(bill.remainingBalance)}</div>
+    </div>
+
+    <!-- Payment Mode & Note -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11.5px;">
+      <div style="font-weight:700;">ادائیگی:</div>
+      <div style="display:flex;gap:16px;">
+        <span>نقد [${bill.paymentMode==='cash'?'✓':'&nbsp;&nbsp;'}]</span>
+        <span>آن لائن [${bill.paymentMode==='online'?'✓':'&nbsp;&nbsp;'}]</span>
+      </div>
+    </div>
+    <div style="border:1px solid #000;border-radius:4px;padding:3px 6px;margin-bottom:6px;font-size:11.5px;min-height:22px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-weight:700;">نوٹ:</span>
+      <span style="flex-grow:1;text-align:center;">${esc(bill.note||'')}</span>
+    </div>
+
+    <!-- Footer Box -->
+    <div style="border:2px double #000;border-radius:6px;padding:5px 4px;text-align:center;font-size:11px;line-height:1.4;">
+      <div style="font-size:12px;font-weight:800;margin-bottom:2px;white-space:nowrap;">❦ آپ کے اعتماد اور تعاون کا تہہ دل سے شکریہ ❦</div>
+      <div style="margin-bottom:2px;">براہِ راست فیکٹری سے • ہول سیل ریٹ پر • قصور، پاکستان</div>
+      <div style="display:flex;justify-content:center;align-items:center;gap:4px;margin-bottom:3px;font-weight:700;">
+        <span>📦 آل پاکستان ڈیلیوری • آرڈر پر مال روانہ کیا جاتا ہے 🚚</span>
+      </div>
+      <div style="border-top:1px dashed #777;margin:3px 0;padding-top:3px;display:flex;justify-content:center;align-items:center;gap:12px;direction:ltr;unicode-bidi:isolate;font-family:Arial,sans-serif;font-size:11px;font-weight:700;">
+        <span>📞 0303 6592255</span>
+        <span>|</span>
+        <span>💬 0341 0143182</span>
+      </div>
+    </div>
+  </div>`;
+}
+function factorySaleManualPrint(bill){let area=document.getElementById('fsManualBillPrintArea');let temp=false;if(!area){area=document.createElement('div');area.id='fsManualBillPrintArea';area.className='receipt-paper';area.style.cssText='width:80mm;margin:auto;';area.innerHTML=factorySaleManualBillHtml(bill);document.body.appendChild(area);temp=true;}try{printElement(area.id||'fsManualBillPrintArea');}finally{if(temp)area.remove();}}
+function buildFactorySaleManualBillCanvas(bill){
+  const width = 600;
+  const pad = 20;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  const cat = typeof factorySaleArticles === 'function' ? factorySaleArticles() : [];
+  let billAdda = bill.cargoAdda || bill.adda || '';
+  if(!billAdda){
+    for(const line of (bill.lines || [])){
+      const found = cat.find(a => String(a.id) === String(line.articleId || line.articleKey || '')) || cat.find(a => a.name === line.articleName);
+      if(found?.adda){ billAdda = found.adda; break; }
+      if(line.adda){ billAdda = line.adda; break; }
+    }
+  }
+
+  const date = new Date(bill.date || Date.now());
+  const urduDays = ['اتوار','پیر','منگل','بدھ','جمعرات','جمعہ','ہفتہ'];
+  const urduMonths = ['جنوری','فروری','مارچ','اپریل','مئی','جون','جولائی','اگست','ستمبر','اکتوبر','نومبر','دسمبر'];
+  const dayName = urduDays[date.getDay()] || '';
+  const monthName = urduMonths[date.getMonth()] || '';
+  const dateStr = dayName ? (dayName + '، ' + date.getDate() + ' ' + monthName + ' ' + date.getFullYear()) : String(bill.date || '').slice(0, 10);
+
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const period = hours >= 12 ? 'شام' : 'صبح';
+  hours = hours % 12 || 12;
+  const timeStr = String(hours).padStart(2, '0') + ':' + minutes + ' ' + period;
+
+  const map = {'ATOMS':'ایٹمز','ATOM':'ایٹمز','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'آئٹم','ITEMS':'آئٹم'};
+
+  // Calculate required dynamic height
+  const lines = Array.isArray(bill.lines) ? bill.lines : [];
+  let totalQty = 0;
+  lines.forEach(l => { totalQty += Number(l.qty) || 0; });
+
+  const rowHeight = 32;
+  const hasDiscount = Number(bill.discount) > 0;
+  const totalSummaryRows = hasDiscount ? 6 : 5;
+  const summaryBoxHeight = totalSummaryRows * 26 + 16;
+  const totalHeight = 310 + (lines.length * rowHeight) + 36 + summaryBoxHeight + 58 + 36 + 120 + pad * 2;
+
+  canvas.width = width * 2;
+  canvas.height = totalHeight * 2;
+  ctx.scale(2, 2);
+
+  // Background
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, totalHeight);
+  ctx.fillStyle = '#000000';
+  ctx.strokeStyle = '#000000';
+  ctx.textBaseline = 'top';
+
+  let y = pad;
+
+  // 1. Header with Badge & Brand Name
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(pad + 30, y + 25, 24, 0, Math.PI * 2);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(pad + 30, y + 25, 20, 0, Math.PI * 2);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.font = 'bold 7px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('FOOTWEAR', pad + 30, y + 14);
+  ctx.fillText('FIND', pad + 30, y + 23);
+  ctx.font = '10px Arial, sans-serif';
+  ctx.fillText('👞👟', pad + 30, y + 31);
+  ctx.restore();
+
+  ctx.font = "900 24px 'Arial Black', Arial, sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('FOOTWEAR FIND SHOES', width / 2 + 15, y + 5);
+
+  ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText('• ----- ہول سیل سپلائر شوز قصور ----- •', width / 2, y + 36);
+
+  y += 62;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(width - pad, y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(pad, y + 3); ctx.lineTo(width - pad, y + 3); ctx.stroke();
+  y += 10;
+
+  // 2. Meta Details (Shopkeeper, Bill #, Date, Time)
+  ctx.font = "bold 15px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'right';
+  ctx.fillText('معزز تاجر: ' + (bill.shopkeeperName || 'کیش کسٹمر'), width - pad, y);
+  ctx.textAlign = 'left';
+  ctx.fillText('بل نمبر: #' + (bill.voucherNo || ''), pad, y);
+  y += 24;
+
+  ctx.font = "13px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'right';
+  ctx.fillText(dateStr, width - pad, y);
+  ctx.textAlign = 'left';
+  ctx.fillText(timeStr, pad, y);
+  y += 24;
+
+  // Adda box
+  if(billAdda){
+    ctx.strokeRect(pad, y, width - pad * 2, 28);
+    ctx.font = "bold 14px 'Segoe UI', Tahoma, sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText('مال بھیجنے کا اڈہ: ' + billAdda, width - pad - 8, y + 5);
+    y += 36;
+  }
+
+  // 3. 4-Column Table: آرٹیکل (42%) | تعداد (18%) | ریٹ (18%) | رقم (22%)
+  const colW1 = Math.round((width - pad * 2) * 0.42);
+  const colW2 = Math.round((width - pad * 2) * 0.18);
+  const colW3 = Math.round((width - pad * 2) * 0.18);
+  const colW4 = (width - pad * 2) - colW1 - colW2 - colW3;
+
+  const xRight = width - pad;
+  const xCol1 = xRight; // Right border of Article (Urdu RTL start)
+  const xCol2 = xCol1 - colW1; // Border between Article and Qty
+  const xCol3 = xCol2 - colW2; // Border between Qty and Rate
+  const xCol4 = xCol3 - colW3; // Border between Rate and Amount
+  const xLeft = pad;
+
+  // Table Header
+  ctx.fillStyle = '#f0f0f0';
+  ctx.fillRect(pad, y, width - pad * 2, 28);
+  ctx.fillStyle = '#000000';
+  ctx.strokeRect(pad, y, width - pad * 2, 28);
+
+  ctx.beginPath();
+  ctx.moveTo(xCol2, y); ctx.lineTo(xCol2, y + 28);
+  ctx.moveTo(xCol3, y); ctx.lineTo(xCol3, y + 28);
+  ctx.moveTo(xCol4, y); ctx.lineTo(xCol4, y + 28);
+  ctx.stroke();
+
+  ctx.font = "bold 14px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('آرٹیکل', xCol2 + colW1 / 2, y + 6);
+  ctx.fillText('تعداد', xCol3 + colW2 / 2, y + 6);
+  ctx.fillText('ریٹ', xCol4 + colW3 / 2, y + 6);
+  ctx.fillText('رقم', xLeft + colW4 / 2, y + 6);
+  y += 28;
+
+  // Table Body Rows
+  lines.forEach(line => {
+    ctx.strokeRect(pad, y, width - pad * 2, rowHeight);
+    ctx.beginPath();
+    ctx.moveTo(xCol2, y); ctx.lineTo(xCol2, y + rowHeight);
+    ctx.moveTo(xCol3, y); ctx.lineTo(xCol3, y + rowHeight);
+    ctx.moveTo(xCol4, y); ctx.lineTo(xCol4, y + rowHeight);
+    ctx.stroke();
+
+    const rawUnit = String(line.unit || '').trim();
+    const uName = map[rawUnit.toUpperCase()] || rawUnit;
+    const qtyStr = line.qty !== undefined && line.qty !== null && line.qty !== '' ? (line.qty + (uName ? (' ' + uName) : '')) : '-';
+
+    const uRate = Number(line.rate) || 0;
+    let uPairs = Number(line.unitPairs);
+    if(!uPairs || uPairs <= 0){
+      const aId = String(line.articleId || line.articleKey || '');
+      const found = cat.find(a => String(a.id) === aId) || cat.find(a => a.name === line.articleName);
+      uPairs = Number(found?.unitPairs);
+    }
+    const pairRate = (uPairs && uPairs > 0) ? (uRate / uPairs) : uRate;
+
+    // Article Name (Right aligned)
+    ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText(String(line.articleName || 'آئٹم'), xCol1 - 6, y + 7);
+
+    // Qty (Center)
+    ctx.textAlign = 'center';
+    ctx.fillText(qtyStr, xCol3 + colW2 / 2, y + 7);
+
+    // Rate per pair (Center)
+    ctx.font = "13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(upperMoney(pairRate).replace('Rs. ', ''), xCol4 + colW3 / 2, y + 7);
+
+    // Amount (Center/Right)
+    ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText(upperMoney(line.amount || 0).replace('Rs. ', ''), xLeft + colW4 / 2, y + 7);
+
+    y += rowHeight;
+  });
+
+  // Table Total Row
+  ctx.strokeRect(pad, y, width - pad * 2, 28);
+  ctx.beginPath();
+  ctx.moveTo(xCol2, y); ctx.lineTo(xCol2, y + 28);
+  ctx.moveTo(xCol3, y); ctx.lineTo(xCol3, y + 28);
+  ctx.moveTo(xCol4, y); ctx.lineTo(xCol4, y + 28);
+  ctx.stroke();
+
+  ctx.font = "bold 14px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('ٹوٹل', xCol2 + colW1 / 2, y + 6);
+  ctx.fillText(String(totalQty), xCol3 + colW2 / 2, y + 6);
+  ctx.fillText('', xCol4 + colW3 / 2, y + 6);
+  ctx.fillText(upperMoney(bill.totalAmount || 0).replace('Rs. ', ''), xLeft + colW4 / 2, y + 6);
+  y += 36;
+
+  // 4. Amount Summary Box
+  ctx.strokeRect(pad, y, width - pad * 2, summaryBoxHeight);
+  let sy = y + 8;
+  const drawSummaryLine = (label, val, isBold = false) => {
+    ctx.font = (isBold ? 'bold ' : '') + "13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText(label, width - pad - 10, sy);
+    ctx.textAlign = 'left';
+    ctx.fillText(val, pad + 10, sy);
+
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = '#cccccc';
+    ctx.beginPath();
+    ctx.moveTo(pad + 10, sy + 20);
+    ctx.lineTo(width - pad - 10, sy + 20);
+    ctx.stroke();
+    ctx.restore();
+    sy += 26;
+  };
+
+  drawSummaryLine('ٹوٹل رقم', upperMoney(bill.totalAmount) + ' روپے', true);
+  if(hasDiscount){
+    drawSummaryLine('ڈسکاؤنٹ', upperMoney(bill.discount) + ' روپے', false);
+  }
+  drawSummaryLine('بل کی رقم', upperMoney(bill.netBillAmount ?? bill.totalAmount) + ' روپے', true);
+  drawSummaryLine('وصول رقم', upperMoney(bill.paidAmount ?? 0) + ' روپے', false);
+  drawSummaryLine('اس بل کی باقی رقم', upperMoney(bill.remainingBalance ?? bill.totalAmount) + ' روپے', true);
+  drawSummaryLine('پچھلا بقایا', upperMoney(bill.pendingAmount ?? bill.openingAmount ?? 0) + ' روپے', false);
+
+  y += summaryBoxHeight + 10;
+
+  // 5. Prominent Remaining Balance Box
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pad, y, width - pad * 2, 46);
+  ctx.font = "bold 16px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'right';
+  ctx.fillText('ٹوٹل باقی رقم', width - pad - 12, y + 13);
+  ctx.font = "900 18px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillText(upperMoney(bill.remainingBalance ?? bill.totalAmount) + ' روپے', pad + 12, y + 12);
+  y += 56;
+
+  // 6. Note if any
+  if(bill.note){
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pad, y, width - pad * 2, 26);
+    ctx.font = "12px 'Segoe UI', Tahoma, sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText('نوٹ: ' + bill.note, width - pad - 8, y + 5);
+    y += 34;
+  }
+
+  // 7. Footer Box
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad, y, width - pad * 2, 70);
+  ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('❦ آپ کے اعتماد اور تعاون کا تہہ دل سے شکریہ ❦', width / 2, y + 8);
+  ctx.font = "11px 'Segoe UI', Tahoma, sans-serif";
+  ctx.fillText('براہِ راست فیکٹری سے • ہول سیل ریٹ پر • قصور، پاکستان', width / 2, y + 26);
+  ctx.font = "bold 12px Arial, sans-serif";
+  ctx.fillText('📞 0303 6592255   |   💬 0341 0143182', width / 2, y + 46);
+
+  return canvas;
+}
+function buildFactorySaleManualBillText(bill){
+  const cat=typeof factorySaleArticles==='function'?factorySaleArticles():[];
+  let billAdda=bill.cargoAdda||bill.adda||'';
+  if(!billAdda){
+    for(const line of (bill.lines||[])){
+      const found=cat.find(a=>String(a.id)===String(line.articleId||line.articleKey||''))||cat.find(a=>a.name===line.articleName);
+      if(found?.adda){billAdda=found.adda;break;}
+      if(line.adda){billAdda=line.adda;break;}
+    }
+  }
+  const dateStr=String(bill.date||new Date().toISOString()).slice(0,10);
+  const map={'ATOMS':'ایٹمز','ATOM':'ایٹمز','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'آئٹم','ITEMS':'آئٹم'};
+  const textLines=[
+    '*FOOTWEAR FIND SHOES*',
+    'ہول سیل سپلائر شوز قصور',
+    '--------------------------------',
+    '*معزز تاجر:* ' + (bill.shopkeeperName||'-'),
+    '*بل نمبر:* #' + (bill.voucherNo||'-'),
+    '*تاریخ:* ' + dateStr
+  ];
+  if(billAdda) textLines.push('*مال بھیجنے کا اڈہ:* ' + billAdda);
+  textLines.push('--------------------------------');
+  textLines.push('*تفصیل آئٹمز:*');
+  (bill.lines||[]).forEach((line,idx)=>{
+    const rawUnit=String(line.unit||'').trim();
+    const uName=map[rawUnit.toUpperCase()]||rawUnit;
+    const qtyStr=line.qty!==undefined&&line.qty!==null&&line.qty!==''?(line.qty+' '+uName):'-';
+    const uRate=Number(line.rate)||0;
+    let uPairs=Number(line.unitPairs);
+    if(!uPairs||uPairs<=0){
+      const aId=String(line.articleId||line.articleKey||'');
+      const found=cat.find(a=>String(a.id)===aId)||cat.find(a=>a.name===line.articleName);
+      uPairs=Number(found?.unitPairs);
+    }
+    const pairRate=(uPairs&&uPairs>0)?(uRate/uPairs):uRate;
+    textLines.push((idx+1) + '. *' + (line.articleName||'آئٹم') + '*\n   تعداد: ' + qtyStr + ' | ریٹ: Rs. ' + upperMoney(pairRate) + ' | رقم: Rs. ' + upperMoney(line.amount));
+  });
+  textLines.push('--------------------------------');
+  textLines.push('*ٹوٹل رقم:* Rs. ' + upperMoney(bill.totalAmount));
+  if(Number(bill.discount)>0) textLines.push('*ڈسکاؤنٹ:* Rs. ' + upperMoney(bill.discount));
+  textLines.push('*بل کی رقم:* Rs. ' + upperMoney(bill.netBillAmount??bill.totalAmount));
+  textLines.push('*وصول رقم:* Rs. ' + upperMoney(bill.paidAmount??0));
+  textLines.push('*ٹوٹل باقی رقم:* Rs. ' + upperMoney(bill.remainingBalance??0));
+  textLines.push('--------------------------------');
+  textLines.push('آپ کے اعتماد اور تعاون کا تہہ دل سے شکریہ!');
+  textLines.push('📞 0303 6592255 | 💬 0341 0143182');
+  return textLines.join('\n');
+}
+
+function factorySaleManualView(id){
+  const bill=(settings.manualBills||[]).slice().reverse().find(b=>String(b.id)===String(id))||(settings.manualBills||[]).find(b=>String(b.id)===String(id));
+  if(!bill)return;
+  modal('<h3>Manual Bill #'+esc(bill.voucherNo)+'</h3><div id="fsManualBillViewContainer" style="width:80mm;max-width:100%;margin:auto;">'+factorySaleManualBillHtml(bill)+'</div><div class="modal-actions"><button class="btn brass" id="fsManualPrint">Print</button><button class="btn ghost" id="fsManualShare">Share</button><button class="btn ghost" id="fsManualBack">Back</button></div>');
+  document.getElementById('fsManualPrint').onclick=()=>factorySaleManualPrint(bill);
+  document.getElementById('fsManualShare').onclick=async()=>{
+    try{
+      toast('Voucher image tyar ho rahi hai...');
+      const canvas = await buildFactorySaleManualBillCanvas(bill);
+      const fileName = 'Bill_' + (bill.voucherNo || 'voucher') + '.png';
+      const title = 'Bill #' + (bill.voucherNo || '');
+
+      canvas.toBlob(async blob => {
+        try{
+          if(!blob){
+            toast('Could not generate receipt image');
+            return;
+          }
+
+          // 1. Auto download the exact visual image
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+          // 2. Copy image to clipboard for direct Ctrl+V
+          let copied = false;
+          try{
+            if(navigator.clipboard && window.ClipboardItem){
+              await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+              copied = true;
+            }
+          }catch(clipErr){}
+
+          // 3. Try native mobile share if available (Android/iOS)
+          const file = new File([blob], fileName, {type: 'image/png'});
+          if(navigator.share && navigator.canShare && navigator.canShare({files: [file]})){
+            try{
+              await navigator.share({files: [file], title});
+              return;
+            }catch(shareErr){
+              if(shareErr?.name === 'AbortError') return;
+            }
+          }
+
+          // 4. Open WhatsApp
+          window.open('https://wa.me/', '_blank');
+          toast(copied
+            ? 'Voucher image copy aur download ho gayi! WhatsApp me Ctrl+V karein.'
+            : 'Voucher image download ho gayi! WhatsApp me attach kar ke bhein.'
+          );
+        }catch(err){
+          toast('Could not share voucher image');
+        }
+      }, 'image/png');
+    }catch(error){
+      toast('Could not share voucher');
+    }
+  };
+  document.getElementById('fsManualBack').onclick=factorySaleManualHistory;
+}
 function factorySaleManualHistory(){modal('<h3>Manual Bill History</h3><div style="overflow-x:auto"><table><thead><tr><th>Bill</th><th>Shopkeeper</th><th>Date</th><th>Grand Total</th><th>Paid Amount</th><th>Remaining Balance</th><th>Actions</th></tr></thead><tbody>'+(settings.manualBills||[]).slice().reverse().map(b=>'<tr><td>#'+esc(b.voucherNo)+'</td><td>'+esc(b.shopkeeperName)+'</td><td>'+esc(String(b.date).slice(0,10))+'</td><td>'+upperMoney(b.totalAmount)+'</td><td>'+upperMoney(b.paidAmount??0)+'</td><td>'+upperMoney(b.remainingBalance??b.totalAmount)+'</td><td>'+ ['View','Edit','Delete','Print'].map(action=>'<button class="btn ghost small" data-fs-manual-action="'+action+'" data-fs-manual-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button class="btn brass" id="fsManualNew">Manual Create Bill</button><button class="btn ghost" id="fsManualClose">Close</button></div>');document.getElementById('fsManualNew').onclick=()=>factorySaleManualEditor();document.getElementById('fsManualClose').onclick=closeModal;document.querySelectorAll('[data-fs-manual-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.fsManualId,bill=(settings.manualBills||[]).find(b=>b.id===id);if(!bill)return;const action=button.dataset.fsManualAction;if(action==='View')factorySaleManualView(id);else if(action==='Edit')factorySaleManualEditor(id);else if(action==='Print')factorySaleManualPrint(bill);else openConfirmModal('Delete Manual Bill #'+bill.voucherNo+'?',()=>factorySaleManualDelete(id,JSON.stringify(bill)));});}
 async function factorySaleManualStore(next,number){if(factorySaleManualSaving)return false;const previous=settings.manualBills,counter=settings.nextManualBillNo,hadBills=Object.prototype.hasOwnProperty.call(settings,'manualBills'),hadCounter=Object.prototype.hasOwnProperty.call(settings,'nextManualBillNo');factorySaleManualSaving=true;settings.manualBills=next;if(number!==undefined)settings.nextManualBillNo=number;try{if(!await saveCriticalCloudState())throw Error('Save failed');return true;}catch(error){if(hadBills)settings.manualBills=previous;else delete settings.manualBills;if(hadCounter)settings.nextManualBillNo=counter;else delete settings.nextManualBillNo;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}toast('Manual bill was not saved.');return false;}finally{factorySaleManualSaving=false;}}
 async function factorySaleManualDelete(id,expected){if(factorySaleManualSaving)return;const current=(settings.manualBills||[]).find(b=>b.id===id);if(!current||JSON.stringify(current)!==expected){toast('Manual bill changed. Reopen history.');return;}if(await factorySaleManualStore(settings.manualBills.filter(b=>b.id!==id)))factorySaleManualHistory();}
 function factorySaleManualEditor(id=''){const original=(settings.manualBills||[]).find(b=>b.id===id);if(id&&!original)return;const expected=original?JSON.stringify(original):'',draftId=original?.id||uid(),articles=factorySaleManualArticles();modal('<h3>'+ (original?'Edit Manual Bill #'+esc(original.voucherNo):'Manual Create Bill')+'</h3><label>Shopkeeper Name<input type="text" id="fsManualName" value="'+esc(original?.shopkeeperName||'')+'"></label><div style="overflow-x:auto"><table><thead><tr><th>Article</th><th>Saved Unit</th><th>Quantity</th><th>Rate</th><th>Line Amount</th><th></th></tr></thead><tbody id="fsManualRows"></tbody></table></div><button class="btn ghost small" id="fsManualAdd">Add Article</button><div class="rline"><strong>Grand Total</strong><strong id="fsManualTotal">0</strong></div><label>Paid Amount<input id="fsManualPaid" type="number" min="0" step="0.01" value="'+esc(original?.paidAmount??0)+'"></label><label>Remaining Balance<input id="fsManualRemaining" readonly></label><div class="modal-actions"><button class="btn brass" id="fsManualSave">Create Bill</button><button class="btn ghost" id="fsManualHistory">History</button><button class="btn ghost" id="fsManualCancel">Cancel</button></div>');
  const host=document.getElementById('fsManualRows');const collect=()=>[...host.children].map(row=>({...row.manualLine,qty:row.querySelector('[data-manual-qty]').value,rate:row.querySelector('[data-manual-rate]').value}));
  const update=()=>{try{const calculated=factorySaleManualAmounts(collect());calculated.lines.forEach((line,i)=>host.children[i].querySelector('[data-manual-amount]').textContent=upperMoney(line.amount));document.getElementById('fsManualTotal').textContent=upperMoney(calculated.totalAmount);document.getElementById('fsManualRemaining').value=upperMoney((Math.round(calculated.totalAmount*100)-Math.round(Number(document.getElementById('fsManualPaid').value)*100))/100);}catch(error){document.getElementById('fsManualRemaining').value='';document.getElementById('fsManualTotal').textContent=error.message;[...host.children].forEach(row=>{try{row.querySelector('[data-manual-amount]').textContent=upperMoney(factorySaleManualAmounts([{...row.manualLine,qty:row.querySelector('[data-manual-qty]').value,rate:row.querySelector('[data-manual-rate]').value}]).totalAmount);}catch(e){row.querySelector('[data-manual-amount]').textContent='';}});}};
- const add=(saved={})=>{const row=document.createElement('tr');row.manualLine={...saved};row.innerHTML='<td><select data-manual-article><option value="">Select Article</option>'+articles.map(a=>'<option value="'+esc(a.key)+'">'+esc(a.articleName)+'</option>').join('')+'</select></td><td data-manual-unit>'+esc(saved.unit||'')+'</td><td><input data-manual-qty type="number" min="0" step="any" value="'+esc(saved.qty??'')+'" style="width:85px"></td><td><input data-manual-rate type="number" min="0" step="any" value="'+esc(saved.rate??'')+'" style="width:85px"></td><td data-manual-amount></td><td><button class="btn ghost small" data-manual-remove>Remove</button></td>';const select=row.querySelector('[data-manual-article]');if(saved.articleName){const option=document.createElement('option');option.value='saved';option.textContent=saved.articleName;select.appendChild(option);select.value='saved';}select.onchange=()=>{const article=articles.find(a=>a.key===select.value);row.manualLine=article?{articleKey:article.key,articleId:article.articleId,articleName:article.articleName,unit:article.unit}:{};row.querySelector('[data-manual-unit]').textContent=article?.unit||'';row.querySelector('[data-manual-rate]').value=article?.rate??'';update();};row.querySelectorAll('input').forEach(input=>input.oninput=update);row.querySelector('[data-manual-remove]').onclick=()=>{row.remove();update();};host.appendChild(row);update();};
+
+ const add=(saved={})=>{const row=document.createElement('tr');row.manualLine={...saved};row.innerHTML='<td><select data-manual-article><option value="">Select Article</option>'+articles.map(a=>'<option value="'+esc(a.key)+'">'+esc(a.articleName)+'</option>').join('')+'</select></td><td data-manual-unit>'+esc(saved.unit||'')+'</td><td><input data-manual-qty type="number" min="0" step="any" value="'+esc(saved.qty??'')+'" style="width:85px"></td><td><input data-manual-rate type="number" min="0" step="any" value="'+esc(saved.rate??'')+'" style="width:85px"></td><td data-manual-amount></td><td><button class="btn ghost small" data-manual-remove>Remove</button></td>';const select=row.querySelector('[data-manual-article]');if(saved.articleName){const option=document.createElement('option');option.value='saved';option.textContent=saved.articleName;select.appendChild(option);select.value='saved';}select.onchange=()=>{const article=articles.find(a=>a.key===select.value);row.manualLine=article?{articleKey:article.key,articleId:article.articleId,articleName:article.articleName,unit:article.unit,adda:article.adda||'',unitPairs:article.unitPairs??''}:{};row.querySelector('[data-manual-unit]').textContent=article?.unit||'';row.querySelector('[data-manual-rate]').value=article?.rate??'';update();};row.querySelectorAll('input').forEach(input=>input.oninput=update);row.querySelector('[data-manual-remove]').onclick=()=>{row.remove();update();};host.appendChild(row);update();};
+
  document.getElementById('fsManualPaid').oninput=update;(original?.lines||[{}]).forEach(add);document.getElementById('fsManualAdd').onclick=()=>add();document.getElementById('fsManualHistory').onclick=factorySaleManualHistory;document.getElementById('fsManualCancel').onclick=closeModal;document.getElementById('fsManualSave').onclick=async()=>{if(factorySaleManualSaving)return;if(!original&&(settings.manualBills||[]).some(b=>b.id===draftId)){factorySaleManualView(draftId);return;}const name=document.getElementById('fsManualName').value.trim();if(!name){toast('Enter Shopkeeper Name.');return;}let calculated;try{calculated=factorySaleManualAmounts(collect());}catch(error){toast(error.message);return;}const rawPaid=document.getElementById('fsManualPaid').value,paidAmount=Math.round(Number(rawPaid)*100)/100,remainingBalance=(Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(rawPaid===''||!Number.isFinite(paidAmount)||paidAmount<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0){toast('Enter Paid Amount between zero and Grand Total.');return;}const bills=settings.manualBills||[];if(original&&JSON.stringify(bills.find(b=>b.id===id))!==expected){toast('Manual bill changed. Reopen it.');return;}const number=original?.voucherNo||Math.max(1001,Number(settings.nextManualBillNo)||1001,...bills.map(b=>(Number(b.voucherNo)||0)+1)),bill={...original,id:draftId,voucherNo:number,date:original?.date||new Date().toISOString(),...(original?{editedAt:new Date().toISOString()}:{}),shopkeeperName:name,lines:calculated.lines,totalAmount:calculated.totalAmount,paidAmount,remainingBalance};bill.dispatchSnapshot={id:'manual:'+bill.id,billId:bill.id,shopkeeperName:name,date:bill.date,lines:bill.lines.map((line,index)=>({id:'manual:'+bill.id+':'+index,manualBillId:bill.id,shopkeeperName:name,date:bill.date,articleId:line.articleId||line.articleKey||'manual-line-'+index,articleName:line.articleName,unit:line.unit,atoms:line.qty,ratePerUnit:line.rate,amount:line.amount}))};const button=document.getElementById('fsManualSave');button.disabled=true;const ok=await factorySaleManualStore(original?bills.map(b=>b.id===id?bill:b):[...bills,bill],original?undefined:number+1);if(ok)factorySaleManualView(bill.id);else if(button.isConnected)button.disabled=false;};}
 
 function route(page){return ['factorySale','factorySaleToday','factorySaleShopkeeperDetail','factorySaleDispatchDetail','factorySaleShopkeeper1','factorySaleShopkeeper2','factorySaleDispatch1','factorySaleDispatch2'].includes(page);}
