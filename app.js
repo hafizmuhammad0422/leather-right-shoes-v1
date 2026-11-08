@@ -11745,21 +11745,490 @@ let tfsUpperReportFilter={mode:'today',from:'',to:''};
 function openTfsUpperProduction(mode='today',from='',to=''){
   tfsUpperReportFilter={mode,from,to};if(currentPage==='tfsUpperProductionReport')render();else goto('tfsUpperProductionReport');
 }
+function tfsUrduDayName(dateStr){
+  try{
+    const d=dateStr?new Date(dateStr+'T00:00:00'):new Date();
+    const days=['اتوار','پیر','منگل','بدھ','جمعرات','جمعہ','ہفتہ'];
+    return days[d.getDay()]||'';
+  }catch(e){return '';}
+}
+function tfsArticleNameUrdu(rawName){
+  if(!rawName)return '';
+  const str=String(rawName).trim().toLowerCase();
+  if(str.includes('tpr') && (str.includes('pump') || str.includes('pumpi'))) return 'ٹی پی ار پمپنگ';
+  if(str.includes('tpr')) return 'ٹی پی ار پمپنگ';
+  if((str.includes('baby') || str.includes('kids') || str.includes('balkana') || str.includes('bachkana')) && (str.includes('moza') || str.includes('moxa'))) return 'بچکانہ موزہ';
+  if(str.includes('baby') || str.includes('kids') || str.includes('balkana') || str.includes('bachkana')) return 'بچکانہ پمپنگ';
+  if(str.includes('one piece') || str.includes('moxa') || str.includes('moza') || str.includes('1 piece')) return 'ون پیس موزہ';
+  if(str.includes('flexible') || str.includes('flex')) return 'فلیکسیبل';
+  if(str.includes('pumpi') || str.includes('pumpy') || str.includes('pump')) return 'پمپنگ';
+  const map={
+    '8814 moza upper':'8814 موزہ اپر',
+    'role cutting pumpi':'رول کٹنگ پمپی',
+    'role cutting kids pumpi':'رول کٹنگ کڈز پمپی'
+  };
+  if(map[str])return map[str];
+  return productionWeeklyUrduText(rawName,false);
+}
+function tfsRenderVoucherHtml(opts){
+  const {title,subtitle='LEATHER RIGHT SHOES BY ABID',from,to,rows,articles=[],mode,valid,themeColor='#1b5e20',lightStripe='#f4fbf5',textColor='#1b5e20'}=opts;
+  if(!valid)return '<p>Select a valid date range.</p>';
+  const urduDay=tfsUrduDayName(from);
+  const dateDisplay=from===to?from:(from+' تا '+to);
+  let totalItems=0,totalSets=0;
+  const tableRows=(rows||[]).map((row,idx)=>{
+    const rawVal=row.qty;
+    const isMissing=rawVal===null||rawVal===undefined||rawVal===''||!Number.isFinite(Number(rawVal));
+    const rawQty=isMissing?0:Math.max(0,Number(rawVal));
+    const isSetUnit=String(row.unit||'').toUpperCase()==='SET';
+    const itemsCount=isMissing?0:(isSetUnit?0:rawQty);
+    const setsCount=isMissing?0:(isSetUnit?rawQty:0);
+    totalItems+=itemsCount;
+    totalSets+=setsCount;
+    const bg=idx%2===1?lightStripe:'#ffffff';
+    const workerUrdu=productionWeeklyUrduText(row.workerName||'',true);
+    const itemsDisplay=isMissing?'-':(isSetUnit?'-':rawQty);
+    const setsDisplay=isMissing?'-':(isSetUnit?rawQty:'-');
+    return '<tr style="background:'+bg+';border-bottom:1px solid #e0e0e0;">'
+      +'<td style="padding:10px 6px;font-size:15px;font-weight:700;text-align:center;">'+(idx+1)+'</td>'
+      +'<td style="padding:10px 8px;font-size:17px;font-weight:700;font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',\'Urdu Typesetting\',serif;text-align:right;">'+esc(workerUrdu)+'</td>'
+      +'<td style="padding:10px 6px;font-size:16px;font-weight:800;text-align:center;">'+itemsDisplay+'</td>'
+      +'<td style="padding:10px 6px;font-size:16px;font-weight:800;text-align:center;">'+setsDisplay+'</td>'
+      +'</tr>';
+  }).join('');
+
+  const validArticles=(articles||[]).filter(a=>Number(a.qty)>0);
+  const articleRows=validArticles.map((art,idx)=>{
+    const rawQty=Number(art.qty)||0;
+    const isSetUnit=String(art.unit||'').toUpperCase()==='SET';
+    const itemsDisplay=isSetUnit?'-':rawQty;
+    const setsDisplay=isSetUnit?rawQty:'-';
+    const bg=idx%2===1?lightStripe:'#ffffff';
+    const artNameUrdu=tfsArticleNameUrdu(art.name);
+    return '<tr style="background:'+bg+';border-bottom:1px solid #e0e0e0;">'
+      +'<td style="padding:8px 6px;font-size:14px;font-weight:700;text-align:center;">'+(idx+1)+'</td>'
+      +'<td style="padding:8px 8px;font-size:15px;font-weight:700;font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif;text-align:right;">'+esc(artNameUrdu)+'</td>'
+      +'<td style="padding:8px 6px;font-size:15px;font-weight:800;text-align:center;">'+itemsDisplay+'</td>'
+      +'<td style="padding:8px 6px;font-size:15px;font-weight:800;text-align:center;">'+setsDisplay+'</td>'
+      +'</tr>';
+  }).join('');
+
+  return '<div class="tfs-voucher-wrap" dir="rtl" style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,0.12);overflow:hidden;font-family:system-ui,-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;direction:rtl;text-align:right;">'
+    +'<div style="background:'+themeColor+';color:#fff;text-align:center;padding:12px 10px 10px;font-weight:900;font-size:18px;letter-spacing:1px;text-transform:uppercase;direction:ltr;">'+esc(subtitle)+'</div>'
+    +'<div style="height:10px;background:repeating-linear-gradient(45deg,#f59e0b,#f59e0b 12px,#1e293b 12px,#1e293b 24px);"></div>'
+    +'<div style="padding:16px 14px 10px;text-align:center;">'
+      +'<div style="font-size:26px;font-weight:800;color:'+textColor+';font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',\'Urdu Typesetting\',serif;line-height:1.6;margin-bottom:10px;">'+esc(title)+'</div>'
+      +'<div style="display:flex;justify-content:center;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;direction:rtl;">'
+        +'<span style="background:#e8f4ec;color:'+textColor+';border-radius:20px;padding:5px 14px;font-size:14px;font-weight:700;">تاریخ: '+esc(dateDisplay)+'</span>'
+        +(urduDay?'<span style="background:#e8f4ec;color:'+textColor+';border-radius:20px;padding:5px 14px;font-size:14px;font-weight:700;">دن: '+esc(urduDay)+'</span>':'')
+      +'</div>'
+      +'<table dir="rtl" style="width:100%;border-collapse:collapse;border-spacing:0;margin-bottom:16px;overflow:hidden;border-radius:8px;direction:rtl;text-align:right;">'
+        +'<thead>'
+          +'<tr style="background:'+themeColor+';color:#fff;font-weight:700;font-size:14px;border:none;">'
+            +'<th style="padding:10px 6px;width:40px;text-align:center;">نمبر</th>'
+            +'<th style="padding:10px 8px;text-align:right;font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif;">کاریگر کا نام</th>'
+            +'<th style="padding:10px 6px;width:75px;text-align:center;">آئٹمز</th>'
+            +'<th style="padding:10px 6px;width:70px;text-align:center;">سیٹ</th>'
+          +'</tr>'
+        +'</thead>'
+        +'<tbody>'
+          +(tableRows||'<tr><td colspan="4" style="padding:16px;text-align:center;color:#888;">کوئی پروڈکشن ریکارڈ موجود نہیں ہے</td></tr>')
+        +'</tbody>'
+      +'</table>'
+      +'<div style="display:flex;gap:12px;justify-content:space-between;margin-top:14px;margin-bottom:14px;direction:rtl;">'
+        +'<div style="flex:1;background:'+themeColor+';color:#fff;border-radius:10px;padding:10px 6px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.2);">'
+          +'<div style="font-size:14px;font-weight:700;font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif;line-height:1.2;">کل آئٹمز</div>'
+          +'<div style="font-size:26px;font-weight:900;line-height:1.2;margin-top:2px;">'+totalItems+'</div>'
+        +'</div>'
+        +'<div style="flex:1;background:#f59e0b;color:#1e293b;border-radius:10px;padding:10px 6px;text-align:center;box-shadow:0 2px 6px rgba(245,158,11,0.25);">'
+          +'<div style="font-size:14px;font-weight:700;font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif;line-height:1.2;">کل سیٹ</div>'
+          +'<div style="font-size:26px;font-weight:900;line-height:1.2;margin-top:2px;">'+totalSets+'</div>'
+        +'</div>'
+      +'</div>'
+      +(validArticles.length>0?'<div style="margin-top:14px;margin-bottom:8px;">'
+        +'<div style="font-size:15px;font-weight:800;color:'+textColor+';font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif;margin-bottom:6px;text-align:right;">آرٹیکل وار تفصیل</div>'
+        +'<table dir="rtl" style="width:100%;border-collapse:collapse;border-spacing:0;overflow:hidden;border-radius:8px;direction:rtl;text-align:right;">'
+          +'<thead>'
+            +'<tr style="background:'+themeColor+';color:#fff;font-weight:700;font-size:13px;border:none;">'
+              +'<th style="padding:8px 6px;width:40px;text-align:center;">نمبر</th>'
+              +'<th style="padding:8px 8px;text-align:right;font-family:\'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif;">آرٹیکل / قسم</th>'
+              +'<th style="padding:8px 6px;width:75px;text-align:center;">آئٹمز</th>'
+              +'<th style="padding:8px 6px;width:70px;text-align:center;">سیٹ</th>'
+            +'</tr>'
+          +'</thead>'
+          +'<tbody>'+articleRows+'</tbody>'
+        +'</table>'
+      +'</div>':'')
+    +'</div>'
+  +'</div>';
+}
+function buildTfsVoucherCanvas(opts){
+  const {title,subtitle='LEATHER RIGHT SHOES BY ABID',from,to,rows,articles=[],themeColor='#1b5e20'}=opts;
+  const width=520,pad=20;
+  const urduDay=tfsUrduDayName(from);
+  const dateDisplay=from===to?from:(from+' تا '+to);
+  let totalItems=0,totalSets=0;
+  const validRows=(rows||[]).map(row=>{
+    const rawVal=row.qty;
+    const isMissing=rawVal===null||rawVal===undefined||rawVal===''||!Number.isFinite(Number(rawVal));
+    const rawQty=isMissing?0:Math.max(0,Number(rawVal));
+    const isSetUnit=String(row.unit||'').toUpperCase()==='SET';
+    const itemsCount=isMissing?0:(isSetUnit?0:rawQty);
+    const setsCount=isMissing?0:(isSetUnit?rawQty:0);
+    totalItems+=itemsCount;
+    totalSets+=setsCount;
+    const workerUrdu=productionWeeklyUrduText(row.workerName||'',true);
+    const itemsDisplay=isMissing?'-':(isSetUnit?'-':String(rawQty));
+    const setsDisplay=isMissing?'-':(isSetUnit?String(rawQty):'-');
+    return {workerUrdu,itemsDisplay,setsDisplay};
+  });
+
+  const validArticles=(articles||[]).filter(a=>Number(a.qty)>0).map(art=>{
+    const rawQty=Number(art.qty)||0;
+    const isSetUnit=String(art.unit||'').toUpperCase()==='SET';
+    const itemsDisplay=isSetUnit?'-':String(rawQty);
+    const setsDisplay=isSetUnit?String(rawQty):'-';
+    const nameUrdu=tfsArticleNameUrdu(art.name);
+    return {name:nameUrdu,itemsDisplay,setsDisplay};
+  });
+
+  const rowHeight=38;
+  const articleRowHeight=34;
+  const tableRowsCount=Math.max(1,validRows.length);
+  const articleSectionHeight=validArticles.length>0?(22+34+(validArticles.length*articleRowHeight)+14):0;
+  const totalHeight=pad+44+10+16+36+26+14+38+(tableRowsCount*rowHeight)+14+56+14+articleSectionHeight+pad;
+
+  const canvas=document.createElement('canvas');
+  canvas.width=width*2;
+  canvas.height=totalHeight*2;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(2,2);
+
+  // Background
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(0,0,width,totalHeight);
+
+  let y=pad;
+
+  // 1. Subtitle Header (LEATHER RIGHT SHOES BY ABID)
+  ctx.fillStyle=themeColor;
+  ctx.fillRect(pad,y,width-pad*2,44);
+  ctx.fillStyle='#ffffff';
+  ctx.font='900 16px sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(subtitle,width/2,y+22);
+  y+=44;
+
+  // 2. Hazard stripe bar
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(pad,y,width-pad*2,10);
+  ctx.clip();
+  ctx.fillStyle='#1e293b';
+  ctx.fillRect(pad,y,width-pad*2,10);
+  ctx.fillStyle='#f59e0b';
+  for(let x=pad-20;x<width;x+=24){
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(x+12,y);
+    ctx.lineTo(x+2,y+10);
+    ctx.lineTo(x-10,y+10);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+  y+=10+16;
+
+  // 3. Title (Urdu)
+  ctx.fillStyle=themeColor;
+  ctx.font='bold 24px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(title,width/2,y+14);
+  y+=36;
+
+  // 4. Date & Day Pills
+  const pillY=y;
+  ctx.font='bold 12px sans-serif';
+  const dateTxt='تاریخ: '+dateDisplay;
+  const dayTxt=urduDay?('دن: '+urduDay):'';
+  
+  // Date pill
+  ctx.fillStyle='#e8f4ec';
+  ctx.beginPath();
+  ctx.roundRect(width/2 - 110,pillY,105,26,13);
+  ctx.fill();
+  ctx.fillStyle=themeColor;
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(dateTxt,width/2 - 58,pillY+13);
+
+  // Day pill
+  if(dayTxt){
+    ctx.fillStyle='#e8f4ec';
+    ctx.beginPath();
+    ctx.roundRect(width/2 + 5,pillY,95,26,13);
+    ctx.fill();
+    ctx.fillStyle=themeColor;
+    ctx.fillText(dayTxt,width/2 + 52,pillY+13);
+  }
+  y+=26+14;
+
+  // 5. Table Header (RTL: نمبر (Right) | کاریگر کا نام | آئٹمز | سیٹ (Left))
+  const colNumberRight=width-pad;
+  const colWorkerRight=colNumberRight-45;
+  const colItemsRight=pad+150;
+  const colSetsRight=pad+75;
+  const tableLeft=pad;
+  const tableRight=width-pad;
+
+  ctx.fillStyle=themeColor;
+  ctx.fillRect(tableLeft,y,tableRight-tableLeft,38);
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 14px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+  ctx.textBaseline='middle';
+
+  // Headers (RTL)
+  ctx.textAlign='center';
+  ctx.fillText('نمبر',colNumberRight-22,y+19);
+  ctx.textAlign='right';
+  ctx.fillText('کاریگر کا نام',colWorkerRight-10,y+19);
+  ctx.textAlign='center';
+  ctx.fillText('آئٹمز',colItemsRight-38,y+19);
+  ctx.fillText('سیٹ',colSetsRight-38,y+19);
+  y+=38;
+
+  // Table Body Rows
+  if(validRows.length===0){
+    ctx.fillStyle='#f9f9f9';
+    ctx.fillRect(tableLeft,y,tableRight-tableLeft,rowHeight);
+    ctx.fillStyle='#888888';
+    ctx.textAlign='center';
+    ctx.font='14px sans-serif';
+    ctx.fillText('کوئی پروڈکشن ریکارڈ موجود نہیں ہے',width/2,y+rowHeight/2);
+    y+=rowHeight;
+  }else{
+    validRows.forEach((r,idx)=>{
+      ctx.fillStyle=idx%2===1?'#f4fbf5':'#ffffff';
+      ctx.fillRect(tableLeft,y,tableRight-tableLeft,rowHeight);
+      
+      // Bottom border
+      ctx.strokeStyle='#e0e0e0';
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(tableLeft,y+rowHeight);
+      ctx.lineTo(tableRight,y+rowHeight);
+      ctx.stroke();
+
+      // Values
+      ctx.fillStyle='#1e293b';
+      ctx.textBaseline='middle';
+      
+      // 1. Sr Number
+      ctx.font='bold 14px sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(String(idx+1),colNumberRight-22,y+rowHeight/2);
+
+      // 2. Worker Name (Urdu)
+      ctx.font='bold 16px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+      ctx.textAlign='right';
+      ctx.fillText(r.workerUrdu,colWorkerRight-10,y+rowHeight/2);
+
+      // 3. Items
+      ctx.font='bold 15px sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(r.itemsDisplay,colItemsRight-38,y+rowHeight/2);
+
+      // 4. Sets
+      ctx.fillText(r.setsDisplay,colSetsRight-38,y+rowHeight/2);
+
+      y+=rowHeight;
+    });
+  }
+  y+=14;
+
+  // 6. Summary Badges: Right: کل آئٹمز (themeColor) | Left: کل سیٹ (Yellow)
+  const badgeWidth=(width-pad*2-12)/2;
+
+  // کل آئٹمز (Right Box)
+  ctx.fillStyle=themeColor;
+  ctx.beginPath();
+  ctx.roundRect(width/2+6,y,badgeWidth,56,8);
+  ctx.fill();
+  ctx.fillStyle='#ffffff';
+  ctx.textAlign='center';
+  ctx.textBaseline='top';
+  ctx.font='bold 13px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+  ctx.fillText('کل آئٹمز',width/2+6+badgeWidth/2,y+8);
+  ctx.font='900 22px sans-serif';
+  ctx.fillText(String(totalItems),width/2+6+badgeWidth/2,y+26);
+
+  // کل سیٹ (Left Box)
+  ctx.fillStyle='#f59e0b';
+  ctx.beginPath();
+  ctx.roundRect(pad,y,badgeWidth,56,8);
+  ctx.fill();
+  ctx.fillStyle='#1e293b';
+  ctx.font='bold 13px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+  ctx.fillText('کل سیٹ',pad+badgeWidth/2,y+8);
+  ctx.font='900 22px sans-serif';
+  ctx.fillText(String(totalSets),pad+badgeWidth/2,y+26);
+  y+=56+14;
+
+  // 7. Article Breakdown Section (if any) - Drawn Below Badges
+  if(validArticles.length>0){
+    ctx.fillStyle=themeColor;
+    ctx.font='bold 15px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+    ctx.textAlign='right';
+    ctx.textBaseline='middle';
+    ctx.fillText('آرٹیکل وار تفصیل',tableRight-6,y+8);
+    y+=22;
+
+    ctx.fillStyle=themeColor;
+    ctx.fillRect(tableLeft,y,tableRight-tableLeft,34);
+    ctx.fillStyle='#ffffff';
+    ctx.font='bold 13px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('نمبر',colNumberRight-22,y+17);
+    ctx.textAlign='right';
+    ctx.fillText('آرٹیکل / قسم',colWorkerRight-10,y+17);
+    ctx.textAlign='center';
+    ctx.fillText('آئٹمز',colItemsRight-38,y+17);
+    ctx.fillText('سیٹ',colSetsRight-38,y+17);
+    y+=34;
+
+    validArticles.forEach((art,idx)=>{
+      ctx.fillStyle=idx%2===1?'#f4fbf5':'#ffffff';
+      ctx.fillRect(tableLeft,y,tableRight-tableLeft,articleRowHeight);
+      ctx.strokeStyle='#e0e0e0';
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.moveTo(tableLeft,y+articleRowHeight);
+      ctx.lineTo(tableRight,y+articleRowHeight);
+      ctx.stroke();
+
+      ctx.fillStyle='#1e293b';
+      ctx.textBaseline='middle';
+      ctx.font='bold 13px sans-serif';
+      ctx.textAlign='center';
+      ctx.fillText(String(idx+1),colNumberRight-22,y+articleRowHeight/2);
+
+      ctx.font='bold 14px \'Noto Nastaliq Urdu\',\'Jameel Noori Nastaleeq\',serif,sans-serif';
+      ctx.textAlign='right';
+      ctx.fillText(art.name,colWorkerRight-10,y+articleRowHeight/2);
+
+      ctx.textAlign='center';
+      ctx.fillText(art.itemsDisplay,colItemsRight-38,y+articleRowHeight/2);
+      ctx.fillText(art.setsDisplay,colSetsRight-38,y+articleRowHeight/2);
+
+      y+=articleRowHeight;
+    });
+    y+=14;
+  }
+
+  return canvas;
+}
+
+async function shareTfsVoucher(kind){
+  try{
+    toast('Voucher image tyar ho rahi hai...');
+    const isUpper=kind==='upper';
+    const filter=isUpper?tfsUpperReportFilter:tfsBottomReportFilter;
+    const data=isUpper?tfsUpperProduction(filter.mode,filter.from,filter.to):tfsBottomProduction(filter.mode,filter.from,filter.to);
+    
+    if(!data.valid){
+      toast('Select a valid date range.');
+      return;
+    }
+
+    const title=isUpper?'آج اپر مین نے کیا بنایا':'آج باٹم مین نے کیا بنایا';
+    const themeColor=isUpper?'#0f406b':'#1b5e20';
+    const canvas=buildTfsVoucherCanvas({
+      title,
+      subtitle:'LEATHER RIGHT SHOES BY ABID',
+      from:data.from,
+      to:data.to,
+      rows:data.rows,
+      articles:data.articles,
+      themeColor
+    });
+
+    const fileName=(isUpper?'Upper_':'Bottom_')+'Production_'+(data.from||'voucher')+'.png';
+    const shareTitle=title+' ('+(data.from||'')+')';
+
+    canvas.toBlob(async blob=>{
+      try{
+        if(!blob){
+          toast('Could not generate receipt image');
+          return;
+        }
+        const blobUrl=URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=blobUrl;
+        a.download=fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(blobUrl),10000);
+
+        let copied=false;
+        try{
+          if(navigator.clipboard && window.ClipboardItem){
+            await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+            copied=true;
+          }
+        }catch(clipErr){}
+
+        const file=new File([blob],fileName,{type:'image/png'});
+        if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+          try{
+            await navigator.share({files:[file],title:shareTitle});
+            return;
+          }catch(shareErr){
+            if(shareErr?.name==='AbortError')return;
+          }
+        }
+
+        window.open('https://wa.me/','_blank');
+        toast(copied
+          ? 'Voucher image copy aur download ho gayi! WhatsApp mein Ctrl+V karein.'
+          : 'Voucher image download ho gayi! WhatsApp mein attach kar ke bhein.'
+        );
+      }catch(err){
+        toast('Could not share voucher image');
+      }
+    },'image/png');
+  }catch(e){
+    toast('Could not share voucher');
+  }
+}
 function pageTfsUpperProduction(){
   const {mode,from,to}=tfsUpperReportFilter;
   const data=tfsUpperProduction(mode,from,to),labels={today:'Today',week:'Weekly',month:'Monthly',custom:'Custom Date'};
-  const seenWorkers=new Set(),money=value=>upperMoney(Math.round(value*100)/100);
-  const mainRows=data.rows.map(row=>{const first=!seenWorkers.has(row.workerId);seenWorkers.add(row.workerId);return '<tr><td>'+esc(row.workerName)+'</td><td>'+esc(row.name)+'</td><td>'+(row.qty===null?'?':esc(row.qty+' '+row.unit))+'</td><td>'+(row.rate===null?'Not saved':money(row.rate))+'</td><td>'+(first?money(data.expenses.get(row.workerId)||0):'')+'</td><td>'+(row.rate===null&&row.qty!==null?'\u2014':money(row.amount))+'</td></tr>';}).join('');
-  const summary=data.articles.length?data.articles:[{name:'?',qty:0,unit:'?'}];
-  const summaryRows=summary.map((row,index)=>'<tr><td>'+(index===0?data.workerCount:'')+'</td><td>'+esc(row.name)+'</td><td>'+row.qty+'</td><td>'+esc(row.unit)+'</td><td>'+(index===0?money(data.kharcha):'')+'</td><td>'+(index===0?money(data.amount):'')+'</td></tr>').join('');
-  const report='<div id="tfsUpperPrint"><style>#tfsUpperPrint{text-align:center}#tfsUpperPrint table{width:100%;table-layout:fixed;border-collapse:collapse}#tfsUpperPrint th,#tfsUpperPrint td{border:1px solid #999;padding:3px 4px;font-size:12px;line-height:1.2;overflow-wrap:anywhere;text-align:center!important;vertical-align:middle}#tfsUpperPrint h3,#tfsUpperPrint p{margin:5px 0}#tfsUpperPrint .tfs-upper-summary{margin-top:8px}</style><h3>Upper Man Production</h3><p>'+esc(data.from)+' to '+esc(data.to)+'</p>'+(data.valid?'<table><thead><tr><th data-i18n=ui_Worker>Worker</th><th data-i18n=ui_Article>Article</th><th>Received + Unit</th><th>Labour Rate</th><th>Weekly Kharcha</th><th data-i18n=ui_Amount>Amount</th></tr></thead><tbody>'+ (mainRows||'<tr><td colspan="6">No received production or kharcha in this period.</td></tr>')+'</tbody></table><table class="tfs-upper-summary"><thead><tr><th>Total Workers</th><th data-i18n=ui_Article>Article</th><th data-i18n=ui_Quantity>Quantity</th><th data-i18n=ui_Unit>Unit</th><th>Weekly Kharcha</th><th>Production Amount</th></tr></thead><tbody>'+summaryRows+'</tbody></table>':'<p>Select a valid date range.</p>')+'<div style="margin-top:8px;font-weight:700">Total Labour: '+money(data.amount)+' | Weekly Kharcha: '+money(data.kharcha)+' | Remaining: '+money(data.amount-data.kharcha)+'</div>'+(data.rows.some(row=>row.qty!==null&&row.rate===null)?'<p>Totals incomplete: saved labour rate missing.</p>':'')+'</div>';
-  return '<div class="card" style="padding:10px"><div style="display:flex;gap:5px;flex-wrap:wrap">'+Object.entries(labels).map(([key,label])=>'<button class="btn small '+(mode===key?'brass':'ghost')+'" data-tfs-upper-period="'+key+'">'+label+'</button>').join('')+'</div>'+(mode==='custom'?'<div class="row"><label>From<input type="date" id="tfsUpperFrom" value="'+esc(from)+'"></label><label>To<input type="date" id="tfsUpperTo" value="'+esc(to)+'"></label></div>':'')+report+'<div class="modal-actions"><button class="btn brass" id="tfsUpperPrintButton" '+(data.valid?'':'disabled')+' data-i18n=ui_Print>Print</button><button class="btn ghost" id="tfsUpperClose">Back to Summary</button></div></div>';
+  const voucherHtml=tfsRenderVoucherHtml({
+    title:'آج اپر مین نے کیا بنایا',
+    subtitle:'LEATHER RIGHT SHOES BY ABID',
+    from:data.from,
+    to:data.to,
+    rows:data.rows,
+    articles:data.articles,
+    mode,
+    valid:data.valid,
+    themeColor:'#0f406b',
+    lightStripe:'#f0f5fa',
+    textColor:'#0f406b'
+  });
+  const report='<div id="tfsUpperPrint">'+voucherHtml+'</div>';
+  return '<div class="card" style="padding:10px"><div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;">'+Object.entries(labels).map(([key,label])=>'<button class="btn small '+(mode===key?'brass':'ghost')+'" data-tfs-upper-period="'+key+'">'+label+'</button>').join('')+'</div>'+(mode==='custom'?'<div class="row" style="margin-bottom:12px;"><label>From<input type="date" id="tfsUpperFrom" value="'+esc(from)+'"></label><label>To<input type="date" id="tfsUpperTo" value="'+esc(to)+'"></label></div>':'')+report+'<div class="modal-actions" style="margin-top:14px;"><button class="btn brass" id="tfsUpperPrintButton" '+(data.valid?'':'disabled')+' data-i18n=ui_Print>Print</button><button class="btn brass" id="tfsUpperShareButton" '+(data.valid?'':'disabled')+'>Share</button><button class="btn ghost" id="tfsUpperClose">Back to Summary</button></div></div>';
 }
 function bindTfsUpperProduction(){
   const {from,to}=tfsUpperReportFilter;
   document.querySelectorAll('[data-tfs-upper-period]').forEach(button=>button.onclick=()=>openTfsUpperProduction(button.dataset.tfsUpperPeriod,from||upperLocalDateKey(new Date()),to||upperLocalDateKey(new Date())));
   ['tfsUpperFrom','tfsUpperTo'].forEach(id=>{const input=document.getElementById(id);if(input)input.onchange=()=>openTfsUpperProduction('custom',document.getElementById('tfsUpperFrom').value,document.getElementById('tfsUpperTo').value);});
-  document.getElementById('tfsUpperPrintButton').onclick=()=>printAggregateThermal(document.getElementById('tfsUpperPrint').outerHTML,'Upper Man Production','element',{portraitSafe:true});document.getElementById('tfsUpperClose').onclick=()=>goto('todayFactorySummary');
+  document.getElementById('tfsUpperPrintButton').onclick=()=>printAggregateThermal(document.getElementById('tfsUpperPrint').outerHTML,'Upper Man Production','element',{portraitSafe:true});
+  document.getElementById('tfsUpperShareButton').onclick=()=>shareTfsVoucher('upper');
+  document.getElementById('tfsUpperClose').onclick=()=>goto('todayFactorySummary');
 }
 function tfsBottomProduction(mode='today',from='',to=''){
  const now=new Date();let start=new Date(now.getFullYear(),now.getMonth(),now.getDate()),end=new Date(start);end.setDate(end.getDate()+1);if(mode==='week'){const week=getUpperWorkWeekRange(now);start=week.start;end=week.end;}if(mode==='month'){start=new Date(now.getFullYear(),now.getMonth(),1);end=new Date(now.getFullYear(),now.getMonth()+1,1);}if(mode==='custom'){start=new Date(from+'T00:00:00');end=new Date(to+'T00:00:00');end.setDate(end.getDate()+1);}
@@ -11779,18 +12248,29 @@ function openTfsBottomProduction(mode='today',from='',to=''){
 function pageTfsBottomProduction(){
   const {mode,from,to}=tfsBottomReportFilter;
   const data=tfsBottomProduction(mode,from,to),labels={today:'Today',week:'Weekly',month:'Monthly',custom:'Custom Date'};
-  const seenWorkers=new Set(),money=value=>upperMoney(Math.round(value*100)/100);
-  const mainRows=data.rows.map(row=>{const first=!seenWorkers.has(row.workerId);seenWorkers.add(row.workerId);return '<tr><td>'+esc(row.workerName)+'</td><td>'+esc(row.name)+'</td><td>'+(row.qty===null?'?':esc(row.qty+' '+row.unit))+'</td><td>'+(row.rate===null?'Not saved':money(row.rate))+'</td><td>'+(first?money(data.expenses.get(row.workerId)||0):'')+'</td><td>'+(row.rate===null&&row.qty!==null?'\u2014':money(row.amount))+'</td></tr>';}).join('');
-  const summary=data.articles.length?data.articles:[{name:'?',qty:0,unit:'?'}];
-  const summaryRows=summary.map((row,index)=>'<tr><td>'+(index===0?data.workerCount:'')+'</td><td>'+esc(row.name)+'</td><td>'+row.qty+'</td><td>'+esc(row.unit)+'</td><td>'+(index===0?money(data.kharcha):'')+'</td><td>'+(index===0?money(data.amount):'')+'</td></tr>').join('');
-  const report='<div id="tfsBottomPrint"><style>#tfsBottomPrint{text-align:center}#tfsBottomPrint table{width:100%;table-layout:fixed;border-collapse:collapse}#tfsBottomPrint th,#tfsBottomPrint td{border:1px solid #999;padding:3px 4px;font-size:12px;line-height:1.2;overflow-wrap:anywhere;text-align:center!important;vertical-align:middle}#tfsBottomPrint h3,#tfsBottomPrint p{margin:5px 0}#tfsBottomPrint .tfs-bottom-summary{margin-top:8px}</style><h3>Bottom Man Production</h3><p>'+esc(data.from)+' to '+esc(data.to)+'</p>'+(data.valid?'<table><thead><tr><th data-i18n=ui_Worker>Worker</th><th data-i18n=ui_Article>Article</th><th>Received + Unit</th><th>Labour Rate</th><th>Weekly Kharcha</th><th data-i18n=ui_Amount>Amount</th></tr></thead><tbody>'+ (mainRows||'<tr><td colspan="6">No received production or kharcha in this period.</td></tr>')+'</tbody></table><table class="tfs-bottom-summary"><thead><tr><th>Total Workers</th><th data-i18n=ui_Article>Article</th><th data-i18n=ui_Quantity>Quantity</th><th data-i18n=ui_Unit>Unit</th><th>Weekly Kharcha</th><th>Production Amount</th></tr></thead><tbody>'+summaryRows+'</tbody></table>':'<p>Select a valid date range.</p>')+'<div style="margin-top:8px;font-weight:700">Total Labour: '+money(data.amount)+' | Weekly Kharcha: '+money(data.kharcha)+' | Remaining: '+money(data.amount-data.kharcha)+'</div>'+(data.rows.some(row=>row.qty!==null&&row.rate===null)?'<p>Totals incomplete: saved labour rate missing.</p>':'')+'</div>';
-  return '<div class="card" style="padding:10px"><div style="display:flex;gap:5px;flex-wrap:wrap">'+Object.entries(labels).map(([key,label])=>'<button class="btn small '+(mode===key?'brass':'ghost')+'" data-tfs-bottom-period="'+key+'">'+label+'</button>').join('')+'</div>'+(mode==='custom'?'<div class="row"><label>From<input type="date" id="tfsBottomFrom" value="'+esc(from)+'"></label><label>To<input type="date" id="tfsBottomTo" value="'+esc(to)+'"></label></div>':'')+report+'<div class="modal-actions"><button class="btn brass" id="tfsBottomPrintButton" '+(data.valid?'':'disabled')+' data-i18n=ui_Print>Print</button><button class="btn ghost" id="tfsBottomClose">Back to Summary</button></div></div>';
+  const voucherHtml=tfsRenderVoucherHtml({
+    title:'آج باٹم مین نے کیا بنایا',
+    subtitle:'LEATHER RIGHT SHOES BY ABID',
+    from:data.from,
+    to:data.to,
+    rows:data.rows,
+    articles:data.articles,
+    mode,
+    valid:data.valid,
+    themeColor:'#1b5e20',
+    lightStripe:'#f4fbf5',
+    textColor:'#1b5e20'
+  });
+  const report='<div id="tfsBottomPrint">'+voucherHtml+'</div>';
+  return '<div class="card" style="padding:10px"><div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;">'+Object.entries(labels).map(([key,label])=>'<button class="btn small '+(mode===key?'brass':'ghost')+'" data-tfs-bottom-period="'+key+'">'+label+'</button>').join('')+'</div>'+(mode==='custom'?'<div class="row" style="margin-bottom:12px;"><label>From<input type="date" id="tfsBottomFrom" value="'+esc(from)+'"></label><label>To<input type="date" id="tfsBottomTo" value="'+esc(to)+'"></label></div>':'')+report+'<div class="modal-actions" style="margin-top:14px;"><button class="btn brass" id="tfsBottomPrintButton" '+(data.valid?'':'disabled')+' data-i18n=ui_Print>Print</button><button class="btn brass" id="tfsBottomShareButton" '+(data.valid?'':'disabled')+'>Share</button><button class="btn ghost" id="tfsBottomClose">Back to Summary</button></div></div>';
 }
 function bindTfsBottomProduction(){
   const {from,to}=tfsBottomReportFilter;
   document.querySelectorAll('[data-tfs-bottom-period]').forEach(button=>button.onclick=()=>openTfsBottomProduction(button.dataset.tfsBottomPeriod,from||upperLocalDateKey(new Date()),to||upperLocalDateKey(new Date())));
   ['tfsBottomFrom','tfsBottomTo'].forEach(id=>{const input=document.getElementById(id);if(input)input.onchange=()=>openTfsBottomProduction('custom',document.getElementById('tfsBottomFrom').value,document.getElementById('tfsBottomTo').value);});
-  document.getElementById('tfsBottomPrintButton').onclick=()=>printAggregateThermal(document.getElementById('tfsBottomPrint').outerHTML,'Bottom Man Production','element',{portraitSafe:true});document.getElementById('tfsBottomClose').onclick=()=>goto('todayFactorySummary');
+  document.getElementById('tfsBottomPrintButton').onclick=()=>printAggregateThermal(document.getElementById('tfsBottomPrint').outerHTML,'Bottom Man Production','element',{portraitSafe:true});
+  document.getElementById('tfsBottomShareButton').onclick=()=>shareTfsVoucher('bottom');
+  document.getElementById('tfsBottomClose').onclick=()=>goto('todayFactorySummary');
 }
 
 function tfsLaborWeeklyData(now=new Date()){
