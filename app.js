@@ -20845,6 +20845,201 @@ function bfWeeklyVoucherHtml(module,v,allProduction=null){
   </style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title">${finished?'FINISH':'BATTAM'} MAN WEEKLY VOUCHER</div><div class="um-person"><span style="white-space:nowrap">${esc(name)}</span><span>#${esc(displayVoucherNo)}</span></div><div class="um-stamp"><span>${esc(date)}</span><span>●</span><span>${esc(time)}</span></div><hr class="um-rule"><div class="um-frame"><table><colgroup><col style="width:52%"><col style="width:48%"></colgroup><thead><tr><th dir="rtl">دن</th><th>Received Items</th></tr></thead><tbody>${days}</tbody></table></div>${totalReceived}<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr><td>${module==='batam'?'TOTAL LABOUR':'TOTAL AMOUNT'}</td><td>${esc(upperMoney(summary.grossEarned)+(module==='batam'&&rows.some(row=>row.rate===null)?' *':''))}</td></tr><tr><td>WEEKLY KHARCHA</td><td>${esc(upperMoney(summary.kharcha))}</td></tr><tr class="um-remaining"><td>REMAINING</td><td>${esc(upperMoney(summary.netEarned)+(module==='batam'&&rows.some(row=>row.rate===null)?' *':''))}</td></tr></tbody></table></div><hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div></div>`);
 }
 function batamVoucherHtml(v){return bfWeeklyVoucherHtml('batam',v);}
+function bfWorkerWeeks(module,workerId){
+  const dateOf=r=>r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date||r.createdAt);
+  const active=r=>!r.deletedAt&&r.deleted!==true;
+  const vouchers=(settings[module+'MansProductionVouchers']||[]).filter(v=>active(v)&&String(v.workerId)===String(workerId)).slice().sort((a,b)=>dateOf(b)-dateOf(a)||new Date(b.createdAt||b.date)-new Date(a.createdAt||a.date));
+  const currentWeekKey=bfWeeklyDateKey(getUpperWorkWeekRange(new Date()).start),weeks=new Map();
+  const fmt=d=>d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  vouchers.forEach(v=>{
+    const dt=dateOf(v);if(!Number.isFinite(+dt))return;
+    const range=getUpperWorkWeekRange(dt),weekKey=bfWeeklyDateKey(range.start);
+    if(!weeks.has(weekKey)){
+      const thu=new Date(range.start);thu.setDate(thu.getDate()+5);
+      const monthKey=weekKey.slice(0,7),monthLabel=range.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      const storedNo=String(v.voucherNo||''),shortNo=storedNo.replace(/^BMP-0*/i,'')||storedNo;
+      const label=fmt(range.start)+' – '+fmt(thu)+(weekKey===currentWeekKey?' (Current Week)':'');
+      weeks.set(weekKey,{weekKey,monthKey,monthLabel,label,shortNo,latestRecord:v});
+    }
+  });
+  return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
+}
+function bfFormatComparisonQty(n){
+  const rounded=Math.round((Number(n)||0)*100)/100;
+  return Number.isInteger(rounded)?String(rounded):String(rounded);
+}
+function bfFormatUnitTotals(map){
+  const parts=[...map.entries()].filter(([,q])=>q!==0).map(([u,q])=>bfFormatComparisonQty(q)+' '+u);
+  return parts.length?parts.join(' / '):'0';
+}
+function bfDiffUnitTotals(finishMap,batamMap){
+  const units=[...new Set([...finishMap.keys(),...batamMap.keys()])],diff=new Map();
+  units.forEach(u=>{const d=Math.round(((finishMap.get(u)||0)-(batamMap.get(u)||0))*100)/100;if(d!==0)diff.set(u,d);});
+  if(!diff.size)return '0 (Balanced)';
+  return [...diff.entries()].map(([u,d])=>(d>0?'+':'')+bfFormatComparisonQty(d)+' '+u).join(' / ');
+}
+function bfCollectModuleArticleWeekTotals(module,range,focusWorkerId=null){
+  const vouchers=settings[module+'MansProductionVouchers']||[],entries=settings[module+'MansProduction']||[],articles=settings[module+'MansProductionArticles']||[];
+  const dateOf=r=>r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date||r.createdAt),active=r=>!r.deletedAt&&r.deleted!==true;
+  const articleNameFn=module==='batam'?batamMansArticleName:finishedMansArticleName;
+  const map=new Map();
+  entries.filter(active).forEach(r=>{
+    const parent=r.voucherId?vouchers.find(x=>String(x.id)===String(r.voucherId)):null;
+    if(r.voucherId&&(!parent||!active(parent)||String(parent.workerId)!==String(r.workerId)))return;
+    const dt=dateOf(r.workDate?r:parent||r),qty=Math.max(0,Number(r.reportedQty)||0);
+    if(!(dt>=range.start&&dt<range.end&&dt.getDay()!==5)||qty<=0)return;
+    const article=articles.find(a=>String(a.id)===String(r.articleId));
+    const unit=typeof r.unit==='string'&&r.unit.trim()?r.unit:typeof article?.unit==='string'&&article.unit.trim()?article.unit:bfArticleUnit(article);
+    const name=String(articleNameFn(r.articleId)||'Article').trim();
+    const key=name.replace(/\s+/g,' ').toLowerCase()+'::'+unit;
+    const row=map.get(key)||{key,name,unit,qty:0,workerIds:new Set(),focusQty:0};
+    row.qty+=qty;
+    if(r.workerId!==undefined&&r.workerId!==null&&String(r.workerId)!=='')row.workerIds.add(String(r.workerId));
+    if(focusWorkerId!==null&&String(r.workerId)===String(focusWorkerId))row.focusQty+=qty;
+    map.set(key,row);
+  });
+  return map;
+}
+function bfArticleComparisonData(module,workerId,baseDate){
+  const range=getUpperWorkWeekRange(baseDate),fmt=d=>d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),thu=new Date(range.start);thu.setDate(thu.getDate()+5);
+  const weekLabel=fmt(range.start)+' – '+fmt(thu);
+  const batamMap=bfCollectModuleArticleWeekTotals('batam',range,module==='batam'?workerId:null);
+  const finishMap=bfCollectModuleArticleWeekTotals('finished',range,module==='finished'?workerId:null);
+  const keys=[...new Set([...batamMap.keys(),...finishMap.keys()])];
+  const batamUnitTotals=new Map(),finishUnitTotals=new Map(),batamArticleCountByUnit=new Map(),finishArticleCountByUnit=new Map();
+  const rows=keys.map(key=>{
+    const b=batamMap.get(key),f=finishMap.get(key);
+    const name=(f||b).name,unit=(f||b).unit;
+    const batamQty=b?.qty||0,batamWorkers=b?.workerIds.size||0,batamAvg=batamWorkers?Math.round((batamQty/batamWorkers)*100)/100:0;
+    const finishQty=f?.qty||0,finishWorkers=f?.workerIds.size||0,finishAvg=finishWorkers?Math.round((finishQty/finishWorkers)*100)/100:0;
+    const diff=Math.round((finishQty-batamQty)*100)/100;
+    const focusQty=module==='finished'?(f?.focusQty||0):(b?.focusQty||0);
+    if(batamQty>0){batamUnitTotals.set(unit,(batamUnitTotals.get(unit)||0)+batamQty);batamArticleCountByUnit.set(unit,(batamArticleCountByUnit.get(unit)||0)+1);}
+    if(finishQty>0){finishUnitTotals.set(unit,(finishUnitTotals.get(unit)||0)+finishQty);finishArticleCountByUnit.set(unit,(finishArticleCountByUnit.get(unit)||0)+1);}
+    return {key,name,unit,batamQty,batamWorkers,batamAvg,finishQty,finishWorkers,finishAvg,focusQty,diff};
+  }).sort((a,b)=>(b.focusQty>0?1:0)-(a.focusQty>0?1:0)||Math.max(b.finishQty,b.batamQty)-Math.max(a.finishQty,a.batamQty)||a.name.localeCompare(b.name));
+  const avgPerArticleText=(unitMap,countMap)=>{const parts=[...unitMap.entries()].filter(([,q])=>q>0).map(([u,q])=>bfFormatComparisonQty(q/(countMap.get(u)||1))+' '+u);return parts.length?parts.join(' / '):'0';};
+  const diffText=rows.length?bfDiffUnitTotals(finishUnitTotals,batamUnitTotals):'—';
+  const hasDiff=[...new Set([...finishUnitTotals.keys(),...batamUnitTotals.keys()])].some(u=>Math.round(((finishUnitTotals.get(u)||0)-(batamUnitTotals.get(u)||0))*100)/100!==0);
+  return {module,workerId,weekLabel,rows,batamUnitTotals,finishUnitTotals,batamAvgPerArticle:avgPerArticleText(batamUnitTotals,batamArticleCountByUnit),finishAvgPerArticle:avgPerArticleText(finishUnitTotals,finishArticleCountByUnit),diffText,hasDiff};
+}
+function bfComparisonCardHtml(module,workerId,baseDate){
+  const d=bfArticleComparisonData(module,workerId,baseDate);
+  if(!d.rows.length){
+    return `<div id="bfComparisonCard" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg-soft,#f8f9fa);font-size:12px;color:var(--muted);text-align:center;"><b>Article-Wise Production Comparison</b> (${esc(d.weekLabel)})<div style="margin-top:4px;">Is work week mein Bottom Man aur Finish Man ki koi article production nahi mili.</div></div>`;
+  }
+  const diffColor=d.hasDiff?'#b45309':'#15803d';
+  const rowsHtml=d.rows.map(r=>{
+    const rowDiffColor=r.diff===0?'#15803d':r.diff<0?'#b45309':'#1d4ed8';
+    const diffLabel=(r.diff>0?'+':'')+bfFormatComparisonQty(r.diff)+' '+r.unit;
+    const batamCell=r.batamQty>0?`<div><b>${esc(bfFormatComparisonQty(r.batamQty))}</b> ${esc(r.unit)}</div><div style="font-size:10px;color:var(--muted);">Avg: ${esc(bfFormatComparisonQty(r.batamAvg))}/w (${r.batamWorkers})</div>`:'<span style="color:var(--muted);">0</span>';
+    const finishCell=r.finishQty>0?`<div><b>${esc(bfFormatComparisonQty(r.finishQty))}</b> ${esc(r.unit)}</div><div style="font-size:10px;color:var(--muted);">Avg: ${esc(bfFormatComparisonQty(r.finishAvg))}/w (${r.finishWorkers})</div>`:'<span style="color:var(--muted);">0</span>';
+    const youBadge=r.focusQty>0?` <span style="display:inline-block;padding:1px 4px;border-radius:4px;background:#fef3c7;color:#92400e;font-size:10px;font-weight:600;">You: ${esc(bfFormatComparisonQty(r.focusQty))}</span>`:'';
+    return `<tr>
+      <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:left;vertical-align:top;"><div style="font-weight:700;">${esc(r.name)}</div><div style="font-size:10px;color:var(--muted);">${esc(r.unit)}${youBadge}</div></td>
+      <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;vertical-align:top;">${batamCell}</td>
+      <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;vertical-align:top;">${finishCell}</td>
+      <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;vertical-align:top;font-weight:700;color:${rowDiffColor};">${esc(diffLabel)}</td>
+    </tr>`;
+  }).join('');
+  return `<div id="bfComparisonCard" style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--bg-soft,#f8f9fa);font-size:12px;text-align:left;box-sizing:border-box;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:8px;">
+      <b style="font-size:12.5px;">Article-Wise Comparison (${esc(d.weekLabel)})</b>
+      <span style="font-size:10px;color:var(--muted);">Screen Only</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center;margin-bottom:8px;">
+      <div style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 4px;">
+        <div style="font-size:10.5px;color:var(--muted);">Bottom Man Total</div>
+        <div style="font-weight:700;font-size:12.5px;margin-top:2px;">${esc(bfFormatUnitTotals(d.batamUnitTotals))}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px;">Avg/Art: ${esc(d.batamAvgPerArticle)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 4px;">
+        <div style="font-size:10.5px;color:var(--muted);">Finish Man Total</div>
+        <div style="font-weight:700;font-size:12.5px;margin-top:2px;">${esc(bfFormatUnitTotals(d.finishUnitTotals))}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px;">Avg/Art: ${esc(d.finishAvgPerArticle)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 4px;">
+        <div style="font-size:10.5px;color:var(--muted);">Diff (F − B)</div>
+        <div style="font-weight:700;font-size:12.5px;margin-top:2px;color:${diffColor};">${esc(d.diffText)}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px;">${d.rows.length} Article${d.rows.length===1?'':'s'}</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:6px;">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+        <thead>
+          <tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:10.5px;">
+            <th style="padding:5px 6px;text-align:left;">Article</th>
+            <th style="padding:5px 6px;text-align:right;">Bottom</th>
+            <th style="padding:5px 6px;text-align:right;">Finish</th>
+            <th style="padding:5px 6px;text-align:right;">Diff (F−B)</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function openBfVoucherModal(module,id,printNow=false){
+  const list=module==='batam'?batamMansVouchers():finishedMansVouchers();
+  const v=list.find(x=>String(x.id)===String(id));if(!v)return;
+  const printFn=module==='batam'?printBatamMansHtml:printFinishedMansHtml;
+  if(printNow){printFn(bfWeeklyVoucherHtml(module,v));return;}
+  let activeVoucher=v;
+  const dateOf=r=>r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date||r.createdAt);
+  const weeks=bfWorkerWeeks(module,v.workerId);
+  const months=[];const seenMonths=new Set();
+  weeks.forEach(w=>{if(!seenMonths.has(w.monthKey)){seenMonths.add(w.monthKey);months.push({key:w.monthKey,label:w.monthLabel});}});
+  const initialWeekKey=bfWeeklyDateKey(getUpperWorkWeekRange(dateOf(v)).start);
+  const selectorBar=weeks.length?`<div id="bfVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:440px;box-sizing:border-box;">
+    <select id="bfVoucherMonthFilter" style="min-width:110px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+      <option value="all">All Months</option>
+      ${months.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('')}
+    </select>
+    <button type="button" class="btn ghost small" id="bfVoucherPrevWeek" title="Previous Week">◀ Prev</button>
+    <select id="bfVoucherWeekSelect" style="flex:1;min-width:180px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+      ${weeks.map(w=>`<option value="${esc(w.weekKey)}" ${w.weekKey===initialWeekKey?'selected':''}>${esc(w.label)} • #${esc(w.shortNo)}</option>`).join('')}
+    </select>
+    <button type="button" class="btn ghost small" id="bfVoucherNextWeek" title="Next Week">Next ▶</button>
+  </div>`:'';
+  modal(`<div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+    ${selectorBar}
+    <div id="bfVoucherPrintArea">${bfWeeklyVoucherHtml(module,activeVoucher)}</div>
+    <div id="bfComparisonCardWrap" style="width:100%;max-width:440px;margin-top:10px;">${bfComparisonCardHtml(module,activeVoucher.workerId,dateOf(activeVoucher))}</div>
+    <div class="modal-actions" style="width:100%;justify-content:center;margin-top:12px;">
+      <button class="btn brass" id="bfModalPrintVoucher" data-i18n=ui_Print>Print</button>
+      <button class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button>
+    </div>
+  </div>`);
+  if(weeks.length){
+    const monthEl=document.getElementById('bfVoucherMonthFilter'),weekEl=document.getElementById('bfVoucherWeekSelect'),prevBtn=document.getElementById('bfVoucherPrevWeek'),nextBtn=document.getElementById('bfVoucherNextWeek');
+    let filteredWeeks=weeks;
+    const syncNavButtons=()=>{
+      const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);
+      if(prevBtn)prevBtn.disabled=idx<0||idx>=filteredWeeks.length-1;
+      if(nextBtn)nextBtn.disabled=idx<=0;
+    };
+    const renderSelectedWeek=weekKey=>{
+      const entry=filteredWeeks.find(w=>w.weekKey===weekKey)||filteredWeeks[0];if(!entry)return;
+      activeVoucher=entry.latestRecord;
+      const area=document.getElementById('bfVoucherPrintArea');if(area)area.innerHTML=bfWeeklyVoucherHtml(module,activeVoucher);
+      const comp=document.getElementById('bfComparisonCardWrap');if(comp)comp.innerHTML=bfComparisonCardHtml(module,activeVoucher.workerId,dateOf(activeVoucher));
+      weekEl.value=entry.weekKey;
+      syncNavButtons();
+    };
+    monthEl?.addEventListener('change',()=>{
+      const m=monthEl.value;
+      filteredWeeks=m==='all'?weeks:weeks.filter(w=>w.monthKey===m);
+      weekEl.innerHTML=filteredWeeks.map(w=>`<option value="${esc(w.weekKey)}">${esc(w.label)} • #${esc(w.shortNo)}</option>`).join('');
+      if(filteredWeeks.length)renderSelectedWeek(filteredWeeks[0].weekKey);
+      else syncNavButtons();
+    });
+    weekEl?.addEventListener('change',()=>renderSelectedWeek(weekEl.value));
+    prevBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>=0&&idx<filteredWeeks.length-1)renderSelectedWeek(filteredWeeks[idx+1].weekKey);});
+    nextBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>0)renderSelectedWeek(filteredWeeks[idx-1].weekKey);});
+    syncNavButtons();
+  }
+  document.getElementById('bfModalPrintVoucher').onclick=()=>printFn(bfWeeklyVoucherHtml(module,activeVoucher));
+}
 
 function printBatamMansHtml(html,title='Batam Mans Production'){
  const voucherBillTypography=voucherBillTypographyApplies(html,title);
@@ -20909,7 +21104,7 @@ function printBatamMansHtml(html,title='Batam Mans Production'){
  </head><body${voucherBillTypography?' class="voucher-bill-typography"':''}>${html}${voucherBillTypography?``:''}</body></html>`);
  w.document.close();applyVoucherBillTypography(w.document.body);w.focus();w.print();
 }
-function openBatamVoucher(id,printNow=false){const v=batamMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(printNow){printBatamMansHtml(batamVoucherHtml(v));return;}modal(`${batamVoucherHtml(v)}<div class="modal-actions"><button class="btn brass" id="bmModalPrintVoucher" data-i18n=ui_Print>Print</button><button class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button></div>`);document.getElementById('bmModalPrintVoucher').onclick=()=>printBatamMansHtml(batamVoucherHtml(v));}
+function openBatamVoucher(id,printNow=false){openBfVoucherModal('batam',id,printNow);}
 function addBatamDraftItem(){
  if(!batamMansSelectedWorker){toast('Select Batam Man first.');return;}
  const host=document.getElementById('bmExtraItemRows');if(!host)return;
@@ -21663,7 +21858,7 @@ function printFinishedMansHtml(html,title='Finished Mans Production'){
  </head><body${voucherBillTypography?' class="voucher-bill-typography"':''}>${html}${voucherBillTypography?``:''}</body></html>`);
  w.document.close();applyVoucherBillTypography(w.document.body);w.focus();w.print();
 }
-function openFinishedVoucher(id,printNow=false){const v=finishedMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(printNow){printFinishedMansHtml(finishedVoucherHtml(v));return;}modal(`${finishedVoucherHtml(v)}<div class="modal-actions"><button class="btn brass" id="fmModalPrintVoucher" data-i18n=ui_Print>Print</button><button class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button></div>`);document.getElementById('fmModalPrintVoucher').onclick=()=>printFinishedMansHtml(finishedVoucherHtml(v));}
+function openFinishedVoucher(id,printNow=false){openBfVoucherModal('finished',id,printNow);}
 function addFinishedDraftItem(){
  if(!finishedMansSelectedWorker){toast('Select Finished Man first.');return;}
  const host=document.getElementById('fmExtraItemRows');if(!host)return;
@@ -22190,7 +22385,7 @@ function openCurrentWeekUpperManCardVoucher(workerId){
 }
 function openCurrentWeekBfWorkerCardVoucher(module,workerId){
  const range=getUpperWorkWeekRange(new Date()),dateOf=v=>v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.date||v.createdAt),vouchers=(settings[module+'MansProductionVouchers']||[]).filter(v=>!v.deletedAt&&v.deleted!==true&&String(v.workerId)===String(workerId)&&dateOf(v)>=range.start&&dateOf(v)<range.end).sort((a,b)=>dateOf(a)-dateOf(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
- const voucher=vouchers[vouchers.length-1];if(!voucher){toast('No current-week weekly voucher found for this worker.');return;}if(module==='batam')openBatamVoucher(voucher.id,false);else openFinishedVoucher(voucher.id,false);sizeCurrentWeekWorkerVoucherPreview();
+ const voucher=vouchers[vouchers.length-1]||bfWorkerWeeks(module,workerId)[0]?.latestRecord;if(!voucher){toast('No saved weekly voucher found for this worker.');return;}if(module==='batam')openBatamVoucher(voucher.id,false);else openFinishedVoucher(voucher.id,false);sizeCurrentWeekWorkerVoucherPreview();
 }
 function bindCurrentWeekWorkerVoucherDoubleClick(){
  if(document.__currentWeekWorkerVoucherDoubleClickBound)return;document.__currentWeekWorkerVoucherDoubleClickBound=true;let previous=null;
