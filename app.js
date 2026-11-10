@@ -16212,7 +16212,21 @@ function sbSupplierBillForm(index,bill=null){
 
 function sbWholeAtoms(value){const n=Number(value);return Number.isInteger(n)&&n>0?n:null;}
 function sbSnapshot(){return {settings:JSON.stringify(settings),auditLog:JSON.stringify(auditLog)};}
+function sbCompactLegacySnapshots(){
+  if(!Array.isArray(settings.shoeBoxSuppliers)) return;
+  settings.shoeBoxSuppliers.forEach(s=>{
+    if(!s || !Array.isArray(s.receiveVouchers)) return;
+    s.receiveVouchers.forEach(v=>{
+      const sw=v?.balanceSnapshot?.shoeBoxWeekly;
+      if(sw && sw.version===1 && (Array.isArray(sw.purchases) || Array.isArray(sw.records))){
+        const cutoff=sw.cutoff||v.balanceSnapshot?.capturedAt||v.createdAt||v.date;
+        v.balanceSnapshot={...(v.balanceSnapshot||{}),capturedAt:cutoff,shoeBoxWeekly:{version:2,cutoff}};
+      }
+    });
+  });
+}
 async function sbCriticalCommit(snapshot,message){
+  sbCompactLegacySnapshots();
   if(await saveCriticalCloudState('shoeBox')) return true;
   settings=JSON.parse(snapshot.settings); auditLog=JSON.parse(snapshot.auditLog);
   await reconcileCloudAfterCriticalRollback();

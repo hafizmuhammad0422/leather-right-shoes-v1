@@ -55,10 +55,21 @@ const SETTINGS_ROOTS = [
   "gasSupplier", "gasSupplierWeeks", "gasPayments", "gasExtraBalances", "gasSupplierBills", "gasSupplierBillAccount", "nextGasVoucherNo",
   "shoeBoxSuppliers", "nextShoeBoxReceiveVoucherNo", "shoeBoxReceiveVoucherFields"
 ];
-async function baselineHash(value) {
-  const encoded = value === undefined ? "missing" : JSON.stringify(value);
+async function baselineHashRaw(encoded) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(encoded));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+async function baselineHash(value) {
+  return baselineHashRaw(value === undefined ? "missing" : JSON.stringify(value));
+}
+function sqlJsonToString(t, v) {
+  if (t === null || t === undefined) return 'missing';
+  if (t === 'null') return 'null';
+  if (t === 'true') return 'true';
+  if (t === 'false') return 'false';
+  if (t === 'text') return JSON.stringify(v);
+  if (t === 'integer' || t === 'real') return JSON.stringify(Number(v));
+  return String(v);
 }
 async function stateBaselines(state, targetRoots = null) {
   const baselines = {};
@@ -102,6 +113,95 @@ async function savePartialState({ env, request }, body) {
   }
   const readNames = [...new Set([...names, ...expected.map(key => key.split('/')[0]), ...(roots.length ? ['settings'] : [])])];
   try {
+    if (sectionsMode) {
+      const needSettingsRaw = expected.includes('settings') ? 1 : 0;
+      const rows = await env.DB.prepare(
+        `SELECT dataset, updated_at, json_type(data_json) AS root_type,
+           CASE WHEN dataset = 'settings' AND ? = 0 THEN NULL ELSE data_json END AS data_json
+         FROM app_state WHERE dataset IN (${readNames.map(() => '?').join(',')})`
+      ).bind(needSettingsRaw, ...readNames).all();
+      const raw = Object.fromEntries(rows.results.map(row => [row.dataset, row.data_json]));
+      const timestamps = Object.fromEntries(rows.results.map(row => [row.dataset, row.updated_at]));
+      const rootTypes = Object.fromEntries(rows.results.map(row => [row.dataset, row.root_type]));
+      if (readNames.some(name => !Object.prototype.hasOwnProperty.call(timestamps, name))) {
+        return json({ error: "conflict", message: "Required authoritative dataset is missing." }, 409);
+      }
+      if (roots.length && rootTypes.settings !== 'object') {
+        throw new Error('Invalid stored settings.');
+      }
+      for (const key of expected) {
+        if (!key.startsWith('settings/')) {
+          if (await baselineHashRaw(raw[key]) !== body.expected[key]) {
+            return json({ error: "conflict", dataset: key, message: "Authoritative data changed. Reload before saving." }, 409);
+          }
+        }
+      }
+      const settingsExpectedKeys = expected.filter(k => k.startsWith('settings/')).map(k => k.slice(9));
+      if (settingsExpectedKeys.length) {
+        const cols = settingsExpectedKeys.map((_, i) => `json_type(data_json, ?) AS t${i}, json_extract(data_json, ?) AS v${i}`).join(', ');
+        const paths = settingsExpectedKeys.flatMap(k => ['$.' + k, '$.' + k]);
+        const extRow = await env.DB.prepare(`SELECT ${cols} FROM app_state WHERE dataset = 'settings'`).bind(...paths).first();
+        if (!extRow) return json({ error: "conflict", message: "Required authoritative dataset is missing." }, 409);
+        for (let i = 0; i < settingsExpectedKeys.length; i++) {
+          const k = settingsExpectedKeys[i];
+          const valStr = sqlJsonToString(extRow['t' + i], extRow['v' + i]);
+          if (await baselineHashRaw(valStr) !== body.expected['settings/' + k]) {
+            return json({ error: "conflict", dataset: 'settings/' + k, message: "Authoritative data changed. Reload before saving." }, 409);
+          }
+        }
+      }
+      const encodedUpdates = Object.fromEntries(names.map(name => [name, JSON.stringify(updates[name])]));
+      const encodedSet = Object.fromEntries(roots.map(root => [root, JSON.stringify(body.set[root])]));
+      const changedUpdates = names.filter(name => encodedUpdates[name] !== raw[name]);
+      const targetDatasets = [...changedUpdates, ...(roots.length ? ['settings'] : [])];
+      const now = new Date().toISOString();
+      const baselines = {};
+      for (const name of names) {
+        baselines[name] = await baselineHashRaw(encodedUpdates[name]);
+      }
+      if (targetDatasets.length) {
+        const guardSql = readNames.map(() => 'EXISTS (SELECT 1 FROM app_state AS checked WHERE checked.dataset = ? AND checked.updated_at = ?)').join(' AND ');
+        const updateWhens = changedUpdates.map(() => 'WHEN ? THEN ?').join(' ');
+        const settingsWhen = roots.length ? `WHEN 'settings' THEN json_set(data_json, ${roots.map(() => '?, json(?)').join(', ')})` : '';
+        const statement = env.DB.prepare(
+          `WITH guard AS MATERIALIZED (SELECT 1 AS allowed WHERE ${guardSql})
+           UPDATE app_state
+           SET data_json = CASE dataset ${updateWhens} ${settingsWhen} ELSE data_json END,
+               updated_at = ?
+           WHERE dataset IN (${targetDatasets.map(() => '?').join(',')})
+             AND EXISTS (SELECT 1 FROM guard)
+           RETURNING dataset, CASE WHEN dataset = 'settings' THEN data_json ELSE NULL END AS settings_json`
+        ).bind(
+          ...readNames.flatMap(name => [name, timestamps[name]]),
+          ...changedUpdates.flatMap(name => [name, encodedUpdates[name]]),
+          ...roots.flatMap(root => ['$.' + root, encodedSet[root]]),
+          now,
+          ...targetDatasets
+        );
+        const result = await env.DB.batch([statement]);
+        const retRows = result[0]?.results || [];
+        if (retRows.length !== targetDatasets.length) {
+          return json({ error: "conflict", message: "Authoritative data changed during save. No rows were written." }, 409);
+        }
+        if (roots.length) {
+          const newSettingsJson = retRows.find(r => r.dataset === 'settings')?.settings_json;
+          if (!newSettingsJson) throw new Error('Updated settings row was not returned.');
+          baselines.settings = await baselineHashRaw(newSettingsJson);
+        }
+      } else if (roots.length) {
+        baselines.settings = raw.settings !== undefined ? await baselineHashRaw(raw.settings) : body.expected.settings;
+      }
+      for (const root of roots) {
+        baselines['settings/' + root] = await baselineHashRaw(encodedSet[root]);
+      }
+      return json({
+        ok: true,
+        saved: [...names, ...(roots.length ? ['settings'] : [])],
+        updatedAt: now,
+        baselines
+      });
+    }
+
     const rows = await env.DB.prepare(
       `SELECT dataset, data_json, updated_at FROM app_state WHERE dataset IN (${readNames.map(() => '?').join(',')})`
     ).bind(...readNames).all();
