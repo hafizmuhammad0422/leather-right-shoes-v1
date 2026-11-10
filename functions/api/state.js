@@ -51,7 +51,9 @@ const SETTINGS_ROOTS = [
   "batamMansPendingRecords", "nextBatamMansVoucherNo", "batamMansVerificationSlips", "nextBatamMansSlipNo",
   "finishedMansProduction", "finishedMansProductionArticles", "finishedMansProductionMaterials",
   "finishedMansProductionVouchers", "finishedMansMaterialDistributions", "finishedMansExpenses",
-  "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo"
+  "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo",
+  "gasSupplier", "gasSupplierWeeks", "gasPayments", "gasExtraBalances", "gasSupplierBills", "gasSupplierBillAccount", "nextGasVoucherNo",
+  "shoeBoxSuppliers", "nextShoeBoxReceiveVoucherNo", "shoeBoxReceiveVoucherFields"
 ];
 async function baselineHash(value) {
   const encoded = value === undefined ? "missing" : JSON.stringify(value);
@@ -83,7 +85,7 @@ async function savePartialState({ env, request }, body) {
       (sectionsMode && name === 'settings') ||
       (name === 'settings' ? !isPlainObject(updates[name]) : !Array.isArray(updates[name]))) ||
       roots.some(root => !SETTINGS_ROOTS.includes(root) ||
-        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling'].includes(root)
+        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling', 'gasSupplier', 'gasSupplierBillAccount', 'shoeBoxReceiveVoucherFields'].includes(root)
           ? !isPlainObject(body.set[root]) : root.startsWith('next')
           ? !Number.isSafeInteger(body.set[root]) || body.set[root] < 0 : !Array.isArray(body.set[root]))) ||
       expected.some(key => !(RUNTIME_DATASETS.includes(key) ||
@@ -163,10 +165,86 @@ function validateState(state, datasets = DATASETS) {
   return { ok: true };
 }
 
+// Backup-only storage limits; runtime datasets and legacy JSON stay unchanged.
+const BACKUP_CHUNK_BYTES = 512 * 1024;
+const BACKUP_MAX_BYTES = 16 * 1024 * 1024;
+async function backupBytes(stream, limit) {
+  const reader = stream.getReader(), parts = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > limit) { await reader.cancel(); throw new Error('Backup exceeds the safe processing limit.'); }
+      parts.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const part of parts) { bytes.set(part, offset); offset += part.byteLength; }
+  return bytes;
+}
+async function backupDigest(bytes) {
+  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+function validBackupVersion(version) {
+  return isPlainObject(version) && typeof version.id === 'string' && !!version.id &&
+    typeof version.timestamp === 'string' && Number.isFinite(Date.parse(version.timestamp)) && isPlainObject(version.data);
+}
+async function decodeBackup(env, entry) {
+  const stored = JSON.parse(entry.data_json);
+  if (!isPlainObject(stored) || entry.dataset !== 'backup-version:' + stored.id) throw new Error('Invalid backup identity.');
+  if (!Object.prototype.hasOwnProperty.call(stored, 'formatVersion')) {
+    if (!validBackupVersion(stored)) throw new Error('Invalid stored backup version.');
+    return stored;
+  }
+  if (stored.formatVersion !== 2 || stored.codec !== 'gzip-base64' ||
+      typeof stored.timestamp !== 'string' || !Number.isFinite(Date.parse(stored.timestamp)) ||
+      typeof stored.token !== 'string' || !/^[a-f0-9-]{36}$/.test(stored.token) ||
+      !/^[a-f0-9]{64}$/.test(stored.sha256) ||
+      !Number.isSafeInteger(stored.rawBytes) || stored.rawBytes < 1 || stored.rawBytes > BACKUP_MAX_BYTES ||
+      !Number.isSafeInteger(stored.encodedBytes) || stored.encodedBytes < 4 || stored.encodedBytes > BACKUP_MAX_BYTES ||
+      stored.chunkCount !== Math.ceil(stored.encodedBytes / BACKUP_CHUNK_BYTES)) throw new Error('Invalid backup manifest.');
+  const keys = Array.from({ length: stored.chunkCount }, (_, index) => 'backup-chunk:' + stored.token + ':' + index);
+  const rows = await env.DB.prepare(`SELECT dataset, data_json FROM app_state WHERE dataset IN (${keys.map(() => '?').join(',')})`).bind(...keys).all();
+  const chunks = new Map((rows.results || []).map(row => [row.dataset, JSON.parse(row.data_json)]));
+  const encoded = keys.map((key, index) => {
+    const chunk = chunks.get(key), expected = Math.min(BACKUP_CHUNK_BYTES, stored.encodedBytes - index * BACKUP_CHUNK_BYTES);
+    if (typeof chunk !== 'string' || chunk.length !== expected) throw new Error('Missing or invalid backup chunk.');
+    return chunk;
+  }).join('');
+  const binary = atob(encoded);
+  if (btoa(binary) !== encoded) throw new Error('Invalid backup encoding.');
+  const compressed = Uint8Array.from(binary, character => character.charCodeAt(0));
+  const raw = await backupBytes(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip')), stored.rawBytes);
+  if (raw.byteLength !== stored.rawBytes || await backupDigest(raw) !== stored.sha256) throw new Error('Backup checksum verification failed.');
+  const version = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
+  if (!validBackupVersion(version) || version.id !== stored.id || version.timestamp !== stored.timestamp ||
+      !validateState(version.data, RUNTIME_DATASETS.filter(name => name !== 'gasVouchers')).ok ||
+      ('gasVouchers' in version.data && !Array.isArray(version.data.gasVouchers))) throw new Error('Invalid decoded backup version.');
+  return version;
+}
+
 // Explicit backup operations never replace or prune existing versions.
 async function readBackups({ env, request }) {
   try {
-    const day = new URL(request.url).searchParams.get("day");
+    const params = new URL(request.url).searchParams;
+    const day = params.get("day"), id = params.get('id');
+    if (id !== null) {
+      const entry = await env.DB.prepare('SELECT dataset, data_json FROM app_state WHERE dataset = ?').bind('backup-version:' + id).first();
+      let version;
+      if (entry) version = await decodeBackup(env, entry);
+      else {
+        const row = await env.DB.prepare("SELECT data_json FROM app_state WHERE dataset = 'backups'").first();
+        const legacy = row ? JSON.parse(row.data_json) : [];
+        if (!Array.isArray(legacy)) throw new Error('Invalid stored backups dataset.');
+        version = legacy.find(item => item.id === id);
+        if (version && !validBackupVersion(version)) throw new Error('Invalid stored backup version.');
+      }
+      if (!version) return json({ error: 'Backup version not found.' }, 404);
+      return json({ version, verified: true, sha256: await backupDigest(new TextEncoder().encode(JSON.stringify(version))) });
+    }
     if (day !== null) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return json({ error: "Invalid backup day." }, 400);
       const row = await env.DB.prepare(
@@ -176,11 +254,21 @@ async function readBackups({ env, request }) {
          FROM app_state WHERE dataset = 'backups'`
       ).bind(day).first();
       if (row && row.kind !== "array") throw new Error("Invalid stored backups dataset.");
-      return json({ hasDay: !!row?.hasDay });
+      const separate = await env.DB.prepare(
+        `SELECT 1 AS hasDay FROM app_state WHERE dataset GLOB 'backup-version:*'
+         AND substr(json_extract(data_json, '$.timestamp'), 1, 10) = ? LIMIT 1`
+      ).bind(day).first();
+      return json({ hasDay: !!row?.hasDay || !!separate?.hasDay });
     }
     const row = await env.DB.prepare("SELECT data_json FROM app_state WHERE dataset = 'backups'").first();
     const backups = row ? JSON.parse(row.data_json) : [];
     if (!Array.isArray(backups)) throw new Error("Invalid stored backups dataset.");
+    const separate = await env.DB.prepare(
+      "SELECT dataset, data_json FROM app_state WHERE dataset GLOB 'backup-version:*' ORDER BY updated_at, dataset"
+    ).all();
+    for (const entry of separate.results || []) {
+      backups.push(await decodeBackup(env, entry));
+    }
     return json({ backups });
   } catch (error) {
     console.error("Backup read failed:", error);
@@ -191,31 +279,56 @@ async function readBackups({ env, request }) {
 async function appendBackup({ env }, body) {
   const version = body?.version;
   const day = body?.automaticDay ?? null;
-  if (!isPlainObject(version) || typeof version.id !== "string" || !version.id ||
+  if (!isPlainObject(version) || typeof version.id !== "string" || !version.id || version.id.length > 200 ||
       typeof version.timestamp !== "string" || !Number.isFinite(Date.parse(version.timestamp)) ||
       !isPlainObject(version.data) ||
       !validateState(version.data, RUNTIME_DATASETS.filter((name) => name !== "gasVouchers")).ok ||
+      ('gasVouchers' in version.data && !Array.isArray(version.data.gasVouchers)) ||
       (day !== null && (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) || day !== version.timestamp.slice(0, 10)))) {
     return json({ error: "Invalid backup version." }, 400);
   }
   const now = new Date().toISOString();
-  const encoded = JSON.stringify(version);
+  const raw = new TextEncoder().encode(JSON.stringify(version));
+  const dataset = 'backup-version:' + version.id;
+  if (raw.byteLength > BACKUP_MAX_BYTES) {
+    return json({ error: 'Backup exceeds the 16 MiB safe processing limit. Existing backups were not changed.' }, 413);
+  }
   try {
-    // Append before the closing bracket, preserving old entries byte for byte.
-    // Duplicate/daily checks and the append are one atomic D1 statement.
-    const result = await env.DB.prepare(
-      `INSERT INTO app_state (dataset, data_json, updated_at) VALUES ('backups', ?, ?)
-       ON CONFLICT(dataset) DO UPDATE SET
-         data_json = substr(app_state.data_json, 1, length(rtrim(app_state.data_json, char(9)||char(10)||char(13)||' ')) - 1)
-           || CASE WHEN json_array_length(app_state.data_json) > 0 THEN ',' ELSE '' END
-           || ? || substr(app_state.data_json, length(rtrim(app_state.data_json, char(9)||char(10)||char(13)||' '))),
-         updated_at = excluded.updated_at
-       WHERE json_type(app_state.data_json) = 'array'
-         AND NOT EXISTS (SELECT 1 FROM json_each(app_state.data_json) WHERE json_extract(value, '$.id') = ?)
-         AND (? IS NULL OR NOT EXISTS (SELECT 1 FROM json_each(app_state.data_json)
-           WHERE substr(json_extract(value, '$.timestamp'), 1, 10) = ?))`
-    ).bind('[' + encoded + ']', now, encoded, version.id, day, day).run();
-    if (result.meta?.changes > 0) return json({ ok: true, saved: true, updatedAt: now });
+    const compressed = await backupBytes(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip')), BACKUP_MAX_BYTES);
+    let binary = '';
+    for (let offset = 0; offset < compressed.length; offset += 32768) binary += String.fromCharCode(...compressed.subarray(offset, offset + 32768));
+    const payload = btoa(binary);
+    if (payload.length > BACKUP_MAX_BYTES) return json({ error: 'Encoded backup exceeds the safe processing limit. Existing backups were not changed.' }, 413);
+    const manifest = { formatVersion: 2, id: version.id, timestamp: version.timestamp, codec: 'gzip-base64',
+      token: crypto.randomUUID(), rawBytes: raw.byteLength, encodedBytes: payload.length,
+      sha256: await backupDigest(raw), chunkCount: Math.ceil(payload.length / BACKUP_CHUNK_BYTES) };
+    const encoded = JSON.stringify(manifest);
+    // The admission INSERT and its chunks share one transaction. The unique
+    // token ensures a rejected duplicate cannot attach chunks to another save.
+    const admission = env.DB.prepare(
+      `INSERT INTO app_state (dataset, data_json, updated_at)
+       SELECT ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM app_state WHERE dataset = 'backups' AND json_type(data_json) <> 'array')
+         AND NOT EXISTS (SELECT 1 FROM app_state, json_each(app_state.data_json)
+           WHERE dataset = 'backups' AND (json_extract(value, '$.id') = ?
+             OR (? IS NOT NULL AND substr(json_extract(value, '$.timestamp'), 1, 10) = ?)))
+         AND NOT EXISTS (SELECT 1 FROM app_state WHERE dataset GLOB 'backup-version:*'
+           AND (dataset = ? OR (? IS NOT NULL AND substr(json_extract(data_json, '$.timestamp'), 1, 10) = ?)))
+       ON CONFLICT(dataset) DO NOTHING`
+    ).bind(dataset, encoded, now, version.id, day, day, dataset, day, day);
+    const chunks = Array.from({ length: manifest.chunkCount }, (_, index) => env.DB.prepare(
+      `INSERT INTO app_state (dataset, data_json, updated_at) SELECT ?, ?, ?
+       WHERE EXISTS (SELECT 1 FROM app_state WHERE dataset = ? AND data_json = ?)`
+    ).bind('backup-chunk:' + manifest.token + ':' + index,
+      JSON.stringify(payload.slice(index * BACKUP_CHUNK_BYTES, (index + 1) * BACKUP_CHUNK_BYTES)), now, dataset, encoded));
+    const result = await env.DB.batch([admission, ...chunks]);
+    if (result[0]?.meta?.changes > 0) {
+      const stored = await env.DB.prepare('SELECT dataset, data_json FROM app_state WHERE dataset = ?').bind(dataset).first();
+      if (!stored) throw new Error('Saved backup manifest is missing.');
+      const verified = await decodeBackup(env, stored);
+      if (JSON.stringify(verified) !== JSON.stringify(version)) throw new Error('Backup read-back does not match the saved snapshot.');
+      return json({ ok: true, saved: true, verified: true, id: version.id, sha256: manifest.sha256, updatedAt: now });
+    }
     if (day !== null) {
       const response = await readBackups({ env, request: new Request('https://backup.invalid/api/state?mode=backups&day=' + day) });
       if (response.ok && (await response.json()).hasDay) return json({ ok: true, saved: false });
@@ -264,9 +377,18 @@ export async function onRequestGet({ env, request }) {
     // An empty database is explicitly reported so the Master HTML can use
     // its existing first-sync behavior.
     const found = new Set((rows.results || []).map((row) => row.dataset));
+    if (datasets.includes('backups')) {
+      const response = await readBackups({ env, request: new Request('https://backup.invalid/api/state?mode=backups') });
+      if (!response.ok) return response;
+      const { backups } = await response.json();
+      if (found.has('backups') || backups.length) {
+        state.backups = backups;
+        found.add('backups');
+      }
+    }
     const missing = datasets.filter((dataset) => !found.has(dataset));
 
-    if (rows.results.length === 0) {
+    if (found.size === 0) {
       return json({ empty: true });
     }
 

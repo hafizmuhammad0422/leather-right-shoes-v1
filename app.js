@@ -134,7 +134,7 @@ function hasUnsavedCloudChanges(){
   return cloudSavedRevision < cloudChangeRevision;
 }
 
-const CLOUD_SETTINGS_ROOTS=["shoesPressManProduction","shoesLaminationShopsProduction","supplierProductionBilling","upperArticles","upperMaterials","upperDistributions","nextUpperVoucherNo","upperPendingRecords","upperManualPendingResets","upperWeeklyLabourRecords","productionKharchaAdjustments","nextBillNo","batamMansProduction","batamMansProductionArticles","batamMansProductionMaterials","batamMansProductionVouchers","batamMansMaterialDistributions","batamMansExpenses","batamMansPendingRecords","nextBatamMansVoucherNo","batamMansVerificationSlips","nextBatamMansSlipNo","finishedMansProduction","finishedMansProductionArticles","finishedMansProductionMaterials","finishedMansProductionVouchers","finishedMansMaterialDistributions","finishedMansExpenses","finishedMansPendingRecords","nextFinishedMansVoucherNo","finishedMansVerificationSlips","nextFinishedMansSlipNo"];
+const CLOUD_SETTINGS_ROOTS=["shoesPressManProduction","shoesLaminationShopsProduction","supplierProductionBilling","upperArticles","upperMaterials","upperDistributions","nextUpperVoucherNo","upperPendingRecords","upperManualPendingResets","upperWeeklyLabourRecords","productionKharchaAdjustments","nextBillNo","batamMansProduction","batamMansProductionArticles","batamMansProductionMaterials","batamMansProductionVouchers","batamMansMaterialDistributions","batamMansExpenses","batamMansPendingRecords","nextBatamMansVoucherNo","batamMansVerificationSlips","nextBatamMansSlipNo","finishedMansProduction","finishedMansProductionArticles","finishedMansProductionMaterials","finishedMansProductionVouchers","finishedMansMaterialDistributions","finishedMansExpenses","finishedMansPendingRecords","nextFinishedMansVoucherNo","finishedMansVerificationSlips","nextFinishedMansSlipNo","gasSupplier","gasSupplierWeeks","gasPayments","gasExtraBalances","gasSupplierBills","gasSupplierBillAccount","nextGasVoucherNo","shoeBoxSuppliers","nextShoeBoxReceiveVoucherNo","shoeBoxReceiveVoucherFields"];
 const CLOUD_SAVE_SCOPES={
   uiLayout:{datasets:['settings'],sections:[],reads:['settings']},
   worker:{datasets:['workers','auditLog'],sections:[],reads:['settings','workers']},
@@ -147,7 +147,9 @@ const CLOUD_SAVE_SCOPES={
   bottom:{datasets:['auditLog'],sections:["batamMansProduction","batamMansProductionArticles","batamMansProductionMaterials","batamMansProductionVouchers","batamMansMaterialDistributions","batamMansExpenses","batamMansPendingRecords","nextBatamMansVoucherNo","batamMansVerificationSlips","nextBatamMansSlipNo"],reads:['settings','workers']},
   finish:{datasets:['auditLog'],sections:["finishedMansProduction","finishedMansProductionArticles","finishedMansProductionMaterials","finishedMansProductionVouchers","finishedMansMaterialDistributions","finishedMansExpenses","finishedMansPendingRecords","nextFinishedMansVoucherNo","finishedMansVerificationSlips","nextFinishedMansSlipNo"],reads:['settings','workers']},
   weekly:{datasets:['auditLog'],sections:['upperDistributions','upperWeeklyLabourRecords'],reads:['settings','workers']},
-  adjustment:{datasets:[],sections:['productionKharchaAdjustments'],reads:['settings','workers']}
+  adjustment:{datasets:[],sections:['productionKharchaAdjustments'],reads:['settings','workers']},
+  gas:{datasets:['gasVouchers','auditLog'],sections:['gasSupplier','gasSupplierWeeks','gasPayments','gasExtraBalances','gasSupplierBills','gasSupplierBillAccount','nextGasVoucherNo'],reads:['settings','gasVouchers']},
+  shoeBox:{datasets:['auditLog'],sections:['shoeBoxSuppliers','nextShoeBoxReceiveVoucherNo','shoeBoxReceiveVoucherFields'],reads:['settings']}
 };
 let cloudBaselines={},cloudBaselineValues={},cloudNeedsReload=false,cloudReconcilePromise=null;
 function rememberCloudValues(state){
@@ -325,7 +327,7 @@ async function saveCriticalCloudState(scopeName=null){
     return false;
   }finally{
     criticalCloudSaveActive=false;
-    setCriticalUiLock(cloudNeedsReload);
+    setCriticalUiLock(false);
     const shouldFlush=deferredCloudSync;
     deferredCloudSync=false;
 
@@ -354,7 +356,7 @@ async function reconcileCloudAfterCriticalRollback(){
       cloudSavedRevision=cloudChangeRevision;deferredCloudSync=false;cloudNeedsReload=false;
       render();return true;
     }catch(error){console.error('Cloud reconciliation failed',error);toast('D1 reload is required before more saves. Reload when the connection is available.');return false;}
-    finally{setCriticalUiLock(cloudNeedsReload);cloudReconcilePromise=null;}
+    finally{setCriticalUiLock(false);cloudReconcilePromise=null;}
   })();
   return cloudReconcilePromise;
 }
@@ -16192,7 +16194,7 @@ function sbSupplierBillForm(index,bill=null){
 function sbWholeAtoms(value){const n=Number(value);return Number.isInteger(n)&&n>0?n:null;}
 function sbSnapshot(){return {settings:JSON.stringify(settings),auditLog:JSON.stringify(auditLog)};}
 async function sbCriticalCommit(snapshot,message){
-  if(await saveCriticalCloudState()) return true;
+  if(await saveCriticalCloudState('shoeBox')) return true;
   settings=JSON.parse(snapshot.settings); auditLog=JSON.parse(snapshot.auditLog);
   await reconcileCloudAfterCriticalRollback();
   toast(message||'Shoe Box change was not saved to D1. No balance/stock change was kept.');
@@ -18904,7 +18906,7 @@ function gasDeepSnapshot(){
   return {settings:JSON.stringify(settings),gasVouchers:JSON.stringify(gasVouchers),auditLog:JSON.stringify(auditLog)};
 }
 async function gasCriticalCommit(snapshot, failMessage){
-  if(await saveCriticalCloudState()) return true;
+  if(await saveCriticalCloudState('gas')) return true;
   settings=JSON.parse(snapshot.settings);
   gasVouchers=JSON.parse(snapshot.gasVouchers);
   auditLog=JSON.parse(snapshot.auditLog);
