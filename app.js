@@ -11569,6 +11569,7 @@ function render(){
   else if(currentPage==='todayFactorySummary') main.innerHTML = pageTodayFactorySummary();
   else if(currentPage==='batamMansProduction') main.innerHTML = pageBatamMansProduction();
   else if(currentPage==='batamMansAllProduction') main.innerHTML = pageBfAllProduction('batam');
+  else if(currentPage==='batamMansArticleComparison') main.innerHTML = pageBfArticleComparison('batam');
   else if(currentPage==='batamMansProductionArticles') main.innerHTML = pageBatamMansProductionArticles();
   else if(currentPage==='batamMansProductionMaterials') main.innerHTML = pageBatamMansProductionMaterials();
   else if(currentPage==='batamMansMaterialAccounts') main.innerHTML = pageBatamMansMaterialAccounts();
@@ -11581,6 +11582,7 @@ function render(){
   else if(currentPage==='batamMansReports') main.innerHTML = pageBatamMansReports();
   else if(currentPage==='finishedMansProduction') main.innerHTML = pageFinishedMansProduction();
   else if(currentPage==='finishedMansAllProduction') main.innerHTML = pageBfAllProduction('finished');
+  else if(currentPage==='finishedMansArticleComparison') main.innerHTML = pageBfArticleComparison('finished');
   else if(currentPage==='finishedMansProductionArticles') main.innerHTML = pageFinishedMansProductionArticles();
   else if(currentPage==='finishedMansProductionMaterials') main.innerHTML = pageFinishedMansProductionMaterials();
   else if(currentPage==='finishedMansMaterialAccounts') main.innerHTML = pageFinishedMansMaterialAccounts();
@@ -11637,7 +11639,7 @@ function render(){
   if(currentPage!=='dashboard'){
     if(productionRoute&&supplierProductionReportScope()&&['distributeUpper','upperIssuedReport','upperReceivedReport','upperPending'].includes(productionView)){
       // Scoped supplier pages render their own navigation.
-    } else if(['laminationSuppliers','batamMansProduction','batamMansProductionArticles','batamMansProductionMaterials','batamMansProductionList','batamMansPending','batamMansDistributeMaterial','finishedMansProduction','finishedMansProductionArticles','finishedMansProductionMaterials','finishedMansProductionList','finishedMansPending','finishedMansDistributeMaterial','finishedMansMaterialAccounts'].includes(currentPage)){
+    } else if(['laminationSuppliers','batamMansProduction','batamMansArticleComparison','batamMansProductionArticles','batamMansProductionMaterials','batamMansProductionList','batamMansPending','batamMansDistributeMaterial','finishedMansProduction','finishedMansArticleComparison','finishedMansProductionArticles','finishedMansProductionMaterials','finishedMansProductionList','finishedMansPending','finishedMansDistributeMaterial','finishedMansMaterialAccounts'].includes(currentPage)){
       // Batam workflow pages own their single Back/navigation control.
     } else if(currentPage==='workerSummaryDetail'){
       // The detail page renders its own Back to Workers button.
@@ -21004,7 +21006,6 @@ function openBfVoucherModal(module,id,printNow=false){
   modal(`<div style="display:flex;flex-direction:column;align-items:center;width:100%;">
     ${selectorBar}
     <div id="bfVoucherPrintArea">${bfWeeklyVoucherHtml(module,activeVoucher)}</div>
-    <div id="bfComparisonCardWrap" style="width:100%;max-width:440px;margin-top:10px;">${bfComparisonCardHtml(module,activeVoucher.workerId,dateOf(activeVoucher))}</div>
     <div class="modal-actions" style="width:100%;justify-content:center;margin-top:12px;">
       <button class="btn brass" id="bfModalPrintVoucher" data-i18n=ui_Print>Print</button>
       <button class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button>
@@ -21022,7 +21023,6 @@ function openBfVoucherModal(module,id,printNow=false){
       const entry=filteredWeeks.find(w=>w.weekKey===weekKey)||filteredWeeks[0];if(!entry)return;
       activeVoucher=entry.latestRecord;
       const area=document.getElementById('bfVoucherPrintArea');if(area)area.innerHTML=bfWeeklyVoucherHtml(module,activeVoucher);
-      const comp=document.getElementById('bfComparisonCardWrap');if(comp)comp.innerHTML=bfComparisonCardHtml(module,activeVoucher.workerId,dateOf(activeVoucher));
       weekEl.value=entry.weekKey;
       syncNavButtons();
     };
@@ -21039,6 +21039,91 @@ function openBfVoucherModal(module,id,printNow=false){
     syncNavButtons();
   }
   document.getElementById('bfModalPrintVoucher').onclick=()=>printFn(bfWeeklyVoucherHtml(module,activeVoucher));
+}
+function bfComparisonWeeks(){
+  const dateOf=r=>r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date||r.createdAt);
+  const active=r=>!r.deletedAt&&r.deleted!==true;
+  const currentRange=getUpperWorkWeekRange(new Date()),currentWeekKey=bfWeeklyDateKey(currentRange.start);
+  const fmt=d=>d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  const weeks=new Map();
+  const addDate=dt=>{
+    if(!Number.isFinite(+dt))return;
+    const range=getUpperWorkWeekRange(dt),weekKey=bfWeeklyDateKey(range.start);
+    if(!weeks.has(weekKey)){
+      const thu=new Date(range.start);thu.setDate(thu.getDate()+5);
+      const monthKey=weekKey.slice(0,7),monthLabel=range.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      const label=fmt(range.start)+' – '+fmt(thu)+(weekKey===currentWeekKey?' (Current Week)':'');
+      weeks.set(weekKey,{weekKey,monthKey,monthLabel,label,start:range.start});
+    }
+  };
+  addDate(currentRange.start);
+  ['batam','finished'].forEach(mod=>{
+    const vouchers=settings[mod+'MansProductionVouchers']||[],entries=settings[mod+'MansProduction']||[];
+    vouchers.filter(active).forEach(v=>addDate(dateOf(v)));
+    entries.filter(active).forEach(r=>{
+      const parent=r.voucherId?vouchers.find(x=>String(x.id)===String(r.voucherId)):null;
+      if(r.voucherId&&(!parent||!active(parent)))return;
+      addDate(dateOf(r.workDate?r:parent||r));
+    });
+  });
+  return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
+}
+function pageBfArticleComparison(module='batam'){
+  const weeks=bfComparisonWeeks();
+  const months=[];const seenMonths=new Set();
+  weeks.forEach(w=>{if(!seenMonths.has(w.monthKey)){seenMonths.add(w.monthKey);months.push({key:w.monthKey,label:w.monthLabel});}});
+  const monthVal=months.some(m=>m.key===window.__bfCmpMonth)?window.__bfCmpMonth:'all';
+  const filteredWeeks=monthVal==='all'?weeks:weeks.filter(w=>w.monthKey===monthVal);
+  const activeWeek=filteredWeeks.find(w=>w.weekKey===window.__bfCmpWeek)||filteredWeeks[0]||weeks[0];
+  const idx=filteredWeeks.findIndex(w=>w.weekKey===activeWeek?.weekKey);
+  return `<div class="bm-compact-page">
+    <h2 class="page-title bm-page-title">Article-Wise Production Comparison</h2>
+    <div class="card" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;">
+      <button type="button" class="btn ghost small" data-bf-cmp-back="${esc(module)}">← Back</button>
+      <div id="bfCmpPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:1;justify-content:flex-end;">
+        <select id="bfCmpMonthFilter" style="min-width:110px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+          <option value="all" ${monthVal==='all'?'selected':''}>All Months</option>
+          ${months.map(m=>`<option value="${esc(m.key)}" ${monthVal===m.key?'selected':''}>${esc(m.label)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn ghost small" id="bfCmpPrevWeek" title="Previous Week" ${idx<0||idx>=filteredWeeks.length-1?'disabled':''}>◀ Prev</button>
+        <select id="bfCmpWeekSelect" style="flex:0 1 230px;min-width:180px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+          ${filteredWeeks.map(w=>`<option value="${esc(w.weekKey)}" ${w.weekKey===activeWeek?.weekKey?'selected':''}>${esc(w.label)}</option>`).join('')}
+        </select>
+        <button type="button" class="btn ghost small" id="bfCmpNextWeek" title="Next Week" ${idx<=0?'disabled':''}>Next ▶</button>
+      </div>
+    </div>
+    <div id="bfComparisonCardWrap" style="width:100%;">${activeWeek?bfComparisonCardHtml(module,null,activeWeek.start):''}</div>
+  </div>`;
+}
+function bindBfArticleComparisonHandlers(module){
+  const weeks=bfComparisonWeeks();
+  const monthEl=document.getElementById('bfCmpMonthFilter'),weekEl=document.getElementById('bfCmpWeekSelect'),prevBtn=document.getElementById('bfCmpPrevWeek'),nextBtn=document.getElementById('bfCmpNextWeek');
+  if(!weekEl)return;
+  let filteredWeeks=monthEl?.value&&monthEl.value!=='all'?weeks.filter(w=>w.monthKey===monthEl.value):weeks;
+  const syncNavButtons=()=>{
+    const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);
+    if(prevBtn)prevBtn.disabled=idx<0||idx>=filteredWeeks.length-1;
+    if(nextBtn)nextBtn.disabled=idx<=0;
+  };
+  const renderSelectedWeek=weekKey=>{
+    const entry=filteredWeeks.find(w=>w.weekKey===weekKey)||filteredWeeks[0];if(!entry)return;
+    window.__bfCmpWeek=entry.weekKey;
+    const comp=document.getElementById('bfComparisonCardWrap');if(comp)comp.innerHTML=bfComparisonCardHtml(module,null,entry.start);
+    weekEl.value=entry.weekKey;
+    syncNavButtons();
+  };
+  monthEl?.addEventListener('change',()=>{
+    const m=monthEl.value;
+    window.__bfCmpMonth=m;
+    filteredWeeks=m==='all'?weeks:weeks.filter(w=>w.monthKey===m);
+    weekEl.innerHTML=filteredWeeks.map(w=>`<option value="${esc(w.weekKey)}">${esc(w.label)}</option>`).join('');
+    if(filteredWeeks.length)renderSelectedWeek(filteredWeeks[0].weekKey);
+    else syncNavButtons();
+  });
+  weekEl.addEventListener('change',()=>renderSelectedWeek(weekEl.value));
+  prevBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>=0&&idx<filteredWeeks.length-1)renderSelectedWeek(filteredWeeks[idx+1].weekKey);});
+  nextBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>0)renderSelectedWeek(filteredWeeks[idx-1].weekKey);});
+  syncNavButtons();
 }
 
 function printBatamMansHtml(html,title='Batam Mans Production'){
@@ -21509,7 +21594,7 @@ function pageBatamMansProduction(){
    <button type="button" class="btn brass small bm-top-card" id="bmOpenArticlesHub">👞 Production Articles</button>
    <button type="button" class="btn brass small bm-top-card" id="bmOpenMaterialsHub">📦 Production Materials</button>
    <button type="button" class="btn blue small bm-top-card" id="bmOpenProductionList">📋 Production List</button>
-   <button type="button" class="btn ghost small bm-top-card" id="bmOpenPending">⏳ Pending</button>
+   <button type="button" class="btn brass small bm-top-card" id="bmArticleComparison">📊 Article Comparison</button>
    <div class="bm-top-stat"><span>Today Kharcha</span><strong>${upperMoney(todayKharcha)}</strong></div>
    <button type="button" class="bm-top-stat" id="bmAllProduction" style="cursor:pointer;"><span>All Production</span></button>
  </div>
@@ -22240,7 +22325,7 @@ function pageFinishedMansProduction(){
    <button type="button" class="btn brass small bm-top-card" id="fmOpenArticlesHub">👞 Production Articles</button>
    <button type="button" class="btn brass small bm-top-card" id="fmOpenMaterialsHub">📦 Production Materials</button>
    <button type="button" class="btn blue small bm-top-card" id="fmOpenProductionList">📋 Production List</button>
-   <button type="button" class="btn ghost small bm-top-card" id="fmOpenPending">⏳ Pending</button>
+   <button type="button" class="btn brass small bm-top-card" id="fmArticleComparison">📊 Article Comparison</button>
    <div class="bm-top-stat"><span>Today Kharcha</span><strong>${upperMoney(todayKharcha)}</strong></div>
    <button type="button" class="bm-top-stat" id="fmAllProduction" style="cursor:pointer;"><span>All Production</span></button>
  </div>
@@ -22621,10 +22706,14 @@ function bindCurrentWeekWorkerVoucherDoubleClick(){
   document.getElementById('btnProductionMaterials')?.addEventListener('click',openBatamMansProductionMaterialsList);
   document.getElementById('bmOpenProductionList')?.addEventListener('click',()=>goto('batamMansProductionList'));
   document.getElementById('bmAllProduction')?.addEventListener('click',()=>goto('batamMansAllProduction'));
+  document.getElementById('bmArticleComparison')?.addEventListener('click',()=>{window.__bfCmpMonth='all';window.__bfCmpWeek='';goto('batamMansArticleComparison');});
   document.getElementById('upperLatestCombinedProduction')?.addEventListener('click',()=>printUpperManAllProduction(true));
   document.getElementById('bmLatestCombinedProduction')?.addEventListener('click',()=>printBfAllProduction('batam',true));
   document.getElementById('fmLatestCombinedProduction')?.addEventListener('click',()=>printBfAllProduction('finished',true));
   document.getElementById('fmAllProduction')?.addEventListener('click',()=>goto('finishedMansAllProduction'));
+  document.getElementById('fmArticleComparison')?.addEventListener('click',()=>{window.__bfCmpMonth='all';window.__bfCmpWeek='';goto('finishedMansArticleComparison');});
+  document.querySelectorAll('[data-bf-cmp-back]').forEach(button=>button.addEventListener('click',()=>goto(button.dataset.bfCmpBack==='batam'?'batamMansProduction':'finishedMansProduction')));
+  if(currentPage==='batamMansArticleComparison'||currentPage==='finishedMansArticleComparison')bindBfArticleComparisonHandlers(currentPage==='batamMansArticleComparison'?'batam':'finished');
   document.querySelectorAll('[data-bf-all-back]').forEach(button=>button.addEventListener('click',()=>goto(button.dataset.bfAllBack==='batam'?'batamMansProduction':'finishedMansProduction')));
   document.querySelectorAll('[data-bf-all-print]').forEach(button=>button.addEventListener('click',()=>printBfAllProduction(button.dataset.bfAllPrint)));
 
