@@ -16768,13 +16768,13 @@ function shoeBoxVoucherHistory(supplier,voucher,selected){
 function shoeBoxCaptureVoucherHistory(supplier,voucher){
   const selected=(supplier.purchases||[]).filter(p=>(voucher.purchaseIds||[]).some(id=>String(id)===String(p.id)));
   if(!selected.length)return;
-  const history=shoeBoxVoucherHistory(supplier,voucher,selected);
-  voucher.balanceSnapshot={...(voucher.balanceSnapshot||{}),shoeBoxWeekly:{version:1,cutoff:history.cutoff,purchases:history.purchases,records:history.records.map(v=>({id:v.id,voucherNo:v.voucherNo,date:v.date,createdAt:v.createdAt,purchaseIds:[...(v.purchaseIds||[])],deletedAt:v.deletedAt}))}};
+  const cutoff=voucher?.balanceSnapshot?.capturedAt||voucher?.createdAt||voucher?.date||selected[0]?.time||selected[0]?.date;
+  voucher.balanceSnapshot={...(voucher.balanceSnapshot||{}),capturedAt:cutoff,shoeBoxWeekly:{version:2,cutoff}};
 }
 function renderShoeBoxVoucherPreview(supplierIndex,purchaseIds,notes='',voucherId=''){
   const supplier=settings.shoeBoxSuppliers?.[supplierIndex]||getShoeBoxSuppliers()[supplierIndex],ids=new Set((purchaseIds||[]).map(String)),selected=(supplier?.purchases||[]).filter(purchase=>ids.has(String(purchase.id)));if(!supplier||!selected.length)return '';
   const voucher=(supplier.receiveVouchers||[]).find(item=>voucherId?String(item.id)===String(voucherId):(item.purchaseIds||[]).some(id=>ids.has(String(id)))),voucherNo=String(voucher?.voucherNo||selected[0].voucherNo||'\u2014'),stamp=new Date(voucher?.createdAt||voucher?.date||selected[0].date),base=new Date(selected[0].workDate?selected[0].workDate+'T00:00:00':voucher?.date||selected[0].date);if(!Number.isFinite(+base)||!Number.isFinite(+stamp))return '';
-  const range=getUpperWorkWeekRange(base),snapshot=voucher?.balanceSnapshot?.shoeBoxWeekly,history=snapshot?.version===1?snapshot:shoeBoxVoucherHistory(supplier,voucher,selected);
+  const range=getUpperWorkWeekRange(base),snapshot=voucher?.balanceSnapshot?.shoeBoxWeekly,history=(snapshot?.version===1&&Array.isArray(snapshot?.purchases))?snapshot:shoeBoxVoucherHistory(supplier,voucher,selected);
   const tripIds=new Set(),tripNumbers=new Set(),tripPurchases=new Set();let trips=0;
   (history.records||[]).forEach(record=>{
     if(!record||record.deletedAt||record.cancelledAt||record.canceledAt||record.deleted===true||record.cancelled===true||record.canceled===true||record.isCancelled===true||record.isCanceled===true||/^(?:deleted|cancelled|canceled|void|voided)$/i.test(String(record.status||'').trim()))return;
@@ -16954,7 +16954,7 @@ function editShoeBoxReceiveVoucher(supplierIndex,voucherId,purchaseIds){
       });
       voucher.purchaseIds=newIds;
       const weeklySnapshot=voucher.balanceSnapshot?.shoeBoxWeekly;
-      if(weeklySnapshot?.version===1){
+      if(weeklySnapshot?.version===1 && Array.isArray(weeklySnapshot.purchases)){
         weeklySnapshot.purchases=(weeklySnapshot.purchases||[]).filter(p=>!ids.includes(String(p.id))).concat(supplier.purchases.filter(p=>newIds.includes(String(p.id))).map(p=>({...p,unit:shoeBoxReceivingUnit(supplier,p)})));
         weeklySnapshot.records=(weeklySnapshot.records||[]).map(record=>String(record.id)===String(voucher.id)?{...record,purchaseIds:[...newIds]}:record);
       }

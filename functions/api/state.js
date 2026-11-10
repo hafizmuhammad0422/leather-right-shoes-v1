@@ -51,9 +51,7 @@ const SETTINGS_ROOTS = [
   "batamMansPendingRecords", "nextBatamMansVoucherNo", "batamMansVerificationSlips", "nextBatamMansSlipNo",
   "finishedMansProduction", "finishedMansProductionArticles", "finishedMansProductionMaterials",
   "finishedMansProductionVouchers", "finishedMansMaterialDistributions", "finishedMansExpenses",
-  "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo",
-  "gasSupplier", "gasSupplierWeeks", "gasPayments", "gasExtraBalances", "gasSupplierBills", "gasSupplierBillAccount", "nextGasVoucherNo",
-  "shoeBoxSuppliers", "nextShoeBoxReceiveVoucherNo", "shoeBoxReceiveVoucherFields"
+  "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo"
 ];
 async function baselineHash(value) {
   const encoded = value === undefined ? "missing" : JSON.stringify(value);
@@ -85,7 +83,7 @@ async function savePartialState({ env, request }, body) {
       (sectionsMode && name === 'settings') ||
       (name === 'settings' ? !isPlainObject(updates[name]) : !Array.isArray(updates[name]))) ||
       roots.some(root => !SETTINGS_ROOTS.includes(root) ||
-        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling', 'gasSupplier', 'gasSupplierBillAccount', 'shoeBoxReceiveVoucherFields'].includes(root)
+        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling'].includes(root)
           ? !isPlainObject(body.set[root]) : root.startsWith('next')
           ? !Number.isSafeInteger(body.set[root]) || body.set[root] < 0 : !Array.isArray(body.set[root]))) ||
       expected.some(key => !(RUNTIME_DATASETS.includes(key) ||
@@ -98,9 +96,10 @@ async function savePartialState({ env, request }, body) {
   const readNames = [...new Set([...names, ...expected.map(key => key.split('/')[0]), ...(roots.length ? ['settings'] : [])])];
   try {
     const rows = await env.DB.prepare(
-      `SELECT dataset, data_json FROM app_state WHERE dataset IN (${readNames.map(() => '?').join(',')})`
+      `SELECT dataset, data_json, updated_at FROM app_state WHERE dataset IN (${readNames.map(() => '?').join(',')})`
     ).bind(...readNames).all();
     const raw = Object.fromEntries(rows.results.map(row => [row.dataset, row.data_json]));
+    const timestamps = Object.fromEntries(rows.results.map(row => [row.dataset, row.updated_at]));
     if (readNames.some(name => !Object.prototype.hasOwnProperty.call(raw, name))) {
       return json({ error: "conflict", message: "Required authoritative dataset is missing." }, 409);
     }
@@ -121,13 +120,13 @@ async function savePartialState({ env, request }, body) {
     const baselines = await stateBaselines(writes);
     if (changed.length) {
       // One UPDATE, one shared guard: all changed rows commit, or none do.
-      // Exact stored JSON guards also catch legacy writers and timestamp collisions.
+      // Checked updated_at timestamp guards ensure atomic CAS without binding massive JSON payloads into SQL parameters.
       const statement = env.DB.prepare(
         `WITH guard AS MATERIALIZED (SELECT 1 AS allowed WHERE
-          ${readNames.map(() => 'EXISTS (SELECT 1 FROM app_state AS checked WHERE checked.dataset = ? AND checked.data_json = ?)').join(' AND ')})
+          ${readNames.map(() => 'EXISTS (SELECT 1 FROM app_state AS checked WHERE checked.dataset = ? AND checked.updated_at = ?)').join(' AND ')})
           UPDATE app_state SET data_json = CASE dataset ${changed.map(() => 'WHEN ? THEN ?').join(' ')} ELSE data_json END,
           updated_at = ? WHERE dataset IN (${changed.map(() => '?').join(',')}) AND EXISTS (SELECT 1 FROM guard)`
-      ).bind(...readNames.flatMap(name => [name, raw[name]]),
+      ).bind(...readNames.flatMap(name => [name, timestamps[name]]),
         ...changed.flatMap(name => [name, JSON.stringify(writes[name])]), now, ...changed);
       const result = await env.DB.batch([statement]);
       if (result[0]?.meta?.changes !== changed.length) {
