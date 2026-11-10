@@ -162,6 +162,24 @@ function rememberCloudValues(state){
 function validCloudBaselines(baselines,keys){
   return baselines && typeof baselines==='object' && keys.every(key=>typeof baselines[key]==='string' && /^[a-f0-9]{64}$/.test(baselines[key]));
 }
+async function baselineHash(value){
+  const encoded=value===undefined?"missing":JSON.stringify(value);
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(encoded));
+  return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("");
+}
+async function computeLocalBaselines(state){
+  const baselines={};
+  for(const name of ['materials','workers','transactions','stockMovements','articles','shopkeepers','bills','auditLog','gasVouchers']){
+    if(Object.prototype.hasOwnProperty.call(state,name)) baselines[name]=await baselineHash(state[name]);
+  }
+  if(state.settings && typeof state.settings==='object'){
+    baselines.settings=await baselineHash(state.settings);
+    for(const root of CLOUD_SETTINGS_ROOTS){
+      baselines['settings/'+root]=await baselineHash(state.settings[root]);
+    }
+  }
+  return baselines;
+}
 function capturePartialCloudState(scopeName){
   const scope=CLOUD_SAVE_SCOPES[scopeName];
   if(!scope)throw new Error('Unknown save scope.');
@@ -348,11 +366,12 @@ async function reconcileCloudAfterCriticalRollback(){
     setCriticalUiLock(true);
     try{
       await cloudWriteChain;
-      const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{cache:'no-store'});
+      const res=await fetch(RUNTIME_CLOUD_API,{cache:'no-store'});
       if(!res.ok)throw new Error('Authoritative reload failed: '+res.status);
       const payload=await res.json();
-      if(!isCompleteCloudState(payload.state)||!payload.baselines)throw new Error('Invalid authoritative reload.');
-      applyCloudState(payload.state);cloudBaselines=payload.baselines;rememberCloudValues(getCurrentState(false));
+      if(!isCompleteCloudState(payload.state))throw new Error('Invalid authoritative reload.');
+      const baselines=payload.baselines||await computeLocalBaselines(payload.state);
+      applyCloudState(payload.state);cloudBaselines=baselines;rememberCloudValues(getCurrentState(false));
       cloudSavedRevision=cloudChangeRevision;deferredCloudSync=false;cloudNeedsReload=false;
       render();return true;
     }catch(error){console.error('Cloud reconciliation failed',error);toast('D1 reload is required before more saves. Reload when the connection is available.');return false;}
@@ -390,7 +409,7 @@ async function hydrateCloud(startupLocalSignature){
   let cloudStateApplied=false;
   let cloudConnectionVerified=false;
   try{
-    const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{cache:'no-store'});
+    const res=await fetch(RUNTIME_CLOUD_API,{cache:'no-store'});
     if(!res.ok) throw new Error('Cloud load failed: '+res.status);
     const payload=await res.json();
 
@@ -405,9 +424,9 @@ async function hydrateCloud(startupLocalSignature){
       }
       // D1 is authoritative whenever a valid cloud state exists. This prevents
       // stale LocalStorage/RAM state from overwriting production during startup.
-      if(!payload.baselines)throw new Error('Authoritative save baselines are missing.');
+      const baselines=payload.baselines||await computeLocalBaselines(payload.state);
       applyCloudState(payload.state);
-      cloudBaselines=payload.baselines;rememberCloudValues(getCurrentState(false));
+      cloudBaselines=baselines;rememberCloudValues(getCurrentState(false));
       cloudStateApplied=true;
       cloudConnectionVerified=true;
     }

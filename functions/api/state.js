@@ -51,20 +51,27 @@ const SETTINGS_ROOTS = [
   "batamMansPendingRecords", "nextBatamMansVoucherNo", "batamMansVerificationSlips", "nextBatamMansSlipNo",
   "finishedMansProduction", "finishedMansProductionArticles", "finishedMansProductionMaterials",
   "finishedMansProductionVouchers", "finishedMansMaterialDistributions", "finishedMansExpenses",
-  "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo"
+  "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo",
+  "gasSupplier", "gasSupplierWeeks", "gasPayments", "gasExtraBalances", "gasSupplierBills", "gasSupplierBillAccount", "nextGasVoucherNo",
+  "shoeBoxSuppliers", "nextShoeBoxReceiveVoucherNo", "shoeBoxReceiveVoucherFields"
 ];
 async function baselineHash(value) {
   const encoded = value === undefined ? "missing" : JSON.stringify(value);
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(encoded));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
 }
-async function stateBaselines(state) {
+async function stateBaselines(state, targetRoots = null) {
   const baselines = {};
   for (const name of RUNTIME_DATASETS) {
     if (!Object.prototype.hasOwnProperty.call(state, name)) continue;
     baselines[name] = await baselineHash(state[name]);
-    if (name === "settings") for (const root of SETTINGS_ROOTS) {
-      baselines['settings/' + root] = await baselineHash(state.settings[root]);
+    if (name === "settings") {
+      const rootsToCheck = Array.isArray(targetRoots) ? targetRoots : SETTINGS_ROOTS;
+      for (const root of rootsToCheck) {
+        if (state.settings && state.settings[root] !== undefined) {
+          baselines['settings/' + root] = await baselineHash(state.settings[root]);
+        }
+      }
     }
   }
   return baselines;
@@ -83,7 +90,7 @@ async function savePartialState({ env, request }, body) {
       (sectionsMode && name === 'settings') ||
       (name === 'settings' ? !isPlainObject(updates[name]) : !Array.isArray(updates[name]))) ||
       roots.some(root => !SETTINGS_ROOTS.includes(root) ||
-        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling'].includes(root)
+        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling', 'gasSupplier', 'gasSupplierBillAccount', 'shoeBoxReceiveVoucherFields'].includes(root)
           ? !isPlainObject(body.set[root]) : root.startsWith('next')
           ? !Number.isSafeInteger(body.set[root]) || body.set[root] < 0 : !Array.isArray(body.set[root]))) ||
       expected.some(key => !(RUNTIME_DATASETS.includes(key) ||
@@ -115,9 +122,10 @@ async function savePartialState({ env, request }, body) {
       if (!isPlainObject(current.settings)) throw new Error('Invalid stored settings.');
       writes.settings = { ...current.settings, ...body.set };
     }
-    const changed = Object.keys(writes).filter(name => JSON.stringify(writes[name]) !== raw[name]);
+    const encodedWrites = Object.fromEntries(Object.keys(writes).map(name => [name, JSON.stringify(writes[name])]));
+    const changed = Object.keys(writes).filter(name => encodedWrites[name] !== raw[name]);
     const now = new Date().toISOString();
-    const baselines = await stateBaselines(writes);
+    const baselines = await stateBaselines(writes, roots.length ? roots : null);
     if (changed.length) {
       // One UPDATE, one shared guard: all changed rows commit, or none do.
       // Checked updated_at timestamp guards ensure atomic CAS without binding massive JSON payloads into SQL parameters.
@@ -127,7 +135,7 @@ async function savePartialState({ env, request }, body) {
           UPDATE app_state SET data_json = CASE dataset ${changed.map(() => 'WHEN ? THEN ?').join(' ')} ELSE data_json END,
           updated_at = ? WHERE dataset IN (${changed.map(() => '?').join(',')}) AND EXISTS (SELECT 1 FROM guard)`
       ).bind(...readNames.flatMap(name => [name, timestamps[name]]),
-        ...changed.flatMap(name => [name, JSON.stringify(writes[name])]), now, ...changed);
+        ...changed.flatMap(name => [name, encodedWrites[name]]), now, ...changed);
       const result = await env.DB.batch([statement]);
       if (result[0]?.meta?.changes !== changed.length) {
         return json({ error: "conflict", message: "Authoritative data changed during save. No rows were written." }, 409);
@@ -346,16 +354,58 @@ export async function onRequestGet({ env, request }) {
 
   if (stateMode(request) === "backups") return readBackups({ env, request });
   const datasets = stateMode(request) === "runtime" ? RUNTIME_DATASETS : DATASETS;
+  const wantBaselines = new URL(request.url).searchParams.get("baselines") === "1";
 
   try {
     const rows = await env.DB
       .prepare(
-        `SELECT dataset, data_json
+        `SELECT dataset, data_json, json_valid(data_json) AS is_valid
          FROM app_state
          WHERE dataset IN (${datasets.map(() => "?").join(",")})`
       )
       .bind(...datasets)
       .all();
+
+    // An empty database is explicitly reported so the Master HTML can use
+    // its existing first-sync behavior.
+    const found = new Set((rows.results || []).map((row) => row.dataset));
+    for (const row of rows.results || []) {
+      if (row.is_valid !== 1) {
+        return json(
+          {
+            error: "incomplete",
+            message: `Stored dataset "${row.dataset}" contains invalid JSON. Local data was not changed.`,
+            dataset: row.dataset,
+          },
+          500
+        );
+      }
+    }
+
+    if (!wantBaselines && !datasets.includes('backups')) {
+      const missing = datasets.filter((dataset) => !found.has(dataset));
+      if (found.size === 0) {
+        return json({ empty: true });
+      }
+      if (missing.length > 0) {
+        return json(
+          {
+            error: "incomplete",
+            message: "Cloud application state is incomplete. Local data was not changed.",
+            missing,
+          },
+          409
+        );
+      }
+      const stateParts = (rows.results || []).map((r) => JSON.stringify(r.dataset) + ":" + r.data_json);
+      return new Response('{"state":{' + stateParts.join(",") + "}}", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
 
     const state = {};
     for (const row of rows.results || []) {
@@ -373,9 +423,6 @@ export async function onRequestGet({ env, request }) {
       }
     }
 
-    // An empty database is explicitly reported so the Master HTML can use
-    // its existing first-sync behavior.
-    const found = new Set((rows.results || []).map((row) => row.dataset));
     if (datasets.includes('backups')) {
       const response = await readBackups({ env, request: new Request('https://backup.invalid/api/state?mode=backups') });
       if (!response.ok) return response;
@@ -402,7 +449,7 @@ export async function onRequestGet({ env, request }) {
       );
     }
 
-    return json(new URL(request.url).searchParams.get("baselines") === "1"
+    return json(wantBaselines
       ? { state, baselines: await stateBaselines(state) } : { state });
   } catch (error) {
     console.error("GET /api/state failed:", error);
