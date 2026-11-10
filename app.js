@@ -8267,15 +8267,32 @@ function openPressMeterRowEditor(row,deleting=false){
   document.getElementById('pressMeterEditCancel').onclick=closeModal;
   document.getElementById('pressMeterEditSave').onclick=async()=>{const button=document.getElementById('pressMeterEditSave');button.disabled=true;try{await pressSaveMeterEntry(selected,snapshot,[...document.querySelectorAll('[data-press-meter-edit-quantity]')].map(input=>input.validity?.badInput?'invalid':input.value),deleting);}finally{button.disabled=false;}};
 }
+function pressWorkerWeeks(workerId){
+  const records=(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(workerId)&&upperProductionRecordMatches(record)&&!record.deletedAt&&record.deleted!==true).slice().sort((a,b)=>(new Date(b.createdAt||b.date).getTime()||0)-(new Date(a.createdAt||a.date).getTime()||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0));
+  const currentWeekKey=upperLocalDateKey(getUpperWorkWeekRange(new Date()).start),weeks=new Map();
+  const fmt=d=>d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  records.forEach(record=>{
+    const ts=upperWorkTimestamp(record);if(!Number.isFinite(+ts))return;
+    const range=getUpperWorkWeekRange(ts),weekKey=upperLocalDateKey(range.start);
+    if(!weeks.has(weekKey)){
+      const thu=new Date(range.start);thu.setDate(thu.getDate()+5);
+      const monthKey=weekKey.slice(0,7),monthLabel=range.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      const label=fmt(range.start)+' – '+fmt(thu)+(weekKey===currentWeekKey?' (Current Week)':'');
+      weeks.set(weekKey,{weekKey,monthKey,monthLabel,label,latestRecord:record});
+    }
+  });
+  return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
+}
 function pressOpenLatestWorkerVoucher(workerId){
   const {start,end}=getUpperWorkWeekRange(new Date());
-  const latest=(settings.upperDistributions||[]).filter(record=>{
+  const current=(settings.upperDistributions||[]).filter(record=>{
     if(String(record.workerId)!==String(workerId)||!upperProductionRecordMatches(record)||record.deletedAt||record.deleted===true)return false;
     const dt=upperWorkTimestamp(record);
     return dt>=start&&dt<end;
   }).sort((a,b)=>(new Date(b.createdAt||b.date).getTime()||0)-(new Date(a.createdAt||a.date).getTime()||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0))[0];
-  if(!latest){toast('No production voucher exists for the current Saturday-Thursday week.');return;}
-  showUpperVoucher(latest);
+  const latest=current||pressWorkerWeeks(workerId)[0]?.latestRecord;
+  if(!latest){toast('No saved production voucher exists for this worker.');return;}
+  showUpperVoucher({...latest,latestWeekly:true});
 }
 let pressWorkerCardClickTimer;
 function bindPressWorkerCards(){
@@ -9099,22 +9116,68 @@ function upperPendingState(workerId,records=settings.upperDistributions||[],thro
   return {qty,valid:valid&&qty>=0};
 }
 function showUpperVoucher(v,saved=true){
-  const directWeekly=v.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)));
-  const rows=(v.lines||[]).map(l=>`<tr><td>${esc(l.articleName||'')}</td><td>${esc(String(upperLineDisplay(l).issued))} ${esc(upperLineDisplay(l).unit)}</td></tr><tr><td>${esc(l.materialName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr>`).join('');
-  modal(`<h3 style="margin-top:0;">${esc(upperVoucherCategoryTitle(v))} Receive Voucher #${v.voucherNo}</h3>
+  let activeVoucher=v;
+  const isPressWeekly=Boolean(v.latestWeekly)&&workerCategoryCompareKey(upperProductionRecordCategory(v))==='shoes press man';
+  const weeks=isPressWeekly?pressWorkerWeeks(v.workerId):[];
+  const months=[];const seenMonths=new Set();
+  weeks.forEach(w=>{if(!seenMonths.has(w.monthKey)){seenMonths.add(w.monthKey);months.push({key:w.monthKey,label:w.monthLabel});}});
+  const initialWeekKey=isPressWeekly?upperLocalDateKey(getUpperWorkWeekRange(upperWorkTimestamp(v)).start):'';
+  const selectorBar=isPressWeekly&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:520px;box-sizing:border-box;">
+      <select id="pressVoucherMonthFilter" style="min-width:115px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+        <option value="all">All Months</option>
+        ${months.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('')}
+      </select>
+      <button type="button" class="btn ghost small" id="pressVoucherPrevWeek" title="Previous Week">◀ Prev</button>
+      <select id="pressVoucherWeekSelect" style="flex:1;min-width:190px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+        ${weeks.map(w=>`<option value="${esc(w.weekKey)}" ${w.weekKey===initialWeekKey?'selected':''}>${esc(w.label)} • #${esc(w.latestRecord.voucherNo)}</option>`).join('')}
+      </select>
+      <button type="button" class="btn ghost small" id="pressVoucherNextWeek" title="Next Week">Next ▶</button>
+    </div>`:'';
+  const directWeeklyFor=rec=>rec.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(rec)));
+  modal(`<h3 id="pressVoucherModalTitle" style="margin-top:0;">${esc(upperVoucherCategoryTitle(activeVoucher))} Receive Voucher #${activeVoucher.voucherNo}</h3>
     <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      ${selectorBar}
       <div id="upperVoucherPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">
-        ${upperVoucherHtml(v)}
+        ${upperVoucherHtml(activeVoucher)}
       </div>
       <div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;">
-        <button type="button" class="btn brass" id="upperVoucherPrint">🖨️ Print</button>${v.workflowVersion===1?'':'<button type="button" class="btn ghost" id="upperVoucherCustomize">Customize Voucher</button>'}
+        <button type="button" class="btn brass" id="upperVoucherPrint">🖨️ Print</button>${activeVoucher.workflowVersion===1?'':'<button type="button" class="btn ghost" id="upperVoucherCustomize">Customize Voucher</button>'}
         ${saved?`<button type="button" class="btn ghost" id="upperVoucherEdit" data-i18n=ui_Edit>Edit</button><button type="button" class="btn red" id="upperVoucherDelete" data-i18n=ui_Delete>Delete</button>`:''}
         <button type="button" class="btn ghost" id="upperVoucherClose" data-i18n=ui_Close>Close</button>
       </div>
     </div>`);
-  document.getElementById('upperVoucherPrint').onclick=()=>directWeekly?printUpperWeeklyVoucherDirect(v):v.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Voucher','element',{settledSizing:/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)))}):printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(v));
-  document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(v.id));
-  document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(v.id));
+  if(isPressWeekly&&weeks.length){
+    const monthEl=document.getElementById('pressVoucherMonthFilter'),weekEl=document.getElementById('pressVoucherWeekSelect'),prevBtn=document.getElementById('pressVoucherPrevWeek'),nextBtn=document.getElementById('pressVoucherNextWeek');
+    let filteredWeeks=weeks;
+    const syncNavButtons=()=>{
+      const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);
+      if(prevBtn)prevBtn.disabled=idx<0||idx>=filteredWeeks.length-1;
+      if(nextBtn)nextBtn.disabled=idx<=0;
+    };
+    const renderSelectedWeek=weekKey=>{
+      const entry=filteredWeeks.find(w=>w.weekKey===weekKey)||filteredWeeks[0];if(!entry)return;
+      activeVoucher={...entry.latestRecord,latestWeekly:true};
+      const titleEl=document.getElementById('pressVoucherModalTitle');if(titleEl)titleEl.textContent=`${upperVoucherCategoryTitle(activeVoucher)} Receive Voucher #${activeVoucher.voucherNo}`;
+      const area=document.getElementById('upperVoucherPrintArea');if(area)area.innerHTML=upperVoucherHtml(activeVoucher);
+      weekEl.value=entry.weekKey;
+      syncNavButtons();
+    };
+    monthEl?.addEventListener('change',()=>{
+      const m=monthEl.value;
+      filteredWeeks=m==='all'?weeks:weeks.filter(w=>w.monthKey===m);
+      weekEl.innerHTML=filteredWeeks.map(w=>`<option value="${esc(w.weekKey)}">${esc(w.label)} • #${esc(w.latestRecord.voucherNo)}</option>`).join('');
+      if(filteredWeeks.length)renderSelectedWeek(filteredWeeks[0].weekKey);
+      else syncNavButtons();
+    });
+    weekEl?.addEventListener('change',()=>renderSelectedWeek(weekEl.value));
+    prevBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>=0&&idx<filteredWeeks.length-1)renderSelectedWeek(filteredWeeks[idx+1].weekKey);});
+    nextBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>0)renderSelectedWeek(filteredWeeks[idx-1].weekKey);});
+    syncNavButtons();
+  }
+  document.getElementById('upperVoucherPrint').onclick=()=>directWeeklyFor(activeVoucher)?printUpperWeeklyVoucherDirect(activeVoucher):activeVoucher.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(activeVoucher)+' Voucher','element',{settledSizing:/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(activeVoucher)))}):printElement('upperVoucherPrintArea');
+  document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(activeVoucher));
+  document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(activeVoucher.id));
+  document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(activeVoucher.id));
   document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
 }
 function supplierProductionBillTotals(bill){
