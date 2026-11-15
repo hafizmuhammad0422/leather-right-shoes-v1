@@ -51,6 +51,7 @@ function loadDB(key, fallback){
   }catch(e){ return fallback; }
 }
 let cloudReady = false;
+let cloudHydrationPromise = null;
 let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
 let cloudSyncQueued = false;
@@ -320,7 +321,17 @@ function scheduleCloudSync(markChange=true){
 // Critical Upper writes get their own revision and block ordinary snapshots until
 // success or rollback. This keeps the D1 state and the visible app state aligned.
 async function saveCriticalCloudState(scopeName=null){
-  if(!cloudReady || cloudNeedsReload || criticalCloudSaveActive)return false;
+  if(cloudHydrationPromise && !cloudReady){
+    try{ await cloudHydrationPromise; }catch(_e){}
+  }
+  if(!cloudReady || cloudNeedsReload || criticalCloudSaveActive){
+    if(!cloudReady){
+      toast('D1 sync is connecting. Please wait a moment before saving.');
+    }else if(cloudNeedsReload){
+      toast('D1 authoritative reload is required. Please wait.');
+    }
+    return false;
+  }
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer=null;
   criticalCloudSaveActive=true;
@@ -23889,9 +23900,11 @@ async function initApp(){
   if(app){app.setAttribute('inert','');app.setAttribute('aria-busy','true');}
 
   try{
-    const cloudStateApplied = await hydrateCloud(startupLocalSignature);
+    cloudHydrationPromise = hydrateCloud(startupLocalSignature);
+    const cloudStateApplied = await cloudHydrationPromise;
     if(cloudStateApplied) render();
   }finally{
+    cloudHydrationPromise = null;
     const currentApp=document.getElementById('appBody');
     if(currentApp && cloudReady){
       currentApp.removeAttribute('inert');

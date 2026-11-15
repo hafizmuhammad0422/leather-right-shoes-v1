@@ -1579,7 +1579,7 @@ body.upper-mans-production-active #main > .row:first-child:has(#btnBackDashboard
 <script src="./shared/name-input.js"></script>
 <script src="./shared/ui-language.js"></script>
 <script src="./app.js"></script>
-<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));}</script>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.getRegistrations().then(regs=>{for(const reg of regs)reg.unregister();}).catch(()=>{});if(window.caches)caches.keys().then(keys=>{for(const k of keys)caches.delete(k);}).catch(()=>{});});}</script>
 
 
 <script id="mobile-navigation-layer">

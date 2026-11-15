@@ -1,2 +1,14 @@
+/*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /app.js
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/factory-sale.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/shared/*
+  Cache-Control: no-cache, no-store, must-revalidate
