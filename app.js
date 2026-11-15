@@ -21458,17 +21458,24 @@ function openBfComparisonDetailModal(module,rowKey,baseDate,side='all'){
   const d=bfArticleComparisonData(module,null,baseDate);
   const row=d.rows.find(r=>r.key===rowKey);if(!row)return;
   const sKey=['batam','finish'].includes(side)?side:'all';
-  const sideTitle=sKey==='batam'?'Bottom Man Vouchers':sKey==='finish'?'Finish Man Vouchers':'Bottom & Finish Vouchers';
-  const items=sKey==='batam'?row.batamItems:sKey==='finish'?row.finishItems:[...row.batamItems,...row.finishItems].sort((a,b)=>a.date.localeCompare(b.date)||a.sideLabel.localeCompare(b.sideLabel)||a.workerName.localeCompare(b.workerName));
+  const sideTitle=sKey==='batam'?'Bottom Man Workers':sKey==='finish'?'Finish Man Workers':'Bottom & Finish Workers';
+  const rawItems=sKey==='batam'?row.batamItems:sKey==='finish'?row.finishItems:[...row.batamItems,...row.finishItems];
+  const workerMap=new Map();
+  rawItems.forEach(item=>{
+    const k=item.side+'::'+item.workerName;
+    const existing=workerMap.get(k)||{side:item.side,sideLabel:item.sideLabel,workerName:item.workerName,unit:item.unit,totalQty:0,voucherCount:0};
+    existing.totalQty=Math.round((existing.totalQty+item.qty)*1000)/1000;
+    existing.voucherCount++;
+    workerMap.set(k,existing);
+  });
+  const workerRows=[...workerMap.values()].sort((a,b)=>b.totalQty-a.totalQty||a.sideLabel.localeCompare(b.sideLabel)||a.workerName.localeCompare(b.workerName));
   const diffLabel=(row.diff>0?'+':'')+bfFormatComparisonQty(row.diff)+' '+row.unit;
-  const rowsHtml=items.length?items.map(item=>`<tr>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;color:${item.side==='batam'?'#1d4ed8':'#15803d'};white-space:nowrap;">${esc(item.sideLabel)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);white-space:nowrap;">${esc(item.date)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);">#${esc(item.voucherNo)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:600;">${esc(item.workerName)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);">${esc(item.articleName)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:700;">${esc(bfFormatComparisonQty(item.qty))} ${esc(item.unit)}</td>
-  </tr>`).join(''):`<tr><td colspan="6" class="empty">Is work week mein is section ki koi matching voucher entry nahi mili.</td></tr>`;
+  const rowsHtml=workerRows.length?workerRows.map(w=>`<tr>
+    <td style="padding:6px;border-top:1px solid var(--line);font-weight:700;color:${w.side==='batam'?'#1d4ed8':'#15803d'};white-space:nowrap;">${esc(w.sideLabel)}</td>
+    <td style="padding:6px;border-top:1px solid var(--line);font-weight:600;">${esc(w.workerName)}</td>
+    <td style="padding:6px;border-top:1px solid var(--line);color:var(--muted);">${w.voucherCount} ${w.voucherCount===1?'voucher':'vouchers'}</td>
+    <td style="padding:6px;border-top:1px solid var(--line);text-align:right;font-weight:700;">${esc(bfFormatComparisonQty(w.totalQty))} ${esc(w.unit)}</td>
+  </tr>`).join(''):`<tr><td colspan="4" class="empty">Is work week mein is section ke kisi worker ki matching production nahi mili.</td></tr>`;
   modal(`<h3 style="margin:0 0 4px;">${esc(row.name)} (${esc(row.unit)}) — ${esc(sideTitle)}</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${esc(d.weekLabel)}</div>
     <div style="font-size:11.5px;color:#1f2937;margin-bottom:10px;padding:6px 8px;background:var(--bg-soft,#f8f9fa);border:1px solid var(--line);border-radius:6px;">
@@ -21478,11 +21485,9 @@ function openBfComparisonDetailModal(module,rowKey,baseDate,side='all'){
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
           <th style="padding:6px;text-align:left;">Module</th>
-          <th style="padding:6px;text-align:left;">Date</th>
-          <th style="padding:6px;text-align:left;">Voucher</th>
           <th style="padding:6px;text-align:left;">Worker</th>
-          <th style="padding:6px;text-align:left;">Article</th>
-          <th style="padding:6px;text-align:right;">Qty</th>
+          <th style="padding:6px;text-align:left;">Entries</th>
+          <th style="padding:6px;text-align:right;">Weekly Total Qty</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
