@@ -21470,40 +21470,214 @@ function openBfComparisonDetailModal(module,rowKey,baseDate,side='all'){
   const row=d.rows.find(r=>r.key===rowKey);if(!row)return;
   const sKey=['batam','finish'].includes(side)?side:'all';
   const sideTitle=sKey==='batam'?'Bottom Man Workers':sKey==='finish'?'Finish Man Workers':'Bottom & Finish Workers';
-  const rawItems=sKey==='batam'?row.batamItems:sKey==='finish'?row.finishItems:[...row.batamItems,...row.finishItems];
-  const workerMap=new Map();
-  rawItems.forEach(item=>{
-    const k=item.side+'::'+item.workerName;
-    const existing=workerMap.get(k)||{side:item.side,sideLabel:item.sideLabel,workerName:item.workerName,unit:item.unit,totalQty:0,voucherCount:0};
-    existing.totalQty=Math.round((existing.totalQty+item.qty)*1000)/1000;
-    existing.voucherCount++;
-    workerMap.set(k,existing);
-  });
-  const workerRows=[...workerMap.values()].sort((a,b)=>b.totalQty-a.totalQty||a.sideLabel.localeCompare(b.sideLabel)||a.workerName.localeCompare(b.workerName));
   const diffLabel=(row.diff>0?'+':'')+bfFormatComparisonQty(row.diff)+' '+row.unit;
-  const rowsHtml=workerRows.length?workerRows.map(w=>`<tr>
-    <td style="padding:6px;border-top:1px solid var(--line);font-weight:700;color:${w.side==='batam'?'#1d4ed8':'#15803d'};white-space:nowrap;">${esc(w.sideLabel)}</td>
-    <td style="padding:6px;border-top:1px solid var(--line);font-weight:600;">${esc(w.workerName)}</td>
-    <td style="padding:6px;border-top:1px solid var(--line);color:var(--muted);">${w.voucherCount} ${w.voucherCount===1?'voucher':'vouchers'}</td>
-    <td style="padding:6px;border-top:1px solid var(--line);text-align:right;font-weight:700;">${esc(bfFormatComparisonQty(w.totalQty))} ${esc(w.unit)}</td>
-  </tr>`).join(''):`<tr><td colspan="4" class="empty">Is work week mein is section ke kisi worker ki matching production nahi mili.</td></tr>`;
-  modal(`<h3 style="margin:0 0 4px;">${esc(row.name)} (${esc(row.unit)}) — ${esc(sideTitle)}</h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${esc(d.weekLabel)}</div>
-    <div style="font-size:11.5px;color:#1f2937;margin-bottom:10px;padding:6px 8px;background:var(--bg-soft,#f8f9fa);border:1px solid var(--line);border-radius:6px;">
-      Bottom Man: <b>${esc(bfFormatComparisonQty(row.batamQty))} ${esc(row.unit)}</b> • Finish Man: <b>${esc(bfFormatComparisonQty(row.finishQty))} ${esc(row.unit)}</b> • Diff: <b>${esc(diffLabel)}</b>
-    </div>
-    <div style="overflow-x:auto;max-height:60dvh;border:1px solid var(--line);border-radius:6px;">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
-          <th style="padding:6px;text-align:left;">Module</th>
-          <th style="padding:6px;text-align:left;">Worker</th>
-          <th style="padding:6px;text-align:left;">Entries</th>
-          <th style="padding:6px;text-align:right;">Weekly Total Qty</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
-    <div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button></div>`);
+  const aggWorkers=items=>{
+    const map=new Map();
+    (items||[]).forEach(item=>{
+      const k=String(item.workerName);
+      const ex=map.get(k)||{side:item.side,sideLabel:item.sideLabel,workerName:k,unit:item.unit,totalQty:0,voucherCount:0};
+      ex.totalQty=Math.round((ex.totalQty+item.qty)*1000)/1000;
+      ex.voucherCount++;
+      map.set(k,ex);
+    });
+    return [...map.values()].sort((a,b)=>b.totalQty-a.totalQty||a.workerName.localeCompare(b.workerName));
+  };
+  const batamWorkers=aggWorkers(row.batamItems);
+  const finishWorkers=aggWorkers(row.finishItems);
+  if(sKey!=='all'){
+    const workers=sKey==='batam'?batamWorkers:finishWorkers;
+    const rowsHtml=workers.length?workers.map(w=>`<tr>
+      <td style="padding:6px;border-top:1px solid var(--line);font-weight:700;color:${w.side==='batam'?'#1d4ed8':'#15803d'};white-space:nowrap;">${esc(w.sideLabel)}</td>
+      <td style="padding:6px;border-top:1px solid var(--line);font-weight:600;">${esc(w.workerName)}</td>
+      <td style="padding:6px;border-top:1px solid var(--line);color:var(--muted);">${w.voucherCount} ${w.voucherCount===1?'voucher':'vouchers'}</td>
+      <td style="padding:6px;border-top:1px solid var(--line);text-align:right;font-weight:700;">${esc(bfFormatComparisonQty(w.totalQty))} ${esc(w.unit)}</td>
+    </tr>`).join(''):`<tr><td colspan="4" class="empty">Is work week mein is section ke kisi worker ki matching production nahi mili.</td></tr>`;
+    modal(`<h3 style="margin:0 0 4px;">${esc(row.name)} (${esc(row.unit)}) — ${esc(sideTitle)}</h3>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${esc(d.weekLabel)}</div>
+      <div style="font-size:11.5px;color:#1f2937;margin-bottom:10px;padding:6px 8px;background:var(--bg-soft,#f8f9fa);border:1px solid var(--line);border-radius:6px;">
+        Bottom Man: <b>${esc(bfFormatComparisonQty(row.batamQty))} ${esc(row.unit)}</b> • Finish Man: <b>${esc(bfFormatComparisonQty(row.finishQty))} ${esc(row.unit)}</b> • Diff: <b>${esc(diffLabel)}</b>
+      </div>
+      <div style="overflow-x:auto;max-height:60dvh;border:1px solid var(--line);border-radius:6px;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
+            <th style="padding:6px;text-align:left;">Module</th>
+            <th style="padding:6px;text-align:left;">Worker</th>
+            <th style="padding:6px;text-align:left;">Entries</th>
+            <th style="padding:6px;text-align:right;">Weekly Total Qty</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button></div>`);
+    return;
+  }
+  const storageKey='bf_multi_pairs_'+encodeURIComponent(d.weekLabel)+'_'+encodeURIComponent(row.key);
+  let assignments={};
+  try{const raw=localStorage.getItem(storageKey);if(raw)assignments=JSON.parse(raw)||{};}catch(_e){}
+  if(!Object.keys(assignments).length){
+    try{
+      const oldRaw=localStorage.getItem('bf_pair_'+encodeURIComponent(d.weekLabel)+'_'+encodeURIComponent(row.key));
+      if(oldRaw){const oldPairs=JSON.parse(oldRaw)||{};for(const [bw,fw] of Object.entries(oldPairs)){if(fw)assignments[fw]=bw;}}
+    }catch(_e){}
+  }
+  const saveAssignments=()=>{try{localStorage.setItem(storageKey,JSON.stringify(assignments));}catch(_e){}};
+  const renderPairingContent=()=>{
+    const unassignedFinish=finishWorkers.filter(fw=>!assignments[fw.workerName]);
+    const bottomCardsHtml=batamWorkers.length?batamWorkers.map((bw,i)=>{
+      const assignedFinish=finishWorkers.filter(fw=>assignments[fw.workerName]===bw.workerName);
+      const finishSubtotal=assignedFinish.reduce((sum,fw)=>Math.round((sum+fw.totalQty)*1000)/1000,0);
+      const diff=Math.round((finishSubtotal-bw.totalQty)*1000)/1000;
+      const diffColor=diff===0?'#15803d':diff<0?'#b45309':'#1d4ed8';
+      const diffText=(diff>0?'+':'')+bfFormatComparisonQty(diff)+' '+row.unit;
+      const chipsHtml=assignedFinish.map(fw=>`
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:6px;background:#f0fdf4;border:1px solid #86efac;font-size:11.5px;color:#166534;font-weight:600;">
+          <span>${esc(fw.workerName)} (${esc(bfFormatComparisonQty(fw.totalQty))} ${esc(row.unit)})</span>
+          <button type="button" data-bf-unassign="${esc(fw.workerName)}" style="background:transparent;border:0;color:#dc2626;cursor:pointer;font-weight:800;padding:0 2px;line-height:1;" title="Remove ${esc(fw.workerName)}">✕</button>
+        </span>`).join('');
+      return `
+        <div class="card" data-bf-bottom-card="${esc(bw.workerName)}" style="margin-bottom:10px;padding:10px 12px;border:1px solid #cbd5e1;background:#fff;border-radius:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:8px;">
+            <div>
+              <b style="font-size:13.5px;color:#1d4ed8;">${i+1}. ${esc(bw.workerName)}</b>
+              <span style="font-size:11px;color:var(--muted);margin-left:6px;">(${bw.voucherCount} ${bw.voucherCount===1?'entry':'entries'})</span>
+            </div>
+            <div style="font-size:13.5px;font-weight:800;color:#1d4ed8;">
+              Bottom: ${esc(bfFormatComparisonQty(bw.totalQty))} ${esc(row.unit)}
+            </div>
+          </div>
+          <div style="margin-bottom:8px;">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;">Assigned Finish Men (${assignedFinish.length}):</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px;align-items:center;">
+              ${chipsHtml||'<span style="font-size:11px;color:var(--muted);font-style:italic;">No Finish Men assigned yet</span>'}
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;background:#f8fafc;padding:6px 8px;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:8px;font-size:11.5px;flex-wrap:wrap;gap:4px;">
+            <div>Finish Total: <b>${esc(bfFormatComparisonQty(finishSubtotal))} ${esc(row.unit)}</b></div>
+            <div style="font-weight:800;color:${diffColor};">Diff: ${esc(diffText)}</div>
+          </div>
+          <div data-bf-drop-target="${esc(bw.workerName)}" style="border:2px dashed #94a3b8;border-radius:6px;padding:6px 10px;text-align:center;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:11.5px;color:#64748b;font-weight:600;">⇣ Drop Finish Man here</span>
+            <select data-bf-select-assign="${esc(bw.workerName)}" style="font-size:11.5px;padding:3px 6px;margin:0;max-width:210px;">
+              <option value="">+ Assign Finish Man...</option>
+              ${unassignedFinish.map(fw=>`<option value="${esc(fw.workerName)}">${esc(fw.workerName)} (${esc(bfFormatComparisonQty(fw.totalQty))} ${esc(row.unit)})</option>`).join('')}
+            </select>
+          </div>
+        </div>`;
+    }).join(''):`<div class="empty">Is article ke liye Bottom Man ki koi entry nahi mili.</div>`;
+    const finishPoolItems=finishWorkers.map(fw=>{
+      const isAssigned=Boolean(assignments[fw.workerName]),assignedTo=assignments[fw.workerName];
+      return `
+        <div draggable="true" data-bf-drag-worker="${esc(fw.workerName)}" style="user-select:none;-webkit-user-select:none;cursor:grab;padding:8px 10px;border-radius:6px;border:1px solid ${isAssigned?'#e2e8f0':'#86efac'};background:${isAssigned?'#f8fafc':'#f0fdf4'};display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="color:#94a3b8;font-size:14px;cursor:grab;">⋮⋮</span>
+            <div>
+              <div style="font-weight:700;color:#0f172a;">${esc(fw.workerName)}</div>
+              <div style="font-size:10px;color:var(--muted);">${fw.voucherCount} ${fw.voucherCount===1?'entry':'entries'} • Weekly Total Qty</div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:800;color:#15803d;">${esc(bfFormatComparisonQty(fw.totalQty))} ${esc(row.unit)}</div>
+            ${isAssigned?`<div style="font-size:10px;color:#2563eb;font-weight:600;">Assigned: ${esc(assignedTo)}</div>`:`<div style="font-size:10px;color:#16a34a;font-weight:600;">Free to drag</div>`}
+          </div>
+        </div>`;
+    }).join('');
+    return `
+      <div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:12px;align-items:start;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;">Bottom Man Workers &amp; Assigned Finish Men (Left)</div>
+          ${bottomCardsHtml}
+        </div>
+        <div style="position:sticky;top:10px;">
+          <div class="card" style="margin:0;padding:12px;border:1px solid var(--line);background:#fff;border-radius:8px;">
+            <div style="font-size:12.5px;font-weight:800;color:#1e293b;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+              <span>Finish Men Pool (Right)</span>
+              <span style="font-size:11px;color:var(--muted);font-weight:600;">${unassignedFinish.length} Unassigned / ${finishWorkers.length} Total</span>
+            </div>
+            <div style="font-size:10.5px;color:var(--muted);margin-bottom:10px;line-height:1.4;">
+              Drag card onto any Bottom Man on the left. Multiple Finish Men can be dropped onto the same Bottom Man.
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;max-height:55dvh;overflow-y:auto;padding-right:2px;">
+              ${finishPoolItems}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  };
+  const modalHtml=`
+    <div id="bfWorkerPairingModal" style="text-align:left;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+        <h3 style="margin:0;">${esc(row.name)} (${esc(row.unit)}) — ${esc(sideTitle)}</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="btn ghost small" id="bfPairAutoBtn" title="Auto-match workers in quantity rank order">Auto-Match</button>
+          <button type="button" class="btn ghost small" id="bfPairResetBtn" title="Reset all mappings">Reset Pairs</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${esc(d.weekLabel)} • Side-by-Side Multi-Worker Mapping</div>
+      <div style="font-size:11.5px;color:#1f2937;margin-bottom:10px;padding:6px 8px;background:var(--bg-soft,#f8f9fa);border:1px solid var(--line);border-radius:6px;">
+        Bottom Man: <b>${esc(bfFormatComparisonQty(row.batamQty))} ${esc(row.unit)}</b> • Finish Man: <b>${esc(bfFormatComparisonQty(row.finishQty))} ${esc(row.unit)}</b> • Diff: <b>${esc(diffLabel)}</b>
+      </div>
+      <div id="bfWorkerPairingWrap" style="max-height:65dvh;overflow-y:auto;padding-right:4px;">
+        ${renderPairingContent()}
+      </div>
+      <div class="modal-actions" style="margin-top:12px;">
+        <button type="button" class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button>
+      </div>
+    </div>`;
+  modal(modalHtml);
+  const modalBox=document.querySelector('#modalBg .modal');
+  if(modalBox){modalBox.style.maxWidth='980px';modalBox.style.width='95vw';}
+  const bindEvents=()=>{
+    const wrap=document.getElementById('bfWorkerPairingWrap');
+    if(!wrap)return;
+    let draggedWorker=null;
+    wrap.querySelectorAll('[data-bf-drag-worker]').forEach(el=>{
+      el.addEventListener('dragstart',e=>{
+        draggedWorker=el.dataset.bfDragWorker;
+        if(e.dataTransfer){e.dataTransfer.setData('text/plain',draggedWorker);e.dataTransfer.effectAllowed='move';}
+      });
+    });
+    wrap.querySelectorAll('[data-bf-drop-target]').forEach(slot=>{
+      slot.addEventListener('dragover',e=>{e.preventDefault();slot.style.borderColor='#2563eb';slot.style.background='#eff6ff';});
+      slot.addEventListener('dragleave',()=>{slot.style.borderColor='#94a3b8';slot.style.background='#f8fafc';});
+      slot.addEventListener('drop',e=>{
+        e.preventDefault();slot.style.borderColor='#94a3b8';slot.style.background='#f8fafc';
+        const fwName=(e.dataTransfer?e.dataTransfer.getData('text/plain'):null)||draggedWorker;
+        const bwName=slot.dataset.bfDropTarget;
+        if(fwName&&bwName){assignments[fwName]=bwName;saveAssignments();refresh();}
+      });
+    });
+    wrap.querySelectorAll('[data-bf-select-assign]').forEach(sel=>{
+      sel.addEventListener('change',()=>{
+        const bwName=sel.dataset.bfSelectAssign,fwName=sel.value;
+        if(bwName&&fwName){assignments[fwName]=bwName;saveAssignments();refresh();}
+      });
+    });
+    wrap.querySelectorAll('[data-bf-unassign]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const fwName=btn.dataset.bfUnassign;
+        if(fwName&&assignments[fwName]){delete assignments[fwName];saveAssignments();refresh();}
+      });
+    });
+  };
+  const refresh=()=>{
+    const wrap=document.getElementById('bfWorkerPairingWrap');
+    if(wrap){wrap.innerHTML=renderPairingContent();bindEvents();}
+  };
+  bindEvents();
+  document.getElementById('bfPairAutoBtn')?.addEventListener('click',()=>{
+    assignments={};
+    const bottomCaps=batamWorkers.map(bw=>({name:bw.workerName,remaining:bw.totalQty}));
+    const sortedFinish=finishWorkers.slice().sort((a,b)=>b.totalQty-a.totalQty);
+    sortedFinish.forEach(fw=>{
+      bottomCaps.sort((a,b)=>b.remaining-a.remaining);
+      const chosen=bottomCaps[0];
+      if(chosen){assignments[fw.workerName]=chosen.name;chosen.remaining=Math.round((chosen.remaining-fw.totalQty)*1000)/1000;}
+    });
+    saveAssignments();refresh();
+  });
+  document.getElementById('bfPairResetBtn')?.addEventListener('click',()=>{
+    assignments={};saveAssignments();refresh();
+  });
 }
 function bfComparisonCardHtml(module,workerId,baseDate){
   const d=bfArticleComparisonData(module,workerId,baseDate);
@@ -21648,6 +21822,595 @@ function bfComparisonWeeks(){
   });
   return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
 }
+function getBfArticleGroups(weekLabel,rowKey){
+  const groupsKey='bf_article_groups_'+encodeURIComponent(weekLabel)+'_'+encodeURIComponent(rowKey);
+  let raw=null;
+  try{raw=localStorage.getItem(groupsKey);}catch(_e){}
+  if(raw!==null){
+    try{return JSON.parse(raw)||[];}catch(_e){return [];}
+  }
+  let groups=[];
+  try{
+    const multiRaw=localStorage.getItem('bf_multi_pairs_'+encodeURIComponent(weekLabel)+'_'+encodeURIComponent(rowKey))||
+                   localStorage.getItem('bf_pair_'+encodeURIComponent(weekLabel)+'_'+encodeURIComponent(rowKey));
+    if(multiRaw){
+      const oldAssignments=JSON.parse(multiRaw)||{};
+      const bwMap=new Map();
+      for(const [fw,bw] of Object.entries(oldAssignments)){
+        if(!bw)continue;
+        if(!bwMap.has(bw))bwMap.set(bw,[]);
+        bwMap.get(bw).push(fw);
+      }
+      let i=1;
+      for(const [bw,fws] of bwMap.entries()){
+        groups.push({id:'grp_'+i,name:'Group: '+bw,bottomWorkers:[bw],finishWorkers:fws});
+        i++;
+      }
+      if(groups.length){
+        try{localStorage.setItem(groupsKey,JSON.stringify(groups));}catch(_e){}
+      }
+    }
+  }catch(_e){}
+  return groups;
+}
+function renderBfFullPageArticleMapping(module,rowKey,baseDate){
+  const d=bfArticleComparisonData(module,null,baseDate);
+  const row=d.rows.find(r=>r.key===rowKey);
+  if(!row)return `<div class="bm-compact-page"><button type="button" class="btn ghost small" id="bfBackToArticlesBtn">← Back to Articles</button><div class="empty" style="margin-top:12px;">Article nahi mila.</div></div>`;
+  const diffLabel=(row.diff>0?'+':'')+bfFormatComparisonQty(row.diff)+' '+row.unit;
+  const diffColor=row.diff===0?'#15803d':row.diff<0?'#b45309':'#1d4ed8';
+  const aggWorkers=items=>{
+    const map=new Map();
+    (items||[]).forEach(item=>{
+      const k=String(item.workerName);
+      const ex=map.get(k)||{side:item.side,sideLabel:item.sideLabel,workerName:k,unit:item.unit,totalQty:0,voucherCount:0};
+      ex.totalQty=Math.round((ex.totalQty+item.qty)*1000)/1000;
+      ex.voucherCount++;
+      map.set(k,ex);
+    });
+    return [...map.values()].sort((a,b)=>b.totalQty-a.totalQty||a.workerName.localeCompare(b.workerName));
+  };
+  const batamWorkers=aggWorkers(row.batamItems);
+  const finishWorkers=aggWorkers(row.finishItems);
+  const groups=getBfArticleGroups(d.weekLabel,row.key);
+  let savedTemplates=[];
+  try{savedTemplates=JSON.parse(localStorage.getItem('bf_saved_group_templates'))||[];}catch(_e){}
+
+  const assignedBottomSet=new Set(groups.flatMap(g=>g.bottomWorkers||[]));
+  const assignedFinishSet=new Set(groups.flatMap(g=>g.finishWorkers||[]));
+  const unassignedBottom=batamWorkers.filter(bw=>!assignedBottomSet.has(bw.workerName));
+  const unassignedFinish=finishWorkers.filter(fw=>!assignedFinishSet.has(fw.workerName));
+
+  const groupsHtml=groups.length?groups.map((grp,i)=>{
+    const bottomList=(grp.bottomWorkers||[]).map(name=>{
+      const found=batamWorkers.find(bw=>bw.workerName===name);
+      return {workerName:name,totalQty:found?found.totalQty:0,voucherCount:found?found.voucherCount:0};
+    });
+    const finishList=(grp.finishWorkers||[]).map(name=>{
+      const found=finishWorkers.find(fw=>fw.workerName===name);
+      return {workerName:name,totalQty:found?found.totalQty:0,voucherCount:found?found.voucherCount:0};
+    });
+    const bSubtotal=bottomList.reduce((sum,bw)=>Math.round((sum+bw.totalQty)*1000)/1000,0);
+    const fSubtotal=finishList.reduce((sum,fw)=>Math.round((sum+fw.totalQty)*1000)/1000,0);
+    const grpDiff=Math.round((fSubtotal-bSubtotal)*1000)/1000;
+    const grpDiffColor=grpDiff===0?'#15803d':grpDiff<0?'#b45309':'#1d4ed8';
+    const grpDiffText=(grpDiff>0?'+':'')+bfFormatComparisonQty(grpDiff)+' '+row.unit;
+
+    const bChipsHtml=bottomList.map(bw=>`
+      <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:6px;background:#eff6ff;border:1px solid #bfdbfe;font-size:11.5px;color:#1e40af;font-weight:600;">
+        <span>${esc(bw.workerName)} (${esc(bfFormatComparisonQty(bw.totalQty))} ${esc(row.unit)})</span>
+        <button type="button" data-bf-remove-worker="batam" data-bf-worker="${esc(bw.workerName)}" data-bf-group-id="${esc(grp.id)}" style="background:transparent;border:0;color:#dc2626;cursor:pointer;font-weight:800;padding:0 2px;line-height:1;" title="Remove ${esc(bw.workerName)}">✕</button>
+      </span>`).join('');
+
+    const fChipsHtml=finishList.map(fw=>`
+      <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 7px;border-radius:6px;background:#f0fdf4;border:1px solid #86efac;font-size:11.5px;color:#166534;font-weight:600;">
+        <span>${esc(fw.workerName)} (${esc(bfFormatComparisonQty(fw.totalQty))} ${esc(row.unit)})</span>
+        <button type="button" data-bf-remove-worker="finish" data-bf-worker="${esc(fw.workerName)}" data-bf-group-id="${esc(grp.id)}" style="background:transparent;border:0;color:#dc2626;cursor:pointer;font-weight:800;padding:0 2px;line-height:1;" title="Remove ${esc(fw.workerName)}">✕</button>
+      </span>`).join('');
+
+    return `
+      <div class="card" data-bf-group-card="${esc(grp.id)}" style="margin-bottom:12px;padding:12px;border:1px solid #cbd5e1;background:#fff;border-radius:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <b style="font-size:14px;color:#0f172a;">${i+1}. ${esc(grp.name||('Group '+(i+1)))}</b>
+            <button type="button" class="btn ghost small" data-bf-rename-group="${esc(grp.id)}" style="padding:1px 6px;font-size:11px;" title="Rename Group">✎</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:12px;font-weight:700;color:${grpDiffColor};background:#f8fafc;padding:2px 8px;border-radius:4px;border:1px solid #e2e8f0;">
+              Diff: ${esc(grpDiffText)}
+            </span>
+            <button type="button" class="btn ghost small" data-bf-remove-group="${esc(grp.id)}" style="padding:1px 6px;font-size:11px;color:#dc2626;" title="Remove this group">🗑 Remove</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+          <div style="background:#f8fafc;padding:8px 10px;border-radius:6px;border:1px solid #e2e8f0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:11.5px;font-weight:700;color:#1e40af;">🔵 Bottom Men (${bottomList.length})</span>
+              <b style="font-size:12px;color:#1d4ed8;">${esc(bfFormatComparisonQty(bSubtotal))} ${esc(row.unit)}</b>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;min-height:26px;align-items:center;margin-bottom:6px;">
+              ${bChipsHtml||'<span style="font-size:11px;color:var(--muted);font-style:italic;">No Bottom Men assigned</span>'}
+            </div>
+            <div data-bf-group-drop-target="batam" data-bf-group-id="${esc(grp.id)}" style="border:1.5px dashed #93c5fd;border-radius:5px;padding:5px 8px;text-align:center;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:6px;">
+              <span style="font-size:11px;color:#3b82f6;">⇣ Drop Bottom Man</span>
+              <select data-bf-group-select="batam" data-bf-group-id="${esc(grp.id)}" style="font-size:11px;padding:2px 4px;margin:0;max-width:140px;">
+                <option value="">+ Add Bottom...</option>
+                ${unassignedBottom.map(bw=>`<option value="${esc(bw.workerName)}">${esc(bw.workerName)} (${esc(bfFormatComparisonQty(bw.totalQty))})</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div style="background:#f8fafc;padding:8px 10px;border-radius:6px;border:1px solid #e2e8f0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:11.5px;font-weight:700;color:#166534;">🟢 Finish Men (${finishList.length})</span>
+              <b style="font-size:12px;color:#15803d;">${esc(bfFormatComparisonQty(fSubtotal))} ${esc(row.unit)}</b>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;min-height:26px;align-items:center;margin-bottom:6px;">
+              ${fChipsHtml||'<span style="font-size:11px;color:var(--muted);font-style:italic;">No Finish Men assigned</span>'}
+            </div>
+            <div data-bf-group-drop-target="finish" data-bf-group-id="${esc(grp.id)}" style="border:1.5px dashed #86efac;border-radius:5px;padding:5px 8px;text-align:center;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:6px;">
+              <span style="font-size:11px;color:#16a34a;">⇣ Drop Finish Man</span>
+              <select data-bf-group-select="finish" data-bf-group-id="${esc(grp.id)}" style="font-size:11px;padding:2px 4px;margin:0;max-width:140px;">
+                <option value="">+ Add Finish...</option>
+                ${unassignedFinish.map(fw=>`<option value="${esc(fw.workerName)}">${esc(fw.workerName)} (${esc(bfFormatComparisonQty(fw.totalQty))})</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join(''):`<div class="empty" style="padding:24px 12px;text-align:center;background:#fff;border-radius:8px;border:1px dashed #cbd5e1;">Abhi koi Group nahi bana. <b>+ Add Group</b> dabayein ya <b>Auto-Group All</b> se groups banayein.</div>`;
+
+  const bottomPoolItems=unassignedBottom.map(bw=>`
+    <div draggable="true" data-bf-drag-side="batam" data-bf-drag-worker="${esc(bw.workerName)}" style="user-select:none;-webkit-user-select:none;cursor:grab;padding:6px 8px;border-radius:6px;border:1px solid #bfdbfe;background:#eff6ff;display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11.5px;">
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span style="color:#60a5fa;font-size:13px;cursor:grab;">⋮⋮</span>
+        <div>
+          <b style="color:#1e40af;">${esc(bw.workerName)}</b>
+          <div style="font-size:10px;color:var(--muted);">${bw.voucherCount} ${bw.voucherCount===1?'entry':'entries'}</div>
+        </div>
+      </div>
+      <b style="color:#1d4ed8;font-size:12px;">${esc(bfFormatComparisonQty(bw.totalQty))} ${esc(row.unit)}</b>
+    </div>`).join('');
+
+  const finishPoolItems=unassignedFinish.map(fw=>`
+    <div draggable="true" data-bf-drag-side="finish" data-bf-drag-worker="${esc(fw.workerName)}" style="user-select:none;-webkit-user-select:none;cursor:grab;padding:6px 8px;border-radius:6px;border:1px solid #86efac;background:#f0fdf4;display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:11.5px;">
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span style="color:#4ade80;font-size:13px;cursor:grab;">⋮⋮</span>
+        <div>
+          <b style="color:#166534;">${esc(fw.workerName)}</b>
+          <div style="font-size:10px;color:var(--muted);">${fw.voucherCount} ${fw.voucherCount===1?'entry':'entries'}</div>
+        </div>
+      </div>
+      <b style="color:#15803d;font-size:12px;">${esc(bfFormatComparisonQty(fw.totalQty))} ${esc(row.unit)}</b>
+    </div>`).join('');
+
+  return `<div class="bm-compact-page" id="bfWorkerMappingFullPage">
+    <div class="card" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn ghost small" id="bfBackToArticlesBtn">← Back to Articles</button>
+        <h2 class="page-title bm-page-title" style="margin:0;font-size:16px;">${esc(row.name)} (${esc(row.unit)}) — Dual-Pool Group Mapping</h2>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <select id="bfTemplateSelect" style="font-size:12px;padding:4px 8px;margin:0;max-width:200px;">
+          <option value="">Saved Templates (${savedTemplates.length})...</option>
+          ${savedTemplates.map(t=>`<option value="${esc(t.id)}" ${window.__bfSelectedTemplateId===t.id?'selected':''}>${esc(t.name)} (${(t.groups||[]).length} groups)</option>`).join('')}
+        </select>
+        <button type="button" class="btn ghost small" id="bfApplyTemplateBtn" title="Apply chosen template to current workers">Apply</button>
+        <button type="button" class="btn ghost small" id="bfSaveTemplateBtn" title="Save current group mapping as a reusable template">💾 Save as Template</button>
+        ${savedTemplates.length?`<button type="button" class="btn ghost small" id="bfDeleteTemplateBtn" title="Delete selected template" style="color:#dc2626;">Delete</button>`:''}
+        <button type="button" class="btn brass small" id="bfMultiPrintBtn" title="Print this mapping">Print</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:12px;">
+      <div class="card" style="margin:0;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;">
+        <div style="font-size:11px;color:#1e40af;font-weight:600;">Bottom Man Total</div>
+        <div style="font-size:18px;font-weight:800;color:#1d4ed8;margin-top:2px;">${esc(bfFormatComparisonQty(row.batamQty))} ${esc(row.unit)}</div>
+        <div style="font-size:10.5px;color:var(--muted);">${batamWorkers.length} Workers</div>
+      </div>
+      <div class="card" style="margin:0;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;">
+        <div style="font-size:11px;color:#166534;font-weight:600;">Finish Man Total</div>
+        <div style="font-size:18px;font-weight:800;color:#15803d;margin-top:2px;">${esc(bfFormatComparisonQty(row.finishQty))} ${esc(row.unit)}</div>
+        <div style="font-size:10.5px;color:var(--muted);">${finishWorkers.length} Workers</div>
+      </div>
+      <div class="card" style="margin:0;padding:8px 12px;background:#fff;border:1px solid var(--line);">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;">Overall Net Difference</div>
+        <div style="font-size:18px;font-weight:800;color:${diffColor};margin-top:2px;">${esc(diffLabel)}</div>
+        <div style="font-size:10.5px;color:var(--muted);">${esc(d.weekLabel)}</div>
+      </div>
+      <div class="card" style="margin:0;padding:8px 12px;background:#f8fafc;border:1px solid var(--line);">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;">Group Status</div>
+        <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:2px;">${groups.length} Groups</div>
+        <div style="font-size:10.5px;color:var(--muted);">${unassignedBottom.length} Bottom / ${unassignedFinish.length} Finish Free</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(310px,1fr);gap:12px;align-items:start;">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+          <div style="font-size:13px;font-weight:800;color:#1e293b;">Unified Worker Groups (${groups.length})</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button type="button" class="btn ghost small" id="bfAddGroupBtn" style="font-weight:700;">+ Add Group</button>
+            <button type="button" class="btn ghost small" id="bfAutoGroupBtn" title="Auto-create balanced groups">Auto-Group All</button>
+            <button type="button" class="btn ghost small" id="bfResetGroupsBtn" style="color:#dc2626;" title="Clear all groups">Reset Groups</button>
+          </div>
+        </div>
+        <div id="bfGroupsContainer">
+          ${groupsHtml}
+        </div>
+      </div>
+      <div style="position:sticky;top:10px;display:flex;flex-direction:column;gap:10px;">
+        <div class="card" style="margin:0;padding:10px 12px;border:1px solid #bfdbfe;background:#fff;border-radius:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <b style="font-size:12.5px;color:#1e40af;">🔵 Bottom Men Pool</b>
+            <span style="font-size:11px;font-weight:700;color:#2563eb;">${unassignedBottom.length} Free</span>
+          </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:6px;">Drag worker into any group's Bottom zone on the left.</div>
+          <div id="bfBottomPool" style="display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;padding-right:2px;">
+            ${bottomPoolItems||'<div style="font-size:11px;color:var(--muted);font-style:italic;text-align:center;padding:8px;">All Bottom Men assigned</div>'}
+          </div>
+        </div>
+        <div class="card" style="margin:0;padding:10px 12px;border:1px solid #86efac;background:#fff;border-radius:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <b style="font-size:12.5px;color:#166534;">🟢 Finish Men Pool</b>
+            <span style="font-size:11px;font-weight:700;color:#16a34a;">${unassignedFinish.length} Free</span>
+          </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:6px;">Drag worker into any group's Finish zone on the left.</div>
+          <div id="bfFinishPool" style="display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;padding-right:2px;">
+            ${finishPoolItems||'<div style="font-size:11px;color:var(--muted);font-style:italic;text-align:center;padding:8px;">All Finish Men assigned</div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function bindBfWorkerMappingHandlers(module,rowKey,baseDate){
+  const d=bfArticleComparisonData(module,null,baseDate);
+  const row=d.rows.find(r=>r.key===rowKey);if(!row)return;
+  const groupsKey='bf_article_groups_'+encodeURIComponent(d.weekLabel)+'_'+encodeURIComponent(row.key);
+  const multiStorageKey='bf_multi_pairs_'+encodeURIComponent(d.weekLabel)+'_'+encodeURIComponent(row.key);
+
+  let groups=getBfArticleGroups(d.weekLabel,row.key);
+
+  const saveGroups=()=>{
+    try{
+      localStorage.setItem(groupsKey,JSON.stringify(groups));
+      const syncAssignments={};
+      groups.forEach(g=>{
+        const primaryBw=g.bottomWorkers[0]||'';
+        (g.finishWorkers||[]).forEach(fw=>{syncAssignments[fw]=primaryBw;});
+      });
+      localStorage.setItem(multiStorageKey,JSON.stringify(syncAssignments));
+    }catch(_e){}
+  };
+
+  const aggWorkers=items=>{
+    const map=new Map();
+    (items||[]).forEach(item=>{
+      const k=String(item.workerName);
+      const ex=map.get(k)||{side:item.side,sideLabel:item.sideLabel,workerName:k,unit:item.unit,totalQty:0,voucherCount:0};
+      ex.totalQty=Math.round((ex.totalQty+item.qty)*1000)/1000;
+      ex.voucherCount++;
+      map.set(k,ex);
+    });
+    return [...map.values()].sort((a,b)=>b.totalQty-a.totalQty||a.workerName.localeCompare(b.workerName));
+  };
+  const batamWorkers=aggWorkers(row.batamItems);
+  const finishWorkers=aggWorkers(row.finishItems);
+
+  const assignWorkerToGroup=(side,workerName,groupId)=>{
+    const grp=groups.find(g=>String(g.id)===String(groupId));if(!grp)return;
+    groups.forEach(g=>{
+      if(side==='batam')g.bottomWorkers=(g.bottomWorkers||[]).filter(w=>w!==workerName);
+      else g.finishWorkers=(g.finishWorkers||[]).filter(w=>w!==workerName);
+    });
+    if(side==='batam'){
+      if(!grp.bottomWorkers.includes(workerName))grp.bottomWorkers.push(workerName);
+    }else{
+      if(!grp.finishWorkers.includes(workerName))grp.finishWorkers.push(workerName);
+    }
+    saveGroups();
+    refreshFull();
+  };
+
+  const rebind=()=>{
+    const page=document.getElementById('bfWorkerMappingFullPage');
+    if(!page)return;
+    let draggedData=null;
+
+    page.querySelectorAll('[data-bf-drag-worker]').forEach(el=>{
+      el.addEventListener('dragstart',e=>{
+        draggedData={side:el.dataset.bfDragSide,workerName:el.dataset.bfDragWorker};
+        window.__bfDraggedData=draggedData;
+        if(e.dataTransfer){
+          const payload=JSON.stringify(draggedData);
+          e.dataTransfer.setData('text/plain',payload);
+          e.dataTransfer.setData('application/json',payload);
+          e.dataTransfer.effectAllowed='move';
+        }
+      });
+    });
+
+    page.querySelectorAll('[data-bf-group-drop-target],[data-bf-group-card]').forEach(slot=>{
+      slot.addEventListener('dragover',e=>{
+        e.preventDefault();
+        if(e.dataTransfer)e.dataTransfer.dropEffect='move';
+        slot.style.borderColor='#2563eb';
+        slot.style.background='#eff6ff';
+      });
+      slot.addEventListener('dragleave',e=>{
+        if(!slot.contains(e.relatedTarget)){
+          slot.style.borderColor='';
+          slot.style.background='';
+        }
+      });
+      slot.addEventListener('drop',e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        slot.style.borderColor='';
+        slot.style.background='';
+        let data=draggedData||window.__bfDraggedData;
+        if(!data&&e.dataTransfer){
+          try{
+            const raw=e.dataTransfer.getData('application/json')||e.dataTransfer.getData('text/plain');
+            if(raw)data=JSON.parse(raw);
+          }catch(_e){
+            const txt=e.dataTransfer.getData('text/plain');
+            if(txt)data={workerName:txt};
+          }
+        }
+        if(!data||!data.workerName)return;
+        const targetGroupId=slot.dataset.bfGroupId||slot.dataset.bfGroupCard;
+        const targetSide=slot.dataset.bfGroupDropTarget||data.side;
+        if(targetGroupId&&targetSide){
+          assignWorkerToGroup(targetSide,data.workerName,targetGroupId);
+        }
+      });
+    });
+
+    page.querySelectorAll('[data-bf-group-select]').forEach(sel=>{
+      sel.addEventListener('change',()=>{
+        const side=sel.dataset.bfGroupSelect;
+        const groupId=sel.dataset.bfGroupId;
+        const workerName=sel.value;
+        if(side&&groupId&&workerName){
+          assignWorkerToGroup(side,workerName,groupId);
+        }
+      });
+    });
+
+    page.addEventListener('click',e=>{
+      const removeBtn=e.target.closest('[data-bf-remove-worker]');
+      if(removeBtn){
+        e.preventDefault();
+        e.stopPropagation();
+        const side=removeBtn.dataset.bfRemoveWorker;
+        const workerName=removeBtn.dataset.bfWorker;
+        const groupId=removeBtn.dataset.bfGroupId;
+        const grp=groups.find(g=>String(g.id)===String(groupId));
+        if(grp){
+          if(side==='batam')grp.bottomWorkers=(grp.bottomWorkers||[]).filter(w=>w!==workerName);
+          else grp.finishWorkers=(grp.finishWorkers||[]).filter(w=>w!==workerName);
+          saveGroups();
+          refreshFull();
+        }
+        return;
+      }
+      const renameBtn=e.target.closest('[data-bf-rename-group]');
+      if(renameBtn){
+        e.preventDefault();
+        e.stopPropagation();
+        const grp=groups.find(g=>String(g.id)===String(renameBtn.dataset.bfRenameGroup));
+        if(grp){
+          const newName=window.prompt('Group ka naya naam darj karein:',grp.name);
+          if(newName&&newName.trim()){
+            grp.name=newName.trim();
+            saveGroups();
+            refreshFull();
+          }
+        }
+        return;
+      }
+      const removeGroupBtn=e.target.closest('[data-bf-remove-group]');
+      if(removeGroupBtn){
+        e.preventDefault();
+        e.stopPropagation();
+        const gid=removeGroupBtn.dataset.bfRemoveGroup;
+        groups=groups.filter(g=>String(g.id)!==String(gid));
+        saveGroups();
+        refreshFull();
+        return;
+      }
+    });
+  };
+
+  const refreshFull=()=>{
+    const main=document.getElementById('mainArea');
+    if(main){main.innerHTML=renderBfFullPageArticleMapping(module,rowKey,baseDate);bindBfWorkerMappingHandlers(module,rowKey,baseDate);}
+  };
+  rebind();
+
+  document.getElementById('bfBackToArticlesBtn')?.addEventListener('click',()=>{
+    window.__bfCmpDetailArticle=null;
+    const main=document.getElementById('mainArea');
+    if(main)main.innerHTML=pageBfArticleComparison(module);
+    bindBfArticleComparisonHandlers(module);
+  });
+
+  document.getElementById('bfAddGroupBtn')?.addEventListener('click',()=>{
+    groups.push({id:'grp_'+Date.now(),name:'Group '+(groups.length+1),bottomWorkers:[],finishWorkers:[]});
+    saveGroups();
+    refreshFull();
+  });
+
+  document.getElementById('bfAutoGroupBtn')?.addEventListener('click',()=>{
+    groups=[];
+    const sortedBottom=batamWorkers.slice().sort((a,b)=>b.totalQty-a.totalQty);
+    const sortedFinish=finishWorkers.slice().sort((a,b)=>b.totalQty-a.totalQty);
+    if(!sortedBottom.length){
+      if(sortedFinish.length){
+        groups.push({id:'grp_'+Date.now(),name:'Group 1',bottomWorkers:[],finishWorkers:sortedFinish.map(f=>f.workerName)});
+      }
+    }else{
+      const grpStates=sortedBottom.map((bw,idx)=>({
+        id:'grp_'+Date.now()+'_'+idx,
+        name:'Group: '+bw.workerName,
+        bottomWorkers:[bw.workerName],
+        finishWorkers:[],
+        remaining:bw.totalQty
+      }));
+      sortedFinish.forEach(fw=>{
+        grpStates.sort((a,b)=>b.remaining-a.remaining);
+        const chosen=grpStates[0];
+        if(chosen){
+          chosen.finishWorkers.push(fw.workerName);
+          chosen.remaining=Math.round((chosen.remaining-fw.totalQty)*1000)/1000;
+        }
+      });
+      groups=grpStates.map(g=>({id:g.id,name:g.name,bottomWorkers:g.bottomWorkers,finishWorkers:g.finishWorkers}));
+    }
+    saveGroups();
+    refreshFull();
+  });
+
+  document.getElementById('bfResetGroupsBtn')?.addEventListener('click',()=>{
+    if(!window.confirm('Kya aap is article ke active groups ko reset karna chahte hain? (Aap ke Saved Templates mehfooz rahengi)'))return;
+    groups=[];
+    window.__bfSelectedTemplateId=null;
+    saveGroups();
+    try{
+      localStorage.removeItem('bf_pair_'+encodeURIComponent(d.weekLabel)+'_'+encodeURIComponent(row.key));
+    }catch(_e){}
+    toast('Active working groups reset ho gaye. Saved templates mehfooz hain.');
+    refreshFull();
+  });
+
+  const applyTemplateById=(tplId)=>{
+    if(!tplId)return;
+    let templates=[];
+    try{templates=JSON.parse(localStorage.getItem('bf_saved_group_templates'))||[];}catch(_e){}
+    const tpl=templates.find(t=>String(t.id)===String(tplId));
+    if(!tpl||(!tpl.groups&&!tpl.assignments)){toast('Template nahi mila.');return;}
+    const norm=s=>String(s||'').trim().toLowerCase();
+    if(tpl.groups){
+      groups=tpl.groups.map((tg,idx)=>{
+        const validBottom=(tg.bottomWorkers||[]).map(bw=>{
+          const found=batamWorkers.find(b=>norm(b.workerName)===norm(bw));
+          return found?found.workerName:null;
+        }).filter(Boolean);
+        const validFinish=(tg.finishWorkers||[]).map(fw=>{
+          const found=finishWorkers.find(f=>norm(f.workerName)===norm(fw));
+          return found?found.workerName:null;
+        }).filter(Boolean);
+        return {
+          id:'grp_'+(idx+1)+'_'+Date.now(),
+          name:tg.name||('Group '+(idx+1)),
+          bottomWorkers:validBottom,
+          finishWorkers:validFinish
+        };
+      }).filter(g=>g.bottomWorkers.length>0||g.finishWorkers.length>0);
+      if(!groups.length){
+        toast('Is template ke workers is hafte ke article mein nahi mile.');
+        return;
+      }
+      saveGroups();
+      toast(`Template "${tpl.name}" apply ho gaya (${groups.length} groups loaded).`);
+    }else if(tpl.assignments){
+      const bwMap=new Map();
+      for(const [fw,bw] of Object.entries(tpl.assignments)){
+        const matchedBw=batamWorkers.find(b=>norm(b.workerName)===norm(bw));
+        const matchedFw=finishWorkers.find(f=>norm(f.workerName)===norm(fw));
+        const bwName=matchedBw?matchedBw.workerName:bw;
+        const fwName=matchedFw?matchedFw.workerName:null;
+        if(matchedBw||matchedFw){
+          if(!bwMap.has(bwName))bwMap.set(bwName,[]);
+          if(fwName)bwMap.get(bwName).push(fwName);
+        }
+      }
+      let i=1;
+      groups=[];
+      for(const [bw,fws] of bwMap.entries()){
+        const hasBw=batamWorkers.some(b=>norm(b.workerName)===norm(bw));
+        groups.push({
+          id:'grp_'+i+'_'+Date.now(),
+          name:'Group: '+bw,
+          bottomWorkers:hasBw?[bw]:[],
+          finishWorkers:fws
+        });
+        i++;
+      }
+      groups=groups.filter(g=>g.bottomWorkers.length>0||g.finishWorkers.length>0);
+      if(!groups.length){
+        toast('Is template ke workers is hafte ke article mein nahi mile.');
+        return;
+      }
+      saveGroups();
+      toast(`Template "${tpl.name}" apply ho gaya (${groups.length} groups created).`);
+    }
+    window.__bfSelectedTemplateId=tplId;
+    refreshFull();
+  };
+
+  document.getElementById('bfTemplateSelect')?.addEventListener('change',e=>{
+    const tplId=e.target.value;
+    window.__bfSelectedTemplateId=tplId;
+    if(tplId)applyTemplateById(tplId);
+  });
+
+  document.getElementById('bfSaveTemplateBtn')?.addEventListener('click',()=>{
+    if(!groups.length){toast('Pehle kam az kam ek group banayein.');return;}
+    const defaultName=`Template ${new Date().toLocaleDateString('en-GB')}`;
+    const name=window.prompt('Group Template ka naam darj karein:',defaultName);
+    if(!name||!name.trim())return;
+    let templates=[];
+    try{templates=JSON.parse(localStorage.getItem('bf_saved_group_templates'))||[];}catch(_e){}
+    const trimmed=name.trim();
+    const existingIdx=templates.findIndex(t=>t.name.toLowerCase()===trimmed.toLowerCase());
+    const tplId=existingIdx>=0?templates[existingIdx].id:'tpl_'+Date.now();
+    const templateData={
+      id:tplId,
+      name:trimmed,
+      savedAt:new Date().toISOString(),
+      articleName:row.name,
+      groups:groups.map(g=>({name:g.name,bottomWorkers:[...g.bottomWorkers],finishWorkers:[...g.finishWorkers]}))
+    };
+    if(existingIdx>=0){
+      if(!window.confirm(`"${trimmed}" naam ka template pehle se mojood hai. Kya aap isay overwrite karna chahte hain?`))return;
+      templates[existingIdx]=templateData;
+    }else{
+      templates.push(templateData);
+    }
+    try{localStorage.setItem('bf_saved_group_templates',JSON.stringify(templates));}catch(_e){}
+    window.__bfSelectedTemplateId=tplId;
+    toast(`Group template "${trimmed}" mehfooz ho gaya (${groups.length} groups).`);
+    refreshFull();
+  });
+
+  document.getElementById('bfApplyTemplateBtn')?.addEventListener('click',()=>{
+    const sel=document.getElementById('bfTemplateSelect');
+    const tplId=sel?.value||window.__bfSelectedTemplateId;
+    if(!tplId){toast('Baraye meherbani drop-down se koi saved template select karein.');return;}
+    applyTemplateById(tplId);
+  });
+
+  document.getElementById('bfDeleteTemplateBtn')?.addEventListener('click',()=>{
+    const sel=document.getElementById('bfTemplateSelect');
+    const tplId=sel?.value||window.__bfSelectedTemplateId;
+    if(!tplId){toast('Baraye meherbani pehle delete karne ke liye template select karein.');return;}
+    let templates=[];
+    try{templates=JSON.parse(localStorage.getItem('bf_saved_group_templates'))||[];}catch(_e){}
+    const tpl=templates.find(t=>t.id===tplId);
+    if(!tpl)return;
+    if(!window.confirm(`Kya aap waqayi template "${tpl.name}" ko delete karna chahte hain?`))return;
+    templates=templates.filter(t=>t.id!==tplId);
+    try{localStorage.setItem('bf_saved_group_templates',JSON.stringify(templates));}catch(_e){}
+    window.__bfSelectedTemplateId=null;
+    toast(`Template "${tpl.name}" delete kar diya gaya.`);
+    refreshFull();
+  });
+
+  document.getElementById('bfMultiPrintBtn')?.addEventListener('click',()=>{
+    const page=document.getElementById('bfWorkerMappingFullPage');
+    if(page)printBatamMansHtml(page.outerHTML,`${row.name} (${row.unit}) — Worker Mapping`);
+  });
+}
 function pageBfArticleComparison(module='batam'){
   const weeks=bfComparisonWeeks();
   const months=[];const seenMonths=new Set();
@@ -21656,6 +22419,9 @@ function pageBfArticleComparison(module='batam'){
   const filteredWeeks=monthVal==='all'?weeks:weeks.filter(w=>w.monthKey===monthVal);
   const activeWeek=filteredWeeks.find(w=>w.weekKey===window.__bfCmpWeek)||filteredWeeks[0]||weeks[0];
   const idx=filteredWeeks.findIndex(w=>w.weekKey===activeWeek?.weekKey);
+  if(window.__bfCmpDetailArticle&&activeWeek){
+    return renderBfFullPageArticleMapping(module,window.__bfCmpDetailArticle,activeWeek.start);
+  }
   return `<div class="bm-compact-page">
     <h2 class="page-title bm-page-title">Article-Wise Production Comparison</h2>
     <div class="card" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;">
@@ -21677,6 +22443,11 @@ function pageBfArticleComparison(module='batam'){
 }
 function bindBfArticleComparisonHandlers(module){
   const weeks=bfComparisonWeeks();
+  const activeWeekEntry=weeks.find(w=>w.weekKey===window.__bfCmpWeek)||weeks[0];
+  if(window.__bfCmpDetailArticle&&activeWeekEntry){
+    bindBfWorkerMappingHandlers(module,window.__bfCmpDetailArticle,activeWeekEntry.start);
+    return;
+  }
   const monthEl=document.getElementById('bfCmpMonthFilter'),weekEl=document.getElementById('bfCmpWeekSelect'),prevBtn=document.getElementById('bfCmpPrevWeek'),nextBtn=document.getElementById('bfCmpNextWeek');
   if(!weekEl)return;
   let filteredWeeks=monthEl?.value&&monthEl.value!=='all'?weeks.filter(w=>w.monthKey===monthEl.value):weeks;
@@ -21688,6 +22459,12 @@ function bindBfArticleComparisonHandlers(module){
   const renderSelectedWeek=weekKey=>{
     const entry=filteredWeeks.find(w=>w.weekKey===weekKey)||filteredWeeks[0];if(!entry)return;
     window.__bfCmpWeek=entry.weekKey;
+    if(window.__bfCmpDetailArticle){
+      const main=document.getElementById('mainArea');
+      if(main)main.innerHTML=pageBfArticleComparison(module);
+      bindBfArticleComparisonHandlers(module);
+      return;
+    }
     const comp=document.getElementById('bfComparisonCardWrap');if(comp)comp.innerHTML=bfComparisonCardHtml(module,null,entry.start);
     weekEl.value=entry.weekKey;
     syncNavButtons();
@@ -21706,7 +22483,11 @@ function bindBfArticleComparisonHandlers(module){
   const compWrap=document.getElementById('bfComparisonCardWrap');
   const openCmpFromEvent=el=>{
     const entry=filteredWeeks.find(w=>w.weekKey===weekEl.value)||weeks.find(w=>w.weekKey===weekEl.value);
-    openBfComparisonDetailModal(module,el.dataset.bfCmpKey,entry?entry.start:new Date(),el.dataset.bfCmpSide||'all');
+    if(entry)window.__bfCmpWeek=entry.weekKey;
+    window.__bfCmpDetailArticle=el.dataset.bfCmpKey;
+    const main=document.getElementById('mainArea');
+    if(main){main.innerHTML=pageBfArticleComparison(module);bindBfArticleComparisonHandlers(module);}
+    else openBfComparisonDetailModal(module,el.dataset.bfCmpKey,entry?entry.start:new Date(),el.dataset.bfCmpSide||'all');
   };
   compWrap?.addEventListener('click',event=>{const cell=event.target?.closest?.('[data-bf-cmp-key]');if(cell)openCmpFromEvent(cell);});
   compWrap?.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){const cell=event.target?.closest?.('[data-bf-cmp-key]');if(cell){event.preventDefault();openCmpFromEvent(cell);}}});
