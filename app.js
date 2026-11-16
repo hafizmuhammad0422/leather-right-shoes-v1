@@ -135,7 +135,7 @@ function hasUnsavedCloudChanges(){
   return cloudSavedRevision < cloudChangeRevision;
 }
 
-const CLOUD_SETTINGS_ROOTS=["shoesPressManProduction","shoesLaminationShopsProduction","supplierProductionBilling","upperArticles","upperMaterials","upperDistributions","nextUpperVoucherNo","upperPendingRecords","upperManualPendingResets","upperWeeklyLabourRecords","productionKharchaAdjustments","nextBillNo","batamMansProduction","batamMansProductionArticles","batamMansProductionMaterials","batamMansProductionVouchers","batamMansMaterialDistributions","batamMansExpenses","batamMansPendingRecords","nextBatamMansVoucherNo","batamMansVerificationSlips","nextBatamMansSlipNo","finishedMansProduction","finishedMansProductionArticles","finishedMansProductionMaterials","finishedMansProductionVouchers","finishedMansMaterialDistributions","finishedMansExpenses","finishedMansPendingRecords","nextFinishedMansVoucherNo","finishedMansVerificationSlips","nextFinishedMansSlipNo","gasSupplier","gasSupplierWeeks","gasPayments","gasExtraBalances","gasSupplierBills","gasSupplierBillAccount","nextGasVoucherNo","shoeBoxSuppliers","nextShoeBoxReceiveVoucherNo","shoeBoxReceiveVoucherFields"];
+const CLOUD_SETTINGS_ROOTS=["shoesPressManProduction","shoesLaminationShopsProduction","supplierProductionBilling","upperArticles","upperMaterials","upperDistributions","nextUpperVoucherNo","upperPendingRecords","upperManualPendingResets","upperWeeklyLabourRecords","productionKharchaAdjustments","nextBillNo","batamMansProduction","batamMansProductionArticles","batamMansProductionMaterials","batamMansProductionVouchers","batamMansMaterialDistributions","batamMansExpenses","batamMansPendingRecords","nextBatamMansVoucherNo","batamMansVerificationSlips","nextBatamMansSlipNo","finishedMansProduction","finishedMansProductionArticles","finishedMansProductionMaterials","finishedMansProductionVouchers","finishedMansMaterialDistributions","finishedMansExpenses","finishedMansPendingRecords","nextFinishedMansVoucherNo","finishedMansVerificationSlips","nextFinishedMansSlipNo","gasSupplier","gasSupplierWeeks","gasPayments","gasExtraBalances","gasSupplierBills","gasSupplierBillAccount","nextGasVoucherNo","shoeBoxSuppliers","nextShoeBoxReceiveVoucherNo","shoeBoxReceiveVoucherFields","factorySale","manualBills","nextManualBillNo","nextDispatchVoucherNo"];
 const CLOUD_SAVE_SCOPES={
   uiLayout:{datasets:['settings'],sections:[],reads:['settings']},
   worker:{datasets:['workers','auditLog'],sections:[],reads:['settings','workers']},
@@ -150,7 +150,8 @@ const CLOUD_SAVE_SCOPES={
   weekly:{datasets:['auditLog'],sections:['upperDistributions','upperWeeklyLabourRecords'],reads:['settings','workers']},
   adjustment:{datasets:[],sections:['productionKharchaAdjustments'],reads:['settings','workers']},
   gas:{datasets:['gasVouchers','auditLog'],sections:['gasSupplier','gasSupplierWeeks','gasPayments','gasExtraBalances','gasSupplierBills','gasSupplierBillAccount','nextGasVoucherNo'],reads:['settings','gasVouchers']},
-  shoeBox:{datasets:['auditLog'],sections:['shoeBoxSuppliers','nextShoeBoxReceiveVoucherNo','shoeBoxReceiveVoucherFields'],reads:['settings']}
+  shoeBox:{datasets:['auditLog'],sections:['shoeBoxSuppliers','nextShoeBoxReceiveVoucherNo','shoeBoxReceiveVoucherFields'],reads:['settings']},
+  factorySale:{datasets:['auditLog'],sections:['factorySale'],reads:['settings']}
 };
 let cloudBaselines={},cloudBaselineValues={},cloudNeedsReload=false,cloudReconcilePromise=null;
 function rememberCloudValues(state){
@@ -357,7 +358,44 @@ async function refreshAuthoritativeBaselines(scopeName=null){
       for(const section of scope.sections){
         const remoteVal=payload.state.settings?.[section];
         const localVal=settings[section];
-        if(Array.isArray(localVal) && Array.isArray(remoteVal)){
+        if(section==='factorySale' && typeof localVal==='object' && localVal && typeof remoteVal==='object' && remoteVal){
+          const merged={...remoteVal,...localVal};
+          if(Array.isArray(localVal.manualBills) && Array.isArray(remoteVal.manualBills)){
+            const localIds=new Set(localVal.manualBills.map(b=>b?.id).filter(Boolean));
+            const missingFromRemote=remoteVal.manualBills.filter(b=>b?.id && !localIds.has(b.id));
+            if(missingFromRemote.length > 0){
+              merged.manualBills=[...remoteVal.manualBills, ...localVal.manualBills.filter(b=>!remoteVal.manualBills.some(r=>r.id===b.id))];
+            }
+          }
+          if(typeof localVal.nextManualBillNo==='number' && typeof remoteVal.nextManualBillNo==='number'){
+            merged.nextManualBillNo=Math.max(localVal.nextManualBillNo, remoteVal.nextManualBillNo);
+          }
+          if(typeof localVal.nextDispatchVoucherNo==='number' && typeof remoteVal.nextDispatchVoucherNo==='number'){
+            merged.nextDispatchVoucherNo=Math.max(localVal.nextDispatchVoucherNo, remoteVal.nextDispatchVoucherNo);
+          }
+          if(Array.isArray(localVal.shopkeepers) && Array.isArray(remoteVal.shopkeepers)){
+            const shopkeepers=remoteVal.shopkeepers.map(remoteShop=>{
+              const localShop=localVal.shopkeepers.find(s=>String(s.id)===String(remoteShop.id));
+              if(!localShop) return remoteShop;
+              const mergedShop={...remoteShop,...localShop};
+              if(Array.isArray(localShop.dispatchVouchers) && Array.isArray(remoteShop.dispatchVouchers)){
+                const rVoucherIds=new Set(remoteShop.dispatchVouchers.map(v=>v?.id).filter(Boolean));
+                const lVouchers=localShop.dispatchVouchers.filter(v=>v?.id && !rVoucherIds.has(v.id));
+                mergedShop.dispatchVouchers=[...remoteShop.dispatchVouchers, ...lVouchers];
+              }
+              if(Array.isArray(localShop.dispatches) && Array.isArray(remoteShop.dispatches)){
+                const rDispIds=new Set(remoteShop.dispatches.map(d=>d?.id).filter(Boolean));
+                const lDisps=localShop.dispatches.filter(d=>d?.id && !rDispIds.has(d.id));
+                mergedShop.dispatches=[...remoteShop.dispatches, ...lDisps];
+              }
+              return mergedShop;
+            });
+            const remoteShopIds=new Set(remoteVal.shopkeepers.map(s=>String(s.id)));
+            const localOnlyShops=localVal.shopkeepers.filter(s=>!remoteShopIds.has(String(s.id)));
+            merged.shopkeepers=[...shopkeepers, ...localOnlyShops];
+          }
+          settings.factorySale=merged;
+        } else if(Array.isArray(localVal) && Array.isArray(remoteVal)){
           const localIds=new Set(localVal.map(item=>item?.id).filter(Boolean));
           const missingFromRemote=remoteVal.filter(item=>item?.id && !localIds.has(item.id));
           if(missingFromRemote.length > 0){

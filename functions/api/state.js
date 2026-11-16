@@ -53,7 +53,8 @@ const SETTINGS_ROOTS = [
   "finishedMansProductionVouchers", "finishedMansMaterialDistributions", "finishedMansExpenses",
   "finishedMansPendingRecords", "nextFinishedMansVoucherNo", "finishedMansVerificationSlips", "nextFinishedMansSlipNo",
   "gasSupplier", "gasSupplierWeeks", "gasPayments", "gasExtraBalances", "gasSupplierBills", "gasSupplierBillAccount", "nextGasVoucherNo",
-  "shoeBoxSuppliers", "nextShoeBoxReceiveVoucherNo", "shoeBoxReceiveVoucherFields"
+  "shoeBoxSuppliers", "nextShoeBoxReceiveVoucherNo", "shoeBoxReceiveVoucherFields",
+  "factorySale", "manualBills", "nextManualBillNo", "nextDispatchVoucherNo"
 ];
 async function baselineHashRaw(encoded) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(encoded));
@@ -101,7 +102,7 @@ async function savePartialState({ env, request }, body) {
       (sectionsMode && name === 'settings') ||
       (name === 'settings' ? !isPlainObject(updates[name]) : !Array.isArray(updates[name]))) ||
       roots.some(root => !SETTINGS_ROOTS.includes(root) ||
-        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling', 'gasSupplier', 'gasSupplierBillAccount', 'shoeBoxReceiveVoucherFields'].includes(root)
+        (['shoesPressManProduction', 'shoesLaminationShopsProduction', 'supplierProductionBilling', 'gasSupplier', 'gasSupplierBillAccount', 'shoeBoxReceiveVoucherFields', 'factorySale'].includes(root)
           ? !isPlainObject(body.set[root]) : root.startsWith('next')
           ? !Number.isSafeInteger(body.set[root]) || body.set[root] < 0 : !Array.isArray(body.set[root]))) ||
       expected.some(key => !(RUNTIME_DATASETS.includes(key) ||
