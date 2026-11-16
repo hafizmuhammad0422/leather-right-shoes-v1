@@ -320,6 +320,61 @@ function scheduleCloudSync(markChange=true){
 
 // Critical Upper writes get their own revision and block ordinary snapshots until
 // success or rollback. This keeps the D1 state and the visible app state aligned.
+function autoDetectSaveScope(){
+  if(!cloudBaselines || !Object.keys(cloudBaselines).length) return null;
+  const state=getCurrentState(false);
+  const originalSettings=JSON.parse(cloudBaselineValues.settings||'{}');
+  const changedDatasets=Object.keys(state).filter(name=>name!=='settings' && JSON.stringify(state[name])!==cloudBaselineValues[name]);
+  const changedSections=[...new Set([...Object.keys(settings),...Object.keys(originalSettings)])].filter(root=>{
+    const before=CLOUD_SETTINGS_ROOTS.includes(root)?cloudBaselineValues['settings/'+root]:JSON.stringify(originalSettings[root]);
+    return JSON.stringify(settings[root])!==before;
+  });
+  if(!changedDatasets.length && !changedSections.length) return null;
+  const nonAuditDatasets=changedDatasets.filter(d=>d!=='auditLog');
+
+  for(const [scopeName, scope] of Object.entries(CLOUD_SAVE_SCOPES)){
+    const datasetMatch=nonAuditDatasets.every(name=>scope.datasets.includes(name));
+    const sectionMatch=changedSections.every(root=>scope.sections.includes(root));
+    if(datasetMatch && sectionMatch){
+      return scopeName;
+    }
+  }
+  return null;
+}
+
+async function refreshAuthoritativeBaselines(scopeName=null){
+  try{
+    const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{cache:'no-store'});
+    if(!res.ok) return false;
+    const payload=await res.json();
+    if(!payload?.state || !payload?.baselines) return false;
+    
+    Object.assign(cloudBaselines, payload.baselines);
+    rememberCloudValues(payload.state);
+    
+    if(scopeName && CLOUD_SAVE_SCOPES[scopeName]){
+      const scope=CLOUD_SAVE_SCOPES[scopeName];
+      for(const section of scope.sections){
+        const remoteVal=payload.state.settings?.[section];
+        const localVal=settings[section];
+        if(Array.isArray(localVal) && Array.isArray(remoteVal)){
+          const localIds=new Set(localVal.map(item=>item?.id).filter(Boolean));
+          const missingFromRemote=remoteVal.filter(item=>item?.id && !localIds.has(item.id));
+          if(missingFromRemote.length > 0){
+            settings[section]=[...remoteVal, ...localVal.filter(item=>!remoteVal.some(r=>r.id===item.id))];
+          }
+        } else if(section.startsWith('next') && typeof localVal==='number' && typeof remoteVal==='number'){
+          settings[section]=Math.max(localVal, remoteVal);
+        }
+      }
+    }
+    return true;
+  }catch(err){
+    console.error('Failed to refresh authoritative baselines for retry', err);
+    return false;
+  }
+}
+
 async function saveCriticalCloudState(scopeName=null){
   if(cloudHydrationPromise && !cloudReady){
     try{ await cloudHydrationPromise; }catch(_e){}
@@ -337,35 +392,47 @@ async function saveCriticalCloudState(scopeName=null){
   criticalCloudSaveActive=true;
   setCriticalUiLock(true);
 
+  const targetScope=scopeName || autoDetectSaveScope();
   const revision=++cloudChangeRevision;
   let ok=false;
-  try{
-    const snapshot=scopeName?capturePartialCloudState(scopeName):captureCloudState(true);
-    await enqueueCloudWrite(snapshot);
-    cloudSavedRevision=Math.max(cloudSavedRevision,revision);
-    ok=true;
-    cloudRetryCount=0;
-    clearTimeout(cloudRetryTimer);
-    cloudRetryTimer=null;
-    return true;
-  }catch(e){
-    console.error('Critical cloud save failed',e);
-    cloudNeedsReload=true;
-    clearTimeout(cloudSyncTimer);clearTimeout(cloudRetryTimer);
-    setTimeout(()=>reconcileCloudAfterCriticalRollback(),0);
-    return false;
-  }finally{
-    criticalCloudSaveActive=false;
-    setCriticalUiLock(false);
-    const shouldFlush=deferredCloudSync;
-    deferredCloudSync=false;
-
-    // IMPORTANT: on failure the caller must rollback first, then call
-    // reconcileCloudAfterCriticalRollback(). Never capture the failed mutation here.
-    if(ok && (shouldFlush || hasUnsavedCloudChanges())){
-      setTimeout(()=>scheduleCloudSync(false),0);
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      const snapshot=targetScope?capturePartialCloudState(targetScope):captureCloudState(true);
+      await enqueueCloudWrite(snapshot);
+      cloudSavedRevision=Math.max(cloudSavedRevision,revision);
+      ok=true;
+      cloudRetryCount=0;
+      clearTimeout(cloudRetryTimer);
+      cloudRetryTimer=null;
+      break;
+    }catch(e){
+      console.warn(`Critical cloud save attempt ${attempt+1} failed:`, e?.message||e);
+      const isConflict=String(e?.message||'').toLowerCase().includes('conflict') || e?.status===409;
+      if(attempt===0 && isConflict && cloudReady){
+        const refreshed=await refreshAuthoritativeBaselines(targetScope);
+        if(refreshed){
+          continue;
+        }
+      }
+      console.error('Critical cloud save failed permanently', e);
+      cloudNeedsReload=true;
+      clearTimeout(cloudSyncTimer);clearTimeout(cloudRetryTimer);
+      setTimeout(()=>reconcileCloudAfterCriticalRollback(),0);
+      break;
     }
   }
+
+  criticalCloudSaveActive=false;
+  setCriticalUiLock(false);
+  const shouldFlush=deferredCloudSync;
+  deferredCloudSync=false;
+
+  // IMPORTANT: on failure the caller must rollback first, then call
+  // reconcileCloudAfterCriticalRollback(). Never capture the failed mutation here.
+  if(ok && (shouldFlush || hasUnsavedCloudChanges())){
+    setTimeout(()=>scheduleCloudSync(false),0);
+  }
+  return ok;
 }
 
 async function reconcileCloudAfterCriticalRollback(){
@@ -395,11 +462,12 @@ function setCriticalUiLock(locked){
   const app=document.getElementById('appBody');
   if(!app) return;
   if(locked){
-    app.setAttribute('inert','');
     app.setAttribute('aria-busy','true');
+    app.classList.add('saving-critical');
   }else{
     app.removeAttribute('inert');
     app.removeAttribute('aria-busy');
+    app.classList.remove('saving-critical');
   }
 }
 
