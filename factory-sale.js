@@ -1114,7 +1114,7 @@ function supplierProductionBillAccountState(workerId){const account=settings.bil
 function supplierProductionReceivedBillData(worker){
  const {start,end}=getUpperWorkWeekRange(new Date()),history=(settings.billing?.bills||[]).filter(b=>billAccountKeepsReceived(b)&&String(b.shopkeeperId)===String(worker.id)),closed=new Set(history.flatMap(b=>b.sourceRecordIds||[]).map(String)),lines=new Map(),sourceRecordIds=[];
  const released=billAccountReleasedIds(settings.billing?.bills,worker.id,'shopkeeperId');
- const records=(worker.dispatches||[]).filter(record=>{const date=new Date(record.date);return (date>=start&&date<end&&date.getDay()!==5)||released.has(String(record.id));}),unbilled=records.filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'sent record');
+ const records=(worker.dispatches||[]).filter(record=>{const date=new Date(record.date);return !closed.has(String(record.id))||(date>=start&&date<end&&date.getDay()!==5)||released.has(String(record.id));}),unbilled=(worker.dispatches||[]).filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'sent record');
  const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved sent-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
  unbilled.forEach(record=>{const rawQty=record.atoms??record.items??record.boxes;if(!present(rawQty))throw Error('Invalid/missing sent quantity for '+name(record.articleName));const qty=Number(rawQty);if(!Number.isFinite(qty)||qty<0)throw Error('Invalid/missing sent quantity for '+name(record.articleName));if(qty===0)return;
   const article=factorySaleShopArticles(worker).find(a=>String(a.id)===String(record.articleId));if(!article)throw Error('Missing saved article/material: '+name(record.articleName));
@@ -1540,7 +1540,7 @@ function factorySaleDeliveryHistory(){
 let factorySaleManualSaving=false;
 function factorySaleManualArticles(){return factorySaleArticles().map(article=>({key:String(article.id),articleId:String(article.id),articleName:article.name,shopkeeperName:'Global Article',unit:shoeSoleProductDisplayUnit(article),rate:article.ratePerUnit,adda:article.adda||'',unitPairs:article.unitPairs??''}));}
 function factorySaleManualAmounts(lines){let total=0;const calculated=lines.map(line=>{const qty=Number(line.qty),rate=Number(line.rate),cents=Math.round(qty*rate*100);if(!line.articleName||!line.unit||line.qty===''||line.rate===''||!Number.isFinite(qty)||qty<=0||!Number.isFinite(rate)||rate<0||!Number.isSafeInteger(cents))throw Error('Select an Article and enter valid Quantity and Rate.');total+=cents;if(!Number.isSafeInteger(total))throw Error('Bill amount is too large.');return {...line,qty,rate,amount:cents/100};});if(!calculated.length)throw Error('Add at least one Article.');return {lines:calculated,totalAmount:total/100};}
-function factorySaleManualBillHtml(bill){
+function factorySaleManualBillHtml(bill,headerOption='footwear'){
   const date=new Date(bill.date||Date.now());
   const urduDays=['اتوار','پیر','منگل','بدھ','جمعرات','جمعہ','ہفتہ'];
   const urduMonths=['جنوری','فروری','مارچ','اپریل','مئی','جون','جولائی','اگست','ستمبر','اکتوبر','نومبر','دسمبر'];
@@ -1612,6 +1612,14 @@ function factorySaleManualBillHtml(bill){
 
   return `<div id="fsManualBillPrintArea" class="receipt-paper" style="width:100%;max-width:80mm;margin:0 auto;box-sizing:border-box;direction:rtl;text-align:right;font-family:'Jameel Noori Nastaleeq','Noto Nastaliq Urdu','Segoe UI',Tahoma,Arial,sans-serif;font-size:12px;line-height:1.4;color:#000;background:#fff;padding:8px 6px;">
     <!-- Brand Header -->
+    ${headerOption==='leather_right'?`
+    <div style="text-align:center;margin-bottom:3px;direction:ltr;">
+      <div style="font-family:'Arial Black',Arial,sans-serif;font-size:14.5px;font-weight:900;letter-spacing:0.1px;line-height:1.2;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">LEATHER RIGHT SHOES BY ABID</div>
+    </div>
+    <div style="text-align:center;font-size:12px;font-weight:700;line-height:1.3;margin-bottom:2px;">• ----- اعلیٰ معیار کے جوتوں کا کارخانہ ----- •</div>
+    <div style="text-align:center;font-size:11px;color:#333;margin-bottom:3px;">قصور، پاکستان</div>
+    <div style="border-top:1px solid #777;border-bottom:1px solid #777;height:2px;margin:3px 0 6px 0;"></div>
+    `:`
     <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:3px;direction:ltr;">
       <div style="width:46px;height:46px;border:2px solid #000;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;box-sizing:border-box;padding:2px;flex-shrink:0;">
         <div style="width:38px;height:38px;border:1px solid #000;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1px;box-sizing:border-box;">
@@ -1624,6 +1632,7 @@ function factorySaleManualBillHtml(bill){
     </div>
     <div style="text-align:center;font-size:12px;font-weight:700;line-height:1.2;margin-bottom:3px;">• ----- ہول سیل سپلائر شوز قصور ----- •</div>
     <div style="border-top:1px solid #777;border-bottom:1px solid #777;height:2px;margin:3px 0 6px 0;"></div>
+    `}
 
     <!-- Meta Details -->
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;font-size:13px;font-weight:700;">
@@ -1712,20 +1721,24 @@ function factorySaleManualBillHtml(bill){
     <!-- Footer Box -->
     <div style="border:2px double #000;border-radius:6px;padding:5px 4px;text-align:center;font-size:11px;line-height:1.4;">
       <div style="font-size:12px;font-weight:800;margin-bottom:2px;white-space:nowrap;">❦ آپ کے اعتماد اور تعاون کا تہہ دل سے شکریہ ❦</div>
-      <div style="margin-bottom:2px;">براہِ راست فیکٹری سے • ہول سیل ریٹ پر • قصور، پاکستان</div>
+      <div style="margin-bottom:2px;">${headerOption==='leather_right'?'اعلیٰ معیار کے جوتوں کا کارخانہ • ہول سیل ریٹ پر':'براہِ راست فیکٹری سے • ہول سیل ریٹ پر • قصور، پاکستان'}</div>
       <div style="display:flex;justify-content:center;align-items:center;gap:4px;margin-bottom:3px;font-weight:700;">
         <span>📦 آل پاکستان ڈیلیوری • آرڈر پر مال روانہ کیا جاتا ہے 🚚</span>
       </div>
       <div style="border-top:1px dashed #777;margin:3px 0;padding-top:3px;display:flex;justify-content:center;align-items:center;gap:12px;direction:ltr;unicode-bidi:isolate;font-family:Arial,sans-serif;font-size:11px;font-weight:700;">
+        ${headerOption==='leather_right'?`
+        <span>📞 0322 6574565</span>
+        `:`
         <span>📞 0303 6592255</span>
         <span>|</span>
         <span>💬 0341 0143182</span>
+        `}
       </div>
     </div>
   </div>`;
 }
-function factorySaleManualPrint(bill){let area=document.getElementById('fsManualBillPrintArea');let temp=false;if(!area){area=document.createElement('div');area.id='fsManualBillPrintArea';area.className='receipt-paper';area.style.cssText='width:80mm;margin:auto;';area.innerHTML=factorySaleManualBillHtml(bill);document.body.appendChild(area);temp=true;}try{printElement(area.id||'fsManualBillPrintArea');}finally{if(temp)area.remove();}}
-function buildFactorySaleManualBillCanvas(bill){
+function factorySaleManualPrint(bill,headerOption='footwear'){let area=document.getElementById('fsManualBillPrintArea');let temp=false;if(!area){area=document.createElement('div');area.id='fsManualBillPrintArea';area.className='receipt-paper';area.style.cssText='width:80mm;margin:auto;';area.innerHTML=factorySaleManualBillHtml(bill,headerOption);document.body.appendChild(area);temp=true;}else{area.innerHTML=factorySaleManualBillHtml(bill,headerOption);}try{printElement(area.id||'fsManualBillPrintArea');}finally{if(temp)area.remove();}}
+function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
   const width = 600;
   const pad = 20;
   const canvas = document.createElement('canvas');
@@ -1764,7 +1777,7 @@ function buildFactorySaleManualBillCanvas(bill){
   const rowHeight = 32;
   const hasDiscount = Number(bill.discount) > 0;
   const totalSummaryRows = hasDiscount ? 6 : 5;
-  const summaryBoxHeight = totalSummaryRows * 26 + 16;
+  const summaryBoxHeight = totalSummaryRows * 28 + 14;
   const totalHeight = 310 + (lines.length * rowHeight) + 36 + summaryBoxHeight + 58 + 36 + 120 + pad * 2;
 
   canvas.width = width * 2;
@@ -1780,30 +1793,41 @@ function buildFactorySaleManualBillCanvas(bill){
 
   let y = pad;
 
-  // 1. Header with Badge & Brand Name
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(pad + 30, y + 25, 24, 0, Math.PI * 2);
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(pad + 30, y + 25, 20, 0, Math.PI * 2);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.font = 'bold 7px Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('FOOTWEAR', pad + 30, y + 14);
-  ctx.fillText('FIND', pad + 30, y + 23);
-  ctx.font = '10px Arial, sans-serif';
-  ctx.fillText('👞👟', pad + 30, y + 31);
-  ctx.restore();
+  const isLeatherRight = headerOption === 'leather_right';
+  if(!isLeatherRight){
+    // 1. Header with Badge & Brand Name
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(pad + 30, y + 25, 24, 0, Math.PI * 2);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(pad + 30, y + 25, 20, 0, Math.PI * 2);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.font = 'bold 7px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('FOOTWEAR', pad + 30, y + 14);
+    ctx.fillText('FIND', pad + 30, y + 23);
+    ctx.font = '10px Arial, sans-serif';
+    ctx.fillText('👞👟', pad + 30, y + 31);
+    ctx.restore();
 
-  ctx.font = "900 24px 'Arial Black', Arial, sans-serif";
-  ctx.textAlign = 'center';
-  ctx.fillText('FOOTWEAR FIND SHOES', width / 2 + 15, y + 5);
+    ctx.font = "900 24px 'Arial Black', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('FOOTWEAR FIND SHOES', width / 2 + 15, y + 5);
 
-  ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
-  ctx.fillText('• ----- ہول سیل سپلائر شوز قصور ----- •', width / 2, y + 36);
+    ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText('• ----- ہول سیل سپلائر شوز قصور ----- •', width / 2, y + 36);
+  } else {
+    // 1. Header without Badge (Leather Right Shoes by Abid)
+    ctx.font = "900 22px 'Arial Black', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('LEATHER RIGHT SHOES BY ABID', width / 2, y + 5);
+
+    ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.fillText('• ----- اعلیٰ معیار کے جوتوں کا کارخانہ ----- •', width / 2, y + 36);
+  }
 
   y += 62;
   ctx.lineWidth = 1;
@@ -1831,7 +1855,7 @@ function buildFactorySaleManualBillCanvas(bill){
     ctx.strokeRect(pad, y, width - pad * 2, 28);
     ctx.font = "bold 14px 'Segoe UI', Tahoma, sans-serif";
     ctx.textAlign = 'right';
-    ctx.fillText('مال بھیجنے کا اڈہ: ' + billAdda, width - pad - 8, y + 5);
+    ctx.fillText('مال بھیجنے کا اڈہ: ' + billAdda, width - pad - 10, y + 5);
     y += 36;
   }
 
@@ -1849,7 +1873,7 @@ function buildFactorySaleManualBillCanvas(bill){
   const xLeft = pad;
 
   // Table Header
-  ctx.fillStyle = '#f0f0f0';
+  ctx.fillStyle = '#f5f5f5';
   ctx.fillRect(pad, y, width - pad * 2, 28);
   ctx.fillStyle = '#000000';
   ctx.strokeRect(pad, y, width - pad * 2, 28);
@@ -1861,8 +1885,12 @@ function buildFactorySaleManualBillCanvas(bill){
   ctx.stroke();
 
   ctx.font = "bold 14px 'Segoe UI', Tahoma, sans-serif";
+  // Article Header (Right aligned inside cell for Urdu RTL feel)
+  ctx.textAlign = 'right';
+  ctx.fillText('آرٹیکل', xCol1 - 16, y + 6);
+
+  // Qty, Rate, Amount Headers (Center aligned in their columns)
   ctx.textAlign = 'center';
-  ctx.fillText('آرٹیکل', xCol2 + colW1 / 2, y + 6);
   ctx.fillText('تعداد', xCol3 + colW2 / 2, y + 6);
   ctx.fillText('ریٹ', xCol4 + colW3 / 2, y + 6);
   ctx.fillText('رقم', xLeft + colW4 / 2, y + 6);
@@ -1890,21 +1918,23 @@ function buildFactorySaleManualBillCanvas(bill){
     }
     const pairRate = (uPairs && uPairs > 0) ? (uRate / uPairs) : uRate;
 
-    // Article Name (Right aligned)
+    // Article Name (Right aligned inside cell)
     ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
     ctx.textAlign = 'right';
-    ctx.fillText(String(line.articleName || 'آئٹم'), xCol1 - 6, y + 7);
+    ctx.fillText(String(line.articleName || 'آئٹم'), xCol1 - 10, y + 7);
 
-    // Qty (Center)
+    // Qty (Center aligned in column)
     ctx.textAlign = 'center';
     ctx.fillText(qtyStr, xCol3 + colW2 / 2, y + 7);
 
-    // Rate per pair (Center)
+    // Rate per pair (Center aligned in column)
     ctx.font = "13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.textAlign = 'center';
     ctx.fillText(upperMoney(pairRate).replace('Rs. ', ''), xCol4 + colW3 / 2, y + 7);
 
-    // Amount (Center/Right)
+    // Amount (Center aligned in column)
     ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
+    ctx.textAlign = 'center';
     ctx.fillText(upperMoney(line.amount || 0).replace('Rs. ', ''), xLeft + colW4 / 2, y + 7);
 
     y += rowHeight;
@@ -1919,8 +1949,9 @@ function buildFactorySaleManualBillCanvas(bill){
   ctx.stroke();
 
   ctx.font = "bold 14px 'Segoe UI', Tahoma, sans-serif";
+  ctx.textAlign = 'right';
+  ctx.fillText('ٹوٹل', xCol1 - 16, y + 6);
   ctx.textAlign = 'center';
-  ctx.fillText('ٹوٹل', xCol2 + colW1 / 2, y + 6);
   ctx.fillText(String(totalQty), xCol3 + colW2 / 2, y + 6);
   ctx.fillText('', xCol4 + colW3 / 2, y + 6);
   ctx.fillText(upperMoney(bill.totalAmount || 0).replace('Rs. ', ''), xLeft + colW4 / 2, y + 6);
@@ -1932,29 +1963,34 @@ function buildFactorySaleManualBillCanvas(bill){
   const drawSummaryLine = (label, val, isBold = false) => {
     ctx.font = (isBold ? 'bold ' : '') + "13px 'Segoe UI', Tahoma, sans-serif";
     ctx.textAlign = 'right';
-    ctx.fillText(label, width - pad - 10, sy);
+    ctx.fillText(label, width - pad - 12, sy);
     ctx.textAlign = 'left';
-    ctx.fillText(val, pad + 10, sy);
+    ctx.fillText(val, pad + 12, sy);
 
     ctx.save();
     ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = '#cccccc';
+    ctx.strokeStyle = '#dddddd';
     ctx.beginPath();
-    ctx.moveTo(pad + 10, sy + 20);
-    ctx.lineTo(width - pad - 10, sy + 20);
+    ctx.moveTo(pad + 12, sy + 21);
+    ctx.lineTo(width - pad - 12, sy + 21);
     ctx.stroke();
     ctx.restore();
-    sy += 26;
+    sy += 28;
   };
 
-  drawSummaryLine('ٹوٹل رقم', upperMoney(bill.totalAmount) + ' روپے', true);
+  const fmtVal = v => {
+    const num = Number(v) || 0;
+    return num.toLocaleString('en-US') + ' روپے';
+  };
+
+  drawSummaryLine('ٹوٹل رقم', fmtVal(bill.totalAmount), true);
   if(hasDiscount){
-    drawSummaryLine('ڈسکاؤنٹ', upperMoney(bill.discount) + ' روپے', false);
+    drawSummaryLine('ڈسکاؤنٹ', fmtVal(bill.discount), false);
   }
-  drawSummaryLine('بل کی رقم', upperMoney(bill.netBillAmount ?? bill.totalAmount) + ' روپے', true);
-  drawSummaryLine('وصول رقم', upperMoney(bill.paidAmount ?? 0) + ' روپے', false);
-  drawSummaryLine('اس بل کی باقی رقم', upperMoney(bill.remainingBalance ?? bill.totalAmount) + ' روپے', true);
-  drawSummaryLine('پچھلا بقایا', upperMoney(bill.pendingAmount ?? bill.openingAmount ?? 0) + ' روپے', false);
+  drawSummaryLine('بل کی رقم', fmtVal(bill.netBillAmount ?? bill.totalAmount), true);
+  drawSummaryLine('وصول رقم', fmtVal(bill.paidAmount ?? 0), false);
+  drawSummaryLine('اس بل کی باقی رقم', fmtVal(bill.remainingBalance ?? bill.totalAmount), true);
+  drawSummaryLine('پچھلا بقایا', fmtVal(bill.pendingAmount ?? bill.openingAmount ?? 0), false);
 
   y += summaryBoxHeight + 10;
 
@@ -1963,10 +1999,10 @@ function buildFactorySaleManualBillCanvas(bill){
   ctx.strokeRect(pad, y, width - pad * 2, 46);
   ctx.font = "bold 16px 'Segoe UI', Tahoma, sans-serif";
   ctx.textAlign = 'right';
-  ctx.fillText('ٹوٹل باقی رقم', width - pad - 12, y + 13);
+  ctx.fillText('ٹوٹل باقی رقم', width - pad - 14, y + 13);
   ctx.font = "900 18px 'Segoe UI', Tahoma, sans-serif";
   ctx.textAlign = 'left';
-  ctx.fillText(upperMoney(bill.remainingBalance ?? bill.totalAmount) + ' روپے', pad + 12, y + 12);
+  ctx.fillText(fmtVal(bill.remainingBalance ?? bill.totalAmount), pad + 14, y + 12);
   y += 56;
 
   // 6. Note if any
@@ -1975,7 +2011,7 @@ function buildFactorySaleManualBillCanvas(bill){
     ctx.strokeRect(pad, y, width - pad * 2, 26);
     ctx.font = "12px 'Segoe UI', Tahoma, sans-serif";
     ctx.textAlign = 'right';
-    ctx.fillText('نوٹ: ' + bill.note, width - pad - 8, y + 5);
+    ctx.fillText('نوٹ: ' + bill.note, width - pad - 10, y + 5);
     y += 34;
   }
 
@@ -1986,13 +2022,14 @@ function buildFactorySaleManualBillCanvas(bill){
   ctx.textAlign = 'center';
   ctx.fillText('❦ آپ کے اعتماد اور تعاون کا تہہ دل سے شکریہ ❦', width / 2, y + 8);
   ctx.font = "11px 'Segoe UI', Tahoma, sans-serif";
-  ctx.fillText('براہِ راست فیکٹری سے • ہول سیل ریٹ پر • قصور، پاکستان', width / 2, y + 26);
+  ctx.fillText(isLeatherRight ? 'اعلیٰ معیار کے جوتوں کا کارخانہ • ہول سیل ریٹ پر' : 'براہِ راست فیکٹری سے • ہول سیل ریٹ پر • قصور، پاکستان', width / 2, y + 26);
   ctx.font = "bold 12px Arial, sans-serif";
-  ctx.fillText('📞 0303 6592255   |   💬 0341 0143182', width / 2, y + 46);
+  ctx.fillText(isLeatherRight ? '📞 0322 6574565' : '📞 0303 6592255   |   💬 0341 0143182', width / 2, y + 46);
 
   return canvas;
 }
-function buildFactorySaleManualBillText(bill){
+function buildFactorySaleManualBillText(bill,headerOption='footwear'){
+  const isLeatherRight = headerOption === 'leather_right';
   const cat=typeof factorySaleArticles==='function'?factorySaleArticles():[];
   let billAdda=bill.cargoAdda||bill.adda||'';
   if(!billAdda){
@@ -2005,8 +2042,8 @@ function buildFactorySaleManualBillText(bill){
   const dateStr=String(bill.date||new Date().toISOString()).slice(0,10);
   const map={'ATOMS':'ایٹمز','ATOM':'ایٹمز','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'آئٹم','ITEMS':'آئٹم'};
   const textLines=[
-    '*FOOTWEAR FIND SHOES*',
-    'ہول سیل سپلائر شوز قصور',
+    isLeatherRight ? '*LEATHER RIGHT SHOES BY ABID*' : '*FOOTWEAR FIND SHOES*',
+    isLeatherRight ? 'اعلیٰ معیار کے جوتوں کا کارخانہ' : 'ہول سیل سپلائر شوز قصور',
     '--------------------------------',
     '*معزز تاجر:* ' + (bill.shopkeeperName||'-'),
     '*بل نمبر:* #' + (bill.voucherNo||'-'),
@@ -2037,19 +2074,40 @@ function buildFactorySaleManualBillText(bill){
   textLines.push('*ٹوٹل باقی رقم:* Rs. ' + upperMoney(bill.remainingBalance??0));
   textLines.push('--------------------------------');
   textLines.push('آپ کے اعتماد اور تعاون کا تہہ دل سے شکریہ!');
-  textLines.push('📞 0303 6592255 | 💬 0341 0143182');
+  textLines.push(headerOption === 'leather_right' ? '📞 0322 6574565' : '📞 0303 6592255 | 💬 0341 0143182');
   return textLines.join('\n');
 }
 
 function factorySaleManualView(id){
   const bill=(settings.manualBills||[]).slice().reverse().find(b=>String(b.id)===String(id))||(settings.manualBills||[]).find(b=>String(b.id)===String(id));
   if(!bill)return;
-  modal('<h3>Manual Bill #'+esc(bill.voucherNo)+'</h3><div id="fsManualBillViewContainer" style="width:80mm;max-width:100%;margin:auto;">'+factorySaleManualBillHtml(bill)+'</div><div class="modal-actions"><button class="btn brass" id="fsManualPrint">Print</button><button class="btn ghost" id="fsManualShare">Share</button><button class="btn ghost" id="fsManualBack">Back</button></div>');
-  document.getElementById('fsManualPrint').onclick=()=>factorySaleManualPrint(bill);
+  let currentHeader = 'footwear';
+  try{ currentHeader = localStorage.getItem('fs_last_manual_header') || 'footwear'; }catch(_e){}
+  modal('<h3>Manual Bill #'+esc(bill.voucherNo)+'</h3>'+
+    '<div style="display:flex;justify-content:center;gap:16px;margin:8px 0 12px 0;padding:6px;background:#f8f9fa;border-radius:6px;border:1px solid var(--border,#ddd);font-size:12px;">'+
+      '<label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-weight:700;">'+
+        '<input type="radio" name="fsHeaderOption" value="footwear" '+(currentHeader==='footwear'?'checked':'')+'> Footwear Find Shoes (With Logo)'+
+      '</label>'+
+      '<label style="cursor:pointer;display:flex;align-items:center;gap:5px;font-weight:700;">'+
+        '<input type="radio" name="fsHeaderOption" value="leather_right" '+(currentHeader==='leather_right'?'checked':'')+'> Leather Right Shoes by Abid'+
+      '</label>'+
+    '</div>'+
+    '<div id="fsManualBillViewContainer" style="width:80mm;max-width:100%;margin:auto;">'+factorySaleManualBillHtml(bill, currentHeader)+'</div>'+
+    '<div class="modal-actions"><button class="btn brass" id="fsManualPrint">Print</button><button class="btn ghost" id="fsManualShare">Share</button><button class="btn ghost" id="fsManualBack">Back</button></div>'
+  );
+  document.querySelectorAll('input[name="fsHeaderOption"]').forEach(radio => {
+    radio.onchange = () => {
+      currentHeader = radio.value;
+      try{ localStorage.setItem('fs_last_manual_header', currentHeader); }catch(_e){}
+      const container = document.getElementById('fsManualBillViewContainer');
+      if(container) container.innerHTML = factorySaleManualBillHtml(bill, currentHeader);
+    };
+  });
+  document.getElementById('fsManualPrint').onclick=()=>factorySaleManualPrint(bill, currentHeader);
   document.getElementById('fsManualShare').onclick=async()=>{
     try{
       toast('Voucher image tyar ho rahi hai...');
-      const canvas = await buildFactorySaleManualBillCanvas(bill);
+      const canvas = await buildFactorySaleManualBillCanvas(bill, currentHeader);
       const fileName = 'Bill_' + (bill.voucherNo || 'voucher') + '.png';
       const title = 'Bill #' + (bill.voucherNo || '');
 
@@ -2106,7 +2164,7 @@ function factorySaleManualView(id){
   };
   document.getElementById('fsManualBack').onclick=factorySaleManualHistory;
 }
-function factorySaleManualHistory(){modal('<h3>Manual Bill History</h3><div style="overflow-x:auto"><table><thead><tr><th>Bill</th><th>Shopkeeper</th><th>Date</th><th>Grand Total</th><th>Paid Amount</th><th>Remaining Balance</th><th>Actions</th></tr></thead><tbody>'+(settings.manualBills||[]).slice().reverse().map(b=>'<tr><td>#'+esc(b.voucherNo)+'</td><td>'+esc(b.shopkeeperName)+'</td><td>'+esc(String(b.date).slice(0,10))+'</td><td>'+upperMoney(b.totalAmount)+'</td><td>'+upperMoney(b.paidAmount??0)+'</td><td>'+upperMoney(b.remainingBalance??b.totalAmount)+'</td><td>'+ ['View','Edit','Delete','Print'].map(action=>'<button class="btn ghost small" data-fs-manual-action="'+action+'" data-fs-manual-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button class="btn brass" id="fsManualNew">Manual Create Bill</button><button class="btn ghost" id="fsManualClose">Close</button></div>');document.getElementById('fsManualNew').onclick=()=>factorySaleManualEditor();document.getElementById('fsManualClose').onclick=closeModal;document.querySelectorAll('[data-fs-manual-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.fsManualId,bill=(settings.manualBills||[]).find(b=>b.id===id);if(!bill)return;const action=button.dataset.fsManualAction;if(action==='View')factorySaleManualView(id);else if(action==='Edit')factorySaleManualEditor(id);else if(action==='Print')factorySaleManualPrint(bill);else openConfirmModal('Delete Manual Bill #'+bill.voucherNo+'?',()=>factorySaleManualDelete(id,JSON.stringify(bill)));});}
+function factorySaleManualHistory(){modal('<h3>Manual Bill History</h3><div style="overflow-x:auto"><table><thead><tr><th>Bill</th><th>Shopkeeper</th><th>Date</th><th>Grand Total</th><th>Paid Amount</th><th>Remaining Balance</th><th>Actions</th></tr></thead><tbody>'+(settings.manualBills||[]).slice().reverse().map(b=>'<tr><td>#'+esc(b.voucherNo)+'</td><td>'+esc(b.shopkeeperName)+'</td><td>'+esc(String(b.date).slice(0,10))+'</td><td>'+upperMoney(b.totalAmount)+'</td><td>'+upperMoney(b.paidAmount??0)+'</td><td>'+upperMoney(b.remainingBalance??b.totalAmount)+'</td><td>'+ ['View','Edit','Delete','Print'].map(action=>'<button class="btn ghost small" data-fs-manual-action="'+action+'" data-fs-manual-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button class="btn brass" id="fsManualNew">Manual Create Bill</button><button class="btn ghost" id="fsManualClose">Close</button></div>');document.getElementById('fsManualNew').onclick=()=>factorySaleManualEditor();document.getElementById('fsManualClose').onclick=closeModal;document.querySelectorAll('[data-fs-manual-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.fsManualId,bill=(settings.manualBills||[]).find(b=>b.id===id);if(!bill)return;const action=button.dataset.fsManualAction;if(action==='View')factorySaleManualView(id);else if(action==='Edit')factorySaleManualEditor(id);else if(action==='Print'){let pref='footwear';try{pref=localStorage.getItem('fs_last_manual_header')||'footwear';}catch(_e){}factorySaleManualPrint(bill,pref);}else openConfirmModal('Delete Manual Bill #'+bill.voucherNo+'?',()=>factorySaleManualDelete(id,JSON.stringify(bill)));});}
 async function factorySaleManualStore(next,number){if(factorySaleManualSaving)return false;const previous=settings.manualBills,counter=settings.nextManualBillNo,hadBills=Object.prototype.hasOwnProperty.call(settings,'manualBills'),hadCounter=Object.prototype.hasOwnProperty.call(settings,'nextManualBillNo');factorySaleManualSaving=true;settings.manualBills=next;if(number!==undefined)settings.nextManualBillNo=number;try{if(!await saveCriticalCloudState())throw Error('Save failed');return true;}catch(error){if(hadBills)settings.manualBills=previous;else delete settings.manualBills;if(hadCounter)settings.nextManualBillNo=counter;else delete settings.nextManualBillNo;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}toast('Manual bill was not saved.');return false;}finally{factorySaleManualSaving=false;}}
 async function factorySaleManualDelete(id,expected){if(factorySaleManualSaving)return;const current=(settings.manualBills||[]).find(b=>b.id===id);if(!current||JSON.stringify(current)!==expected){toast('Manual bill changed. Reopen history.');return;}if(await factorySaleManualStore(settings.manualBills.filter(b=>b.id!==id)))factorySaleManualHistory();}
 function factorySaleManualEditor(id=''){const original=(settings.manualBills||[]).find(b=>b.id===id);if(id&&!original)return;const expected=original?JSON.stringify(original):'',draftId=original?.id||uid(),articles=factorySaleManualArticles();modal('<h3>'+ (original?'Edit Manual Bill #'+esc(original.voucherNo):'Manual Create Bill')+'</h3><label>Shopkeeper Name<input type="text" id="fsManualName" value="'+esc(original?.shopkeeperName||'')+'"></label><div style="overflow-x:auto"><table><thead><tr><th>Article</th><th>Saved Unit</th><th>Quantity</th><th>Rate</th><th>Line Amount</th><th></th></tr></thead><tbody id="fsManualRows"></tbody></table></div><button class="btn ghost small" id="fsManualAdd">Add Article</button><div class="rline"><strong>Grand Total</strong><strong id="fsManualTotal">0</strong></div><label>Paid Amount<input id="fsManualPaid" type="number" min="0" step="0.01" value="'+esc(original?.paidAmount??0)+'"></label><label>Remaining Balance<input id="fsManualRemaining" readonly></label><div class="modal-actions"><button class="btn brass" id="fsManualSave">Create Bill</button><button class="btn ghost" id="fsManualHistory">History</button><button class="btn ghost" id="fsManualCancel">Cancel</button></div>');
