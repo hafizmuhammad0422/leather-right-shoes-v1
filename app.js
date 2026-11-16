@@ -1747,7 +1747,7 @@ function billAccountBoardsAdapter(index){
     busy:()=>sbSupplierBillSaving,lock:value=>{sbSupplierBillSaving=value;},
     read:()=>({account:getShoeBoxSuppliers()[index].supplierBillAccount||null,bills:getShoeBoxSuppliers()[index].supplierBills||[]}),
     write:data=>{const target=getShoeBoxSuppliers()[index];target.supplierBillAccount=data.account;target.supplierBills=data.bills;},
-    save:()=>saveCriticalCloudState(),reconcile:()=>reconcileCloudAfterCriticalRollback(),back:()=>openShoeBoxSupplierBillModal(index)};
+    save:()=>saveCriticalCloudState('shoeBox'),reconcile:()=>reconcileCloudAfterCriticalRollback(),back:()=>openShoeBoxSupplierBillModal(index)};
 }
 let billAccountGasBusy=false;
 function billAccountGasAdapter(){
@@ -1757,7 +1757,7 @@ function billAccountGasAdapter(){
     read:()=>({account:settings.gasSupplierBillAccount||null,bills:settings.gasSupplierBills||[],billedExtraIds:settings.gasSupplierBilledExtraBalanceIds||[]}),
     write:data=>{settings={...settings,gasSupplierBillAccount:data.account,gasSupplierBills:data.bills,gasSupplierBilledExtraBalanceIds:data.billedExtraIds};},
     deleted:(data,bill)=>{if(bill.billingLifecycleVersion===1){if(!Array.isArray(bill.billingSourceExtraIds))throw Error('NEW Gas bill source snapshot is missing.');const released=Number(data.account.billReleasedGasKg??0)+Number(bill.totalGasKg);if(!Number.isFinite(released)||released<0)throw Error('Invalid saved Gas quantity.');data.account.billReleasedGasKg=released;const releasedIds=new Set(bill.billingSourceExtraIds.map(String));data.billedExtraIds=data.billedExtraIds.filter(id=>!releasedIds.has(String(id)));}},
-    save:()=>saveCriticalCloudState(),reconcile:()=>reconcileCloudAfterCriticalRollback(),back:()=>openGasSupplierBillModal()};
+    save:()=>saveCriticalCloudState('gas'),reconcile:()=>reconcileCloudAfterCriticalRollback(),back:()=>openGasSupplierBillModal()};
 }
 function mountBillAccountActions(adapter,viewSelector,idFromButton){
   const cancel=document.getElementById(adapter.cancelId);if(!cancel)return;
@@ -1988,7 +1988,7 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
 }
 function buildSupplierProductionBillCanvas(bill){
@@ -2041,7 +2041,7 @@ async function saveUpperPending(){
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();
   settings.upperPendingRecords.push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});
   audit(delta<0?'Upper Pending Reduced':'Upper Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
   const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 function renderUpperPendingPageList(){
@@ -2382,7 +2382,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLaminationShopsUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLaminationShopsUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState();
+  const cloudSaved=await saveCriticalCloudState('upper');
   if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
@@ -2483,7 +2483,7 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
+    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
   });
 }
@@ -2499,7 +2499,7 @@ async function editUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  r.totalAmount=amount; r.editedAt=new Date().toISOString();
  audit('Upper Weekly Kharcha Edited',`${r.workerName||'Worker'}: ${old} → ${amount}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
  render();toast('Weekly kharcha updated');
 }
 async function deleteUpperWeeklyKharcha(id){
@@ -2508,7 +2508,7 @@ async function deleteUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.upperWeeklyLabourRecords=all.filter(x=>String(x.id)!==String(id));
  audit('Upper Weekly Kharcha Deleted',`${r.workerName||'Worker'} — ${Number(r.totalAmount)||0}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
  render();toast('Weekly kharcha deleted');
 }
 function workerProductionPageKey(category){return 'category-'+Array.from(workerCategoryCompareKey(category)).map(char=>char.codePointAt(0).toString(16)).join('-');}
@@ -3626,7 +3626,7 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
 }
 function buildSupplierProductionBillCanvas(bill){
@@ -3679,7 +3679,7 @@ async function saveUpperPending(){
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();
   settings.upperPendingRecords.push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});
   audit(delta<0?'Upper Pending Reduced':'Upper Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
   const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 function renderUpperPendingPageList(){
@@ -4020,7 +4020,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLaserManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLaserManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLaser(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState();
+  const cloudSaved=await saveCriticalCloudState('upper');
   if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
@@ -4119,7 +4119,7 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLaser(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
+    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
   });
 }
@@ -4135,7 +4135,7 @@ async function editUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  r.totalAmount=amount; r.editedAt=new Date().toISOString();
  audit('Upper Weekly Kharcha Edited',`${r.workerName||'Worker'}: ${old} → ${amount}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
  render();toast('Weekly kharcha updated');
 }
 async function deleteUpperWeeklyKharcha(id){
@@ -4144,7 +4144,7 @@ async function deleteUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.upperWeeklyLabourRecords=all.filter(x=>String(x.id)!==String(id));
  audit('Upper Weekly Kharcha Deleted',`${r.workerName||'Worker'} — ${Number(r.totalAmount)||0}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
  render();toast('Weekly kharcha deleted');
 }
 function workerProductionPageKey(category){return 'category-'+Array.from(workerCategoryCompareKey(category)).map(char=>char.codePointAt(0).toString(16)).join('-');}
@@ -6833,7 +6833,7 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
 }
 function buildSupplierProductionBillCanvas(bill){
@@ -6886,7 +6886,7 @@ async function saveUpperPending(){
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();
   settings.upperPendingRecords.push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});
   audit(delta<0?'Upper Pending Reduced':'Upper Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
   const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 function renderUpperPendingPageList(){
@@ -7227,7 +7227,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLabelManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLabelManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState();
+  const cloudSaved=await saveCriticalCloudState('upper');
   if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
@@ -7326,7 +7326,7 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
+    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
   });
 }
@@ -7342,7 +7342,7 @@ async function editUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  r.totalAmount=amount; r.editedAt=new Date().toISOString();
  audit('Upper Weekly Kharcha Edited',`${r.workerName||'Worker'}: ${old} → ${amount}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
  render();toast('Weekly kharcha updated');
 }
 async function deleteUpperWeeklyKharcha(id){
@@ -7351,7 +7351,7 @@ async function deleteUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.upperWeeklyLabourRecords=all.filter(x=>String(x.id)!==String(id));
  audit('Upper Weekly Kharcha Deleted',`${r.workerName||'Worker'} — ${Number(r.totalAmount)||0}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
  render();toast('Weekly kharcha deleted');
 }
 function workerProductionPageKey(category){return 'category-'+Array.from(workerCategoryCompareKey(category)).map(char=>char.codePointAt(0).toString(16)).join('-');}
@@ -8585,7 +8585,7 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
 }
 function buildSupplierProductionBillCanvas(bill){
@@ -8638,7 +8638,7 @@ async function saveUpperPending(){
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();
   settings.upperPendingRecords.push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});
   audit(delta<0?'Upper Pending Reduced':'Upper Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
   const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 function renderUpperPendingPageList(){
@@ -8981,7 +8981,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesPressManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesPressManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,pressCutting:true,...(draft.cuttingMeter?.allocationVersion===1?{pressMeterAllocation:true}:{}),...(draft.issuedRolls?{issuedRolls:draft.issuedRolls}:{}),voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);if(draft.cuttingMeter)settings.shoesPressCuttingMeters=[...(settings.shoesPressCuttingMeters||[]),{id:uid(),voucherId:String(record.id),voucherNo,workerId:draft.workerId,workerName:draft.workerName,workDate:draft.workDate,...draft.cuttingMeter,createdAt:date,date}];auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState();
+  const cloudSaved=await saveCriticalCloudState('upper');
   if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
@@ -9080,7 +9080,7 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
+    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
   });
 }
@@ -9096,7 +9096,7 @@ async function editUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  r.totalAmount=amount; r.editedAt=new Date().toISOString();
  audit('Upper Weekly Kharcha Edited',`${r.workerName||'Worker'}: ${old} → ${amount}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
  render();toast('Weekly kharcha updated');
 }
 async function deleteUpperWeeklyKharcha(id){
@@ -9105,7 +9105,7 @@ async function deleteUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.upperWeeklyLabourRecords=all.filter(x=>String(x.id)!==String(id));
  audit('Upper Weekly Kharcha Deleted',`${r.workerName||'Worker'} — ${Number(r.totalAmount)||0}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
  render();toast('Weekly kharcha deleted');
 }
 function workerProductionPageKey(category){return 'category-'+Array.from(workerCategoryCompareKey(category)).map(char=>char.codePointAt(0).toString(16)).join('-');}
@@ -10173,7 +10173,7 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
 }
 function buildSupplierProductionBillCanvas(bill){
@@ -10226,7 +10226,7 @@ async function saveUpperPending(){
   const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString();
   settings.upperPendingRecords.push({id:uid(),date,workerId:String(worker.id),workerName:String(worker.name||''),workerCategory:String(worker.category||''),qty:Math.abs(delta),delta,action:delta<0?'minus':'add'});
   audit(delta<0?'Upper Pending Reduced':'Upper Pending Added',`${worker.name}: ${delta>0?'+':''}${delta} ATOMS — Current ${next} ATOMS`);
-  if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
+  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Pending change was NOT saved to D1. No Pending balance was changed.');return;}
   const w=document.getElementById('upperPendingWorker');if(w)w.value='';const q=document.getElementById('upperPendingQty');if(q)q.value='';toast(`${worker.name} Current Pending: ${next} ATOMS`);
 }
 function renderUpperPendingPageList(){
@@ -10567,7 +10567,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__homeLaserAndStitchMan_upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__homeLaserAndStitchMan_upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState();
+  const cloudSaved=await saveCriticalCloudState('upper');
   if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
@@ -10666,7 +10666,7 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
+    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
   });
 }
@@ -10682,7 +10682,7 @@ async function editUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  r.totalAmount=amount; r.editedAt=new Date().toISOString();
  audit('Upper Weekly Kharcha Edited',`${r.workerName||'Worker'}: ${old} → ${amount}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha edit was NOT saved.');return;}
  render();toast('Weekly kharcha updated');
 }
 async function deleteUpperWeeklyKharcha(id){
@@ -10691,7 +10691,7 @@ async function deleteUpperWeeklyKharcha(id){
  const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  settings.upperWeeklyLabourRecords=all.filter(x=>String(x.id)!==String(id));
  audit('Upper Weekly Kharcha Deleted',`${r.workerName||'Worker'} — ${Number(r.totalAmount)||0}`);
- if(!await saveCriticalCloudState()){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
+ if(!await saveCriticalCloudState('weekly')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Weekly kharcha delete was NOT saved.');return;}
  render();toast('Weekly kharcha deleted');
 }
 function workerProductionPageKey(category){return 'category-'+Array.from(workerCategoryCompareKey(category)).map(char=>char.codePointAt(0).toString(16)).join('-');}
@@ -17639,16 +17639,18 @@ function openShoeBoxReceiveVoucherBuilder(supplierIndex,initialPurchaseIds){
     document.getElementById('sbvBuilderNotes').addEventListener('input',e=>{notes=e.target.value;});
     document.getElementById('sbvBuilderCancel').onclick=closeModal;
     document.getElementById('sbvBuilderCustomize').onclick=()=>openShoeBoxReceiveVoucherCustomizeModal(renderBuilder);
-    document.getElementById('sbvBuilderCreate').onclick=()=>{
+    document.getElementById('sbvBuilderCreate').onclick=async()=>{
       if(!selected.size){toast('Select at least one receiving entry');return;}
       const ids=Array.from(selected);
       const now=new Date().toISOString();
+      const __snap={settings:JSON.stringify(settings),auditLog:JSON.stringify(auditLog)};
       const voucherNo=String(settings.nextShoeBoxReceiveVoucherNo||1001);
       settings.nextShoeBoxReceiveVoucherNo=(Number(settings.nextShoeBoxReceiveVoucherNo)||1001)+1;
       supplier.receiveVouchers=supplier.receiveVouchers||[];
       supplier.receiveVouchers.push({id:uid(),voucherNo,date:now,createdAt:now,purchaseIds:ids,notes,rickshawPheraNo:sbAssignRickshawPheraNo(supplier,now)});
       shoeBoxCaptureVoucherHistory(supplier,supplier.receiveVouchers[supplier.receiveVouchers.length-1]);
-      persistAll();
+      audit('Shoe Box Receive Voucher Created',`${voucherNo} — ${ids.length} items`);
+      if(!await sbCriticalCommit(__snap,'Shoe Box voucher was not saved to D1. Voucher and voucher number were rolled back.'))return;
       closeModal();
       openShoeBoxReceiveVoucherModal(supplierIndex,ids,false,supplier.receiveVouchers[supplier.receiveVouchers.length-1].id);
     };
