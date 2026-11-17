@@ -416,22 +416,26 @@ async function refreshAuthoritativeBaselines(scopeName=null){
   }
 }
 
-async function saveCriticalCloudState(scopeName=null){
+async function saveCriticalCloudState(scopeName=null, { nonBlocking=false }={}){
   if(cloudHydrationPromise && !cloudReady){
     try{ await cloudHydrationPromise; }catch(_e){}
   }
-  if(!cloudReady || cloudNeedsReload || criticalCloudSaveActive){
-    if(!cloudReady){
-      toast('D1 sync is connecting. Please wait a moment before saving.');
-    }else if(cloudNeedsReload){
-      toast('D1 authoritative reload is required. Please wait.');
+  if(!cloudReady || cloudNeedsReload || (!nonBlocking && criticalCloudSaveActive)){
+    if(!nonBlocking){
+      if(!cloudReady){
+        toast('D1 sync is connecting. Please wait a moment before saving.');
+      }else if(cloudNeedsReload){
+        toast('D1 authoritative reload is required. Please wait.');
+      }
     }
     return false;
   }
   clearTimeout(cloudSyncTimer);
   cloudSyncTimer=null;
-  criticalCloudSaveActive=true;
-  setCriticalUiLock(true);
+  if(!nonBlocking){
+    criticalCloudSaveActive=true;
+    setCriticalUiLock(true);
+  }
 
   const targetScope=scopeName || autoDetectSaveScope();
   const revision=++cloudChangeRevision;
@@ -456,15 +460,21 @@ async function saveCriticalCloudState(scopeName=null){
         }
       }
       console.error('Critical cloud save failed permanently', e);
-      cloudNeedsReload=true;
-      clearTimeout(cloudSyncTimer);clearTimeout(cloudRetryTimer);
-      setTimeout(()=>reconcileCloudAfterCriticalRollback(),0);
+      if(!nonBlocking){
+        cloudNeedsReload=true;
+        clearTimeout(cloudSyncTimer);clearTimeout(cloudRetryTimer);
+        setTimeout(()=>reconcileCloudAfterCriticalRollback(),0);
+      }else{
+        scheduleCloudRetry();
+      }
       break;
     }
   }
 
-  criticalCloudSaveActive=false;
-  setCriticalUiLock(false);
+  if(!nonBlocking){
+    criticalCloudSaveActive=false;
+    setCriticalUiLock(false);
+  }
   const shouldFlush=deferredCloudSync;
   deferredCloudSync=false;
 
@@ -474,6 +484,26 @@ async function saveCriticalCloudState(scopeName=null){
     setTimeout(()=>scheduleCloudSync(false),0);
   }
   return ok;
+}
+
+async function syncVoucherInBackground(scope, voucherDesc='Voucher'){
+  setD1SafeIndicator('busy');
+  try{
+    const ok=await saveCriticalCloudState(scope, { nonBlocking:true });
+    if(ok){
+      setD1SafeIndicator('ok');
+    }else{
+      setD1SafeIndicator('bad');
+      console.warn(`Background sync for ${voucherDesc} queued/deferred; retrying automatically.`);
+      scheduleCloudRetry();
+    }
+    return ok;
+  }catch(err){
+    setD1SafeIndicator('bad');
+    console.warn(`Background sync error for ${voucherDesc}:`, err?.message||err);
+    scheduleCloudRetry();
+    return false;
+  }
 }
 
 async function reconcileCloudAfterCriticalRollback(){
@@ -1774,7 +1804,7 @@ const shoesLaminationShopsServices={
   exists:()=>Object.prototype.hasOwnProperty.call(settings,'shoesLaminationShopsProduction'),
   publish:value=>{settings={...settings,shoesLaminationShopsProduction:{...(settings.shoesLaminationShopsProduction||{}),...value}};},
   restore:(value,exists)=>{const next={...settings};if(exists)next.shoesLaminationShopsProduction=value;else delete next.shoesLaminationShopsProduction;settings=next;},
-  critical:()=>saveCriticalCloudState('lamination'),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
+  critical:(opts={})=>saveCriticalCloudState('lamination',opts),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
   navigate:(page,...args)=>goto(page,...args),render:()=>render()
 };
 const shoesLaminationShopsModule=(()=>{
@@ -1789,7 +1819,7 @@ const shoesLaminationShopsModule=(()=>{
   function captureCloudState(){return JSON.parse(JSON.stringify(getCurrentState()));}
   function applyCloudState(state){settings=state.settings||{};workers=state.workers||[];materials=state.materials||[];transactions=state.transactions||[];bills=state.bills||[];auditLog=state.auditLog||[];articles=state.articles||[];stockMoves=state.stockMoves||[];gasVouchers=state.gasVouchers||[];}
   function load(){if(writeDepth)return;const saved=shoesLaminationShopsServices.read();applyCloudState(saved?JSON.parse(JSON.stringify(saved)):{settings:shoesLaminationShopsServices.common()});normalizeUpperFeatureState();normalizeWorkerColumnLabels();normalizeWorkerColumnOrder();}
-  async function saveCriticalCloudState(){const previous=shoesLaminationShopsServices.read(),existed=shoesLaminationShopsServices.exists();writeDepth++;shoesLaminationShopsServices.publish(captureCloudState());try{const ok=await shoesLaminationShopsServices.critical();if(!ok)shoesLaminationShopsServices.restore(previous,existed);return ok;}catch(error){shoesLaminationShopsServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
+  async function saveCriticalCloudState(opts={}){const previous=shoesLaminationShopsServices.read(),existed=shoesLaminationShopsServices.exists();writeDepth++;shoesLaminationShopsServices.publish(captureCloudState());try{const ok=await shoesLaminationShopsServices.critical(opts);if(!ok&&!opts?.nonBlocking)shoesLaminationShopsServices.restore(previous,existed);return ok;}catch(error){if(!opts?.nonBlocking)shoesLaminationShopsServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
   function persistAll(){shoesLaminationShopsServices.publish(captureCloudState());return shoesLaminationShopsServices.persist();}
   function saveDB(){shoesLaminationShopsServices.publish(captureCloudState());return shoesLaminationShopsServices.local();}
   function reconcileCloudAfterCriticalRollback(){return shoesLaminationShopsServices.reconcile();}
@@ -2385,10 +2415,16 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLaminationShopsUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLaminationShopsUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState('upper');
-  if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
+  toast(`Upper Voucher #${voucherNo} created`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher save deferred:', err?.message||err);
+    }
+  })();
   }finally{window.__shoesLaminationShopsUpperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function setUpperWorkerSelection(workerId){
@@ -3450,7 +3486,7 @@ const shoesLaserManServices={
   exists:()=>Object.prototype.hasOwnProperty.call(settings,'shoesLaserManProduction'),
   publish:value=>{settings={...settings,shoesLaserManProduction:value};},
   restore:(value,exists)=>{const next={...settings};if(exists)next.shoesLaserManProduction=value;else delete next.shoesLaserManProduction;settings=next;},
-  critical:()=>saveCriticalCloudState(),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
+  critical:(opts={})=>saveCriticalCloudState('upper',opts),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
   navigate:(page,...args)=>goto(page,...args),render:()=>render()
 };
 const shoesLaserManModule=(()=>{
@@ -3464,7 +3500,7 @@ const shoesLaserManModule=(()=>{
   function captureCloudState(){return JSON.parse(JSON.stringify(getCurrentState()));}
   function applyCloudState(state){settings=state.settings||{};workers=state.workers||[];materials=state.materials||[];transactions=state.transactions||[];bills=state.bills||[];auditLog=state.auditLog||[];articles=state.articles||[];stockMoves=state.stockMoves||[];gasVouchers=state.gasVouchers||[];}
   function load(){if(writeDepth)return;const saved=shoesLaserManServices.read();applyCloudState(saved?JSON.parse(JSON.stringify(saved)):{settings:shoesLaserManServices.common()});normalizeUpperFeatureState();normalizeWorkerColumnLabels();normalizeWorkerColumnOrder();}
-  async function saveCriticalCloudState(){const previous=shoesLaserManServices.read(),existed=shoesLaserManServices.exists();writeDepth++;shoesLaserManServices.publish(captureCloudState());try{const ok=await shoesLaserManServices.critical();if(!ok)shoesLaserManServices.restore(previous,existed);return ok;}catch(error){shoesLaserManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
+  async function saveCriticalCloudState(opts={}){const previous=shoesLaserManServices.read(),existed=shoesLaserManServices.exists();writeDepth++;shoesLaserManServices.publish(captureCloudState());try{const ok=await shoesLaserManServices.critical(opts);if(!ok&&!opts?.nonBlocking)shoesLaserManServices.restore(previous,existed);return ok;}catch(error){if(!opts?.nonBlocking)shoesLaserManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
   function persistAll(){shoesLaserManServices.publish(captureCloudState());return shoesLaserManServices.persist();}
   function saveDB(){shoesLaserManServices.publish(captureCloudState());return shoesLaserManServices.local();}
   function reconcileCloudAfterCriticalRollback(){return shoesLaserManServices.reconcile();}
@@ -4023,10 +4059,16 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLaserManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLaserManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLaser(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState('upper');
-  if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
+  toast(`Upper Voucher #${voucherNo} created`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher save deferred:', err?.message||err);
+    }
+  })();
   }finally{window.__shoesLaserManUpperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function setUpperWorkerSelection(workerId){
@@ -6657,7 +6699,7 @@ const shoesLabelManServices={
   exists:()=>Object.prototype.hasOwnProperty.call(settings,'shoesLabelManProduction'),
   publish:value=>{settings={...settings,shoesLabelManProduction:value};},
   restore:(value,exists)=>{const next={...settings};if(exists)next.shoesLabelManProduction=value;else delete next.shoesLabelManProduction;settings=next;},
-  critical:()=>saveCriticalCloudState(),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
+  critical:(opts={})=>saveCriticalCloudState('upper',opts),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
   navigate:(page,...args)=>goto(page,...args),render:()=>render()
 };
 const shoesLabelManModule=(()=>{
@@ -6671,7 +6713,7 @@ const shoesLabelManModule=(()=>{
   function captureCloudState(){return JSON.parse(JSON.stringify(getCurrentState()));}
   function applyCloudState(state){settings=state.settings||{};workers=state.workers||[];materials=state.materials||[];transactions=state.transactions||[];bills=state.bills||[];auditLog=state.auditLog||[];articles=state.articles||[];stockMoves=state.stockMoves||[];gasVouchers=state.gasVouchers||[];}
   function load(){if(writeDepth)return;const saved=shoesLabelManServices.read();applyCloudState(saved?JSON.parse(JSON.stringify(saved)):{settings:shoesLabelManServices.common()});normalizeUpperFeatureState();normalizeWorkerColumnLabels();normalizeWorkerColumnOrder();}
-  async function saveCriticalCloudState(){const previous=shoesLabelManServices.read(),existed=shoesLabelManServices.exists();writeDepth++;shoesLabelManServices.publish(captureCloudState());try{const ok=await shoesLabelManServices.critical();if(!ok)shoesLabelManServices.restore(previous,existed);return ok;}catch(error){shoesLabelManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
+  async function saveCriticalCloudState(opts={}){const previous=shoesLabelManServices.read(),existed=shoesLabelManServices.exists();writeDepth++;shoesLabelManServices.publish(captureCloudState());try{const ok=await shoesLabelManServices.critical(opts);if(!ok&&!opts?.nonBlocking)shoesLabelManServices.restore(previous,existed);return ok;}catch(error){if(!opts?.nonBlocking)shoesLabelManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
   function persistAll(){shoesLabelManServices.publish(captureCloudState());return shoesLabelManServices.persist();}
   function saveDB(){shoesLabelManServices.publish(captureCloudState());return shoesLabelManServices.local();}
   function reconcileCloudAfterCriticalRollback(){return shoesLabelManServices.reconcile();}
@@ -7230,10 +7272,16 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLabelManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLabelManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState('upper');
-  if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
+  toast(`Upper Voucher #${voucherNo} created`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher save deferred:', err?.message||err);
+    }
+  })();
   }finally{window.__shoesLabelManUpperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function setUpperWorkerSelection(workerId){
@@ -8213,7 +8261,7 @@ const shoesPressManServices={
   exists:()=>Object.prototype.hasOwnProperty.call(settings,'shoesPressManProduction'),
   publish:value=>{settings={...settings,shoesPressManProduction:{...(settings.shoesPressManProduction||{}),...value}};},
   restore:(value,exists)=>{const next={...settings};if(exists)next.shoesPressManProduction=value;else delete next.shoesPressManProduction;settings=next;},
-  critical:()=>saveCriticalCloudState('press'),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
+  critical:(opts={})=>saveCriticalCloudState('press',opts),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
   navigate:(page,...args)=>goto(page,...args),render:()=>render()
 };
 const shoesPressManModule=(()=>{
@@ -8235,7 +8283,7 @@ const WORKER_PRODUCTION_VIEWS=['pressMeterReport','distributeUpper','upperArticl
   function captureCloudState(){return JSON.parse(JSON.stringify(getCurrentState()));}
   function applyCloudState(state){settings=state.settings||{};workers=state.workers||[];materials=state.materials||[];transactions=state.transactions||[];bills=state.bills||[];auditLog=state.auditLog||[];articles=state.articles||[];stockMoves=state.stockMoves||[];gasVouchers=state.gasVouchers||[];}
   function load(){if(writeDepth)return;const saved=shoesPressManServices.read();applyCloudState(saved?JSON.parse(JSON.stringify(saved)):{settings:shoesPressManServices.common()});normalizeUpperFeatureState();normalizeWorkerColumnLabels();normalizeWorkerColumnOrder();}
-  async function saveCriticalCloudState(){const previous=shoesPressManServices.read(),existed=shoesPressManServices.exists();writeDepth++;shoesPressManServices.publish(captureCloudState());try{const ok=await shoesPressManServices.critical();if(!ok)shoesPressManServices.restore(previous,existed);return ok;}catch(error){shoesPressManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
+  async function saveCriticalCloudState(opts={}){const previous=shoesPressManServices.read(),existed=shoesPressManServices.exists();writeDepth++;shoesPressManServices.publish(captureCloudState());try{const ok=await shoesPressManServices.critical(opts);if(!ok&&!opts?.nonBlocking)shoesPressManServices.restore(previous,existed);return ok;}catch(error){if(!opts?.nonBlocking)shoesPressManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
   function persistAll(){shoesPressManServices.publish(captureCloudState());return shoesPressManServices.persist();}
   function saveDB(){shoesPressManServices.publish(captureCloudState());return shoesPressManServices.local();}
   function reconcileCloudAfterCriticalRollback(){return shoesPressManServices.reconcile();}
@@ -8984,10 +9032,16 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesPressManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesPressManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,pressCutting:true,...(draft.cuttingMeter?.allocationVersion===1?{pressMeterAllocation:true}:{}),...(draft.issuedRolls?{issuedRolls:draft.issuedRolls}:{}),voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);if(draft.cuttingMeter)settings.shoesPressCuttingMeters=[...(settings.shoesPressCuttingMeters||[]),{id:uid(),voucherId:String(record.id),voucherNo,workerId:draft.workerId,workerName:draft.workerName,workDate:draft.workDate,...draft.cuttingMeter,createdAt:date,date}];auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState('upper');
-  if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
+  toast(`Upper Voucher #${voucherNo} created`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher save deferred:', err?.message||err);
+    }
+  })();
   }finally{window.__shoesPressManUpperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function setUpperWorkerSelection(workerId){
@@ -9996,7 +10050,7 @@ const homeLaserAndStitchManServices={
   exists:()=>Object.prototype.hasOwnProperty.call(settings,'homeLaserAndStitchManProduction'),
   publish:value=>{settings={...settings,homeLaserAndStitchManProduction:value};},
   restore:(value,exists)=>{const next={...settings};if(exists)next.homeLaserAndStitchManProduction=value;else delete next.homeLaserAndStitchManProduction;settings=next;},
-  critical:()=>saveCriticalCloudState(),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
+  critical:(opts={})=>saveCriticalCloudState('upper',opts),persist:()=>persistAll(),local:()=>persistLocalOnly(),reconcile:()=>reconcileCloudAfterCriticalRollback(),
   navigate:(page,...args)=>goto(page,...args),render:()=>render()
 };
 const homeLaserAndStitchManModule=(()=>{
@@ -10011,7 +10065,7 @@ const homeLaserAndStitchManModule=(()=>{
   function captureCloudState(){return JSON.parse(JSON.stringify(getCurrentState()));}
   function applyCloudState(state){settings=state.settings||{};workers=state.workers||[];materials=state.materials||[];transactions=state.transactions||[];bills=state.bills||[];auditLog=state.auditLog||[];articles=state.articles||[];stockMoves=state.stockMoves||[];gasVouchers=state.gasVouchers||[];}
   function load(){if(writeDepth)return;const saved=homeLaserAndStitchManServices.read();applyCloudState(saved?JSON.parse(JSON.stringify(saved)):{settings:homeLaserAndStitchManServices.common()});normalizeUpperFeatureState();normalizeWorkerColumnLabels();normalizeWorkerColumnOrder();}
-  async function saveCriticalCloudState(){const previous=homeLaserAndStitchManServices.read(),existed=homeLaserAndStitchManServices.exists();writeDepth++;homeLaserAndStitchManServices.publish(captureCloudState());try{const ok=await homeLaserAndStitchManServices.critical();if(!ok)homeLaserAndStitchManServices.restore(previous,existed);return ok;}catch(error){homeLaserAndStitchManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
+  async function saveCriticalCloudState(opts={}){const previous=homeLaserAndStitchManServices.read(),existed=homeLaserAndStitchManServices.exists();writeDepth++;homeLaserAndStitchManServices.publish(captureCloudState());try{const ok=await homeLaserAndStitchManServices.critical(opts);if(!ok&&!opts?.nonBlocking)homeLaserAndStitchManServices.restore(previous,existed);return ok;}catch(error){if(!opts?.nonBlocking)homeLaserAndStitchManServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
   function persistAll(){homeLaserAndStitchManServices.publish(captureCloudState());return homeLaserAndStitchManServices.persist();}
   function saveDB(){homeLaserAndStitchManServices.publish(captureCloudState());return homeLaserAndStitchManServices.local();}
   function reconcileCloudAfterCriticalRollback(){return homeLaserAndStitchManServices.reconcile();}
@@ -10570,10 +10624,16 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__homeLaserAndStitchMan_upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__homeLaserAndStitchMan_upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState('upper');
-  if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
+  toast(`Upper Voucher #${voucherNo} created`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher save deferred:', err?.message||err);
+    }
+  })();
   }finally{window.__homeLaserAndStitchMan_upperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function setUpperWorkerSelection(workerId){
@@ -14927,10 +14987,10 @@ function collectUpperDistributionDraft(){
 }
 
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
-  const cloudSaved=await saveCriticalCloudState('upper');
-  if(!cloudSaved){settings=JSON.parse(beforeSettings);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!(settings.upperDistributions||[]).some(saved=>String(saved.id)===String(record.id))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Upper Distribution was NOT saved to D1. No stock was changed. Please check the connection and try again.');return;}}
   render();
   showUpperVoucher(record);
+  toast(`Upper Voucher #${voucherNo} created`);
+  syncVoucherInBackground('upper', `Upper Voucher #${voucherNo}`);
   }finally{window.__upperVoucherCreating=false;const b=document.getElementById('btnCreateUpperVoucher');if(b)b.disabled=false;}
 }
 function getUpperPendingForWorker(workerId){
@@ -22713,8 +22773,8 @@ async function createBatamProductionVoucher(){
  if(expenseAmount>0)batamMansExpenses().push({id:uid(),voucherId,workerId:String(v.workerId),workerName:batamMansWorkerName(v.workerId),amount:expenseAmount,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'});if(pendingQty>0){const w=workers.find(x=>String(x.id)===String(v.workerId))||{};batamPendingRecords().push({id:uid(),date:now,voucherId,workerId:String(v.workerId),workerName:batamMansWorkerName(v.workerId),workerCategory:String(w.category||''),qty:pendingQty,delta:pendingQty,action:'add',source:'productionVoucher'});}
  materials.forEach(dm=>batamMaterialDistributions().push({id:uid(),voucherId,workerId:v.workerId,materialId:dm.materialId,qty:dm.qty,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'}));
  audit('Batam Mans Production Voucher Created',`${voucherNo} — ${batamMansWorkerName(v.workerId)} — ${voucherTotal} Atoms`);
- if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!batamMansVouchers().some(saved=>String(saved.id)===String(voucherId))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Voucher was not saved.');return;}}
  batamMansDraftItems=[];batamMansDraftMaterials=[];render();openBatamVoucher(voucherId,false);toast('Production voucher saved as Pending Verification');
+ syncVoucherInBackground('bottom', `Batam Voucher #${voucherNo}`);
  }finally{createBatamProductionVoucher.saving=false;}
 }
 
@@ -23467,8 +23527,8 @@ async function createFinishedProductionVoucher(){
  if(expenseAmount>0)finishedMansExpenses().push({id:uid(),voucherId,workerId:String(v.workerId),workerName:finishedMansWorkerName(v.workerId),amount:expenseAmount,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'});if(pendingQty>0){const w=workers.find(x=>String(x.id)===String(v.workerId))||{};finishedPendingRecords().push({id:uid(),date:now,voucherId,workerId:String(v.workerId),workerName:finishedMansWorkerName(v.workerId),workerCategory:String(w.category||''),qty:pendingQty,delta:pendingQty,action:'add',source:'productionVoucher'});}
  materials.forEach(dm=>finishedMaterialDistributions().push({id:uid(),voucherId,workerId:v.workerId,materialId:dm.materialId,qty:dm.qty,notes:`Voucher ${voucherNo}`,createdAt:now,createdBy:'Admin'}));
  audit('Finished Mans Production Voucher Created',`${voucherNo} — ${finishedMansWorkerName(v.workerId)} — ${voucherTotal} Atoms`);
- if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();if(!finishedMansVouchers().some(saved=>String(saved.id)===String(voucherId))){if(entryPage)entryPage.replaceChildren(...entryNodes);toast('Voucher was not saved.');return;}}
  finishedMansDraftItems=[];finishedMansDraftMaterials=[];render();openFinishedVoucher(voucherId,false);toast('Production voucher saved as Pending Verification');
+ syncVoucherInBackground('finish', `Finished Voucher #${voucherNo}`);
  }finally{createFinishedProductionVoucher.saving=false;}
 }
 
