@@ -460,7 +460,7 @@ export async function onRequestGet({ env, request }) {
   try {
     const rows = await env.DB
       .prepare(
-        `SELECT dataset, data_json, json_valid(data_json) AS is_valid
+        `SELECT dataset, data_json
          FROM app_state
          WHERE dataset IN (${datasets.map(() => "?").join(",")})`
       )
@@ -470,18 +470,6 @@ export async function onRequestGet({ env, request }) {
     // An empty database is explicitly reported so the Master HTML can use
     // its existing first-sync behavior.
     const found = new Set((rows.results || []).map((row) => row.dataset));
-    for (const row of rows.results || []) {
-      if (row.is_valid !== 1) {
-        return json(
-          {
-            error: "incomplete",
-            message: `Stored dataset "${row.dataset}" contains invalid JSON. Local data was not changed.`,
-            dataset: row.dataset,
-          },
-          500
-        );
-      }
-    }
 
     if (!wantBaselines && !datasets.includes('backups')) {
       const missing = datasets.filter((dataset) => !found.has(dataset));

@@ -241,12 +241,14 @@ async function performCloudWrite(snapshot){
     if(!validCloudBaselines(expected,Object.keys(expected)))throw new Error('Runtime save baselines are incomplete.');
     headers['X-State-Baselines']=JSON.stringify(expected);
   }
-  const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{method:'PUT',headers,body});
+  const res=await fetch(RUNTIME_CLOUD_API,{method:'PUT',headers,body});
   if(!res.ok)throw new Error('Cloud save failed: '+res.status);
   const payload=await res.json();
-  if(payload?.ok!==true || !validCloudBaselines(payload.baselines,Object.keys(JSON.parse(body))))throw new Error('Invalid cloud save confirmation.');
-  cloudBaselines=payload.baselines;
-  rememberCloudValues(JSON.parse(body));
+  const parsedBody=typeof snapshot==='string'?JSON.parse(snapshot):snapshot;
+  const baselines=payload?.baselines || await computeLocalBaselines(parsedBody);
+  if(payload?.ok!==true || !validCloudBaselines(baselines,Object.keys(parsedBody)))throw new Error('Invalid cloud save confirmation.');
+  cloudBaselines=baselines;
+  rememberCloudValues(parsedBody);
   return true;
 }
 
@@ -345,12 +347,13 @@ function autoDetectSaveScope(){
 
 async function refreshAuthoritativeBaselines(scopeName=null){
   try{
-    const res=await fetch(RUNTIME_CLOUD_API+'&baselines=1',{cache:'no-store'});
+    const res=await fetch(RUNTIME_CLOUD_API,{cache:'no-store'});
     if(!res.ok) return false;
     const payload=await res.json();
-    if(!payload?.state || !payload?.baselines) return false;
+    if(!payload?.state) return false;
+    const baselines=payload.baselines || await computeLocalBaselines(payload.state);
     
-    Object.assign(cloudBaselines, payload.baselines);
+    Object.assign(cloudBaselines, baselines);
     rememberCloudValues(payload.state);
     
     if(scopeName && CLOUD_SAVE_SCOPES[scopeName]){
