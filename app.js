@@ -2021,8 +2021,8 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
+  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -2522,8 +2522,8 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -3665,8 +3665,8 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
+  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -4164,8 +4164,8 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLaser(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -6878,8 +6878,8 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
+  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -7377,8 +7377,8 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -8636,8 +8636,8 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
+  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -9137,8 +9137,8 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -10230,8 +10230,8 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
+  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -10729,8 +10729,8 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -15679,8 +15679,8 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
-  if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher changes were NOT saved to D1. Please check the connection and try again.');return;}
   showUpperVoucher(r);toast('Upper Voucher updated');
+  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
 }
 function deleteUpperDistribution(id){
   const r=(settings.upperDistributions||[]).find(x=>String(x.id)===String(id));const articleOnly=r&&upperVoucherArticleOnly(r);if(!r){toast('Upper voucher not found');return;}
@@ -15693,8 +15693,8 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
-    if(!await saveCriticalCloudState('upper')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Upper Voucher was NOT deleted from D1. Please check the connection and try again.');return;}
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function openUpperVoucherCustomize(v){const fields=[['factoryName','Factory Name'],['title','Voucher Title'],['voucherNo','Voucher Number'],['date','Date'],['time','Time'],['worker','Worker'],['workerType','Worker Type'],['articleMaterial','Article / Material'],['quantity','Quantity'],['labourWeeklyKharcha','Labour Weekly Kharcha'],['receivingSummary','Receiving Summary'],['totalItems','Total Items']];const current=settings.upperVoucherCustomization||{};modal(`<h3 style="margin-top:0;">Customize Voucher</h3><div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Choose which fields are shown and which are bold.</div><div>${fields.map(([id,label])=>{const f=current[id]||{show:true,bold:false};return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);"><strong>${label}</strong><label style="font-size:12px;"><input type="checkbox" data-uv-show="${id}" ${f.show?'checked':''}> Show</label><label style="font-size:12px;"><input type="checkbox" data-uv-bold="${id}" ${f.bold?'checked':''}> Bold</label></div>`;}).join('')}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperVoucherCustomization" data-i18n=ui_Save>Save</button><button type="button" class="btn ghost" id="cancelUpperVoucherCustomization" data-i18n=ui_Cancel>Cancel</button></div>`);document.getElementById('cancelUpperVoucherCustomization').onclick=()=>showUpperVoucher(v);document.getElementById('saveUpperVoucherCustomization').onclick=async()=>{const before=JSON.stringify(settings);settings.upperVoucherCustomization=settings.upperVoucherCustomization||{};fields.forEach(([id])=>{settings.upperVoucherCustomization[id]={show:!!document.querySelector(`[data-uv-show="${id}"]`)?.checked,bold:!!document.querySelector(`[data-uv-bold="${id}"]`)?.checked};});if(await saveCriticalCloudState()){showUpperVoucher(v);toast('Voucher customization saved');}else{settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Voucher customization was NOT saved to D1. Please try again.');}};}
@@ -22789,18 +22789,19 @@ async function saveEditBatamVoucher(id){
  v.expenseAmount=Math.max(0,Number(document.getElementById('bmEditExpense')?.value)||0);v.notes=document.getElementById('bmEditNotes')?.value.trim()||'';v.editedAt=new Date().toISOString();
  let ex=batamMansExpenses().find(x=>String(x.voucherId)===String(v.id));if(v.expenseAmount>0){if(ex){ex.amount=v.expenseAmount;ex.editedAt=v.editedAt;}else batamMansExpenses().push({id:uid(),voucherId:v.id,workerId:v.workerId,workerName:batamMansWorkerName(v.workerId),amount:v.expenseAmount,notes:`Voucher ${v.voucherNo}`,createdAt:v.editedAt,createdBy:'Admin'});}else if(ex)settings.batamMansExpenses=settings.batamMansExpenses.filter(x=>String(x.id)!==String(ex.id));
  audit('Batam Mans Voucher Edited',v.voucherNo);
- if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher edit was NOT saved.');return;}closeModal();render();toast('Voucher updated');
+ closeModal();render();toast('Voucher updated');
+ syncVoucherInBackground('bottom', `Batam Voucher #${v.voucherNo} Edit`);
 }
 async function deleteBatamVoucher(id){
  const v=batamMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(!confirm(`Delete ${v.voucherNo}?\n\nIts linked Batam material distribution and expense will also be reversed/removed. Other modules will not be changed.`))return;
- const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  (v.materials||[]).forEach(dm=>{const m=getBatamMansProductionMaterial(dm.materialId);if(m)m.stock=Number(m.stock)+(Number(dm.qty)||0);});
  settings.batamMansMaterialDistributions=batamMaterialDistributions().filter(x=>String(x.voucherId)!==String(v.id));
  settings.batamMansExpenses=batamMansExpenses().filter(x=>String(x.voucherId)!==String(v.id));
  settings.batamMansProduction=batamMansEntries().filter(x=>String(x.voucherId)!==String(v.id));
  settings.batamMansProductionVouchers=batamMansVouchers().filter(x=>String(x.id)!==String(v.id));
  audit('Batam Mans Voucher Deleted',v.voucherNo);
- if(!await saveCriticalCloudState('bottom')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher delete was NOT saved.');return;}render();toast('Voucher deleted');
+ closeModal();render();toast('Voucher deleted');
+ syncVoucherInBackground('bottom', `Batam Voucher #${v.voucherNo} Delete`);
 }
 function batamVerificationSlipHtml(vouchers){
  const flat=[];vouchers.forEach(v=>(v.items||[]).forEach(i=>flat.push({v,i})));const total=flat.reduce((s,x)=>s+(Number(x.i.reportedQty)||0),0);
@@ -23543,18 +23544,19 @@ async function saveEditFinishedVoucher(id){
  v.expenseAmount=Math.max(0,Number(document.getElementById('fmEditExpense')?.value)||0);v.notes=document.getElementById('fmEditNotes')?.value.trim()||'';v.editedAt=new Date().toISOString();
  let ex=finishedMansExpenses().find(x=>String(x.voucherId)===String(v.id));if(v.expenseAmount>0){if(ex){ex.amount=v.expenseAmount;ex.editedAt=v.editedAt;}else finishedMansExpenses().push({id:uid(),voucherId:v.id,workerId:v.workerId,workerName:finishedMansWorkerName(v.workerId),amount:v.expenseAmount,notes:`Voucher ${v.voucherNo}`,createdAt:v.editedAt,createdBy:'Admin'});}else if(ex)settings.finishedMansExpenses=settings.finishedMansExpenses.filter(x=>String(x.id)!==String(ex.id));
  audit('Finished Mans Voucher Edited',v.voucherNo);
- if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher edit was NOT saved.');return;}closeModal();render();toast('Voucher updated');
+ closeModal();render();toast('Voucher updated');
+ syncVoucherInBackground('finish', `Finished Voucher #${v.voucherNo} Edit`);
 }
 async function deleteFinishedVoucher(id){
  const v=finishedMansVouchers().find(x=>String(x.id)===String(id));if(!v)return;if(!confirm(`Delete ${v.voucherNo}?\n\nIts linked Finished material distribution and expense will also be reversed/removed. Other modules will not be changed.`))return;
- const before=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog);
  (v.materials||[]).forEach(dm=>{const m=getFinishedMansProductionMaterial(dm.materialId);if(m)m.stock=Number(m.stock)+(Number(dm.qty)||0);});
  settings.finishedMansMaterialDistributions=finishedMaterialDistributions().filter(x=>String(x.voucherId)!==String(v.id));
  settings.finishedMansExpenses=finishedMansExpenses().filter(x=>String(x.voucherId)!==String(v.id));
  settings.finishedMansProduction=finishedMansEntries().filter(x=>String(x.voucherId)!==String(v.id));
  settings.finishedMansProductionVouchers=finishedMansVouchers().filter(x=>String(x.id)!==String(v.id));
  audit('Finished Mans Voucher Deleted',v.voucherNo);
- if(!await saveCriticalCloudState('finish')){settings=JSON.parse(before);auditLog=JSON.parse(beforeAudit);await reconcileCloudAfterCriticalRollback();toast('Voucher delete was NOT saved.');return;}render();toast('Voucher deleted');
+ closeModal();render();toast('Voucher deleted');
+ syncVoucherInBackground('finish', `Finished Voucher #${v.voucherNo} Delete`);
 }
 function finishedVerificationSlipHtml(vouchers){
  const flat=[];vouchers.forEach(v=>(v.items||[]).forEach(i=>flat.push({v,i})));const total=flat.reduce((s,x)=>s+(Number(x.i.reportedQty)||0),0);
@@ -24104,12 +24106,11 @@ function bindCurrentWeekWorkerVoucherDoubleClick(){
       const delId = b.dataset.delwk;
       const wk = workers.find(w=>w.id===delId);
       if(!wk)return;
-      const before=JSON.parse(JSON.stringify(workers));
       wk.archived=true;
-      if(!await saveCriticalCloudState('worker')){workers=before;await reconcileCloudAfterCriticalRollback();toast('Worker was not archived.');return;}
       if(currentPage==='workerHistory' && selectedWorkerId===delId){ goto('workers'); }
       else { render(); }
       toast('Worker archived');
+      syncVoucherInBackground('worker', `Worker ${wk.name} Archive`);
     }
   }));
   document.querySelectorAll('[data-viewwk]').forEach(b=>b.addEventListener('click', ()=>openWorkerHistory(b.dataset.viewwk)));
@@ -24703,9 +24704,14 @@ function bindCurrentWeekWorkerVoucherDoubleClick(){
     const mat = materials.find(m=>m.id===b.dataset.restoremat);
     if(mat){ mat.archived=false; persistAll(); render(); toast('Material restored'); }
   }));
-  document.querySelectorAll('[data-restorewk]').forEach(b=>b.addEventListener('click', async()=>{
+  document.querySelectorAll('[data-restorewk]').forEach(b=>b.addEventListener('click', ()=>{
     const wk = workers.find(w=>w.id===b.dataset.restorewk);
-    if(wk){const before=JSON.parse(JSON.stringify(workers));wk.archived=false;if(!await saveCriticalCloudState('worker')){workers=before;await reconcileCloudAfterCriticalRollback();toast('Worker was not restored.');return;}render();toast('Worker restored');}
+    if(wk){
+      wk.archived=false;
+      render();
+      toast('Worker restored');
+      syncVoucherInBackground('worker', `Worker ${wk.name} Restore`);
+    }
   }));
 }
 
