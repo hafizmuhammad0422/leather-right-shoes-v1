@@ -2021,8 +2021,15 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
+  persistAll();
   showUpperVoucher(r);toast('Upper Voucher updated');
-  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher edit deferred:', err?.message||err);
+    }
+  })();
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -2415,6 +2422,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLaminationShopsUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLaminationShopsUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
+  persistAll();
   render();
   showUpperVoucher(record);
   toast(`Upper Voucher #${voucherNo} created`);
@@ -2522,8 +2530,15 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
+    persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
+    (async()=>{
+      try{
+        await saveCriticalCloudState({ nonBlocking: true });
+      }catch(err){
+        console.warn('Background voucher delete deferred:', err?.message||err);
+      }
+    })();
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -3679,8 +3694,15 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
+  persistAll();
   showUpperVoucher(r);toast('Upper Voucher updated');
-  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher edit deferred:', err?.message||err);
+    }
+  })();
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -4073,6 +4095,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLaserManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLaserManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLaser(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
+  persistAll();
   render();
   showUpperVoucher(record);
   toast(`Upper Voucher #${voucherNo} created`);
@@ -4178,8 +4201,15 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLaser(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
+    persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
+    (async()=>{
+      try{
+        await saveCriticalCloudState({ nonBlocking: true });
+      }catch(err){
+        console.warn('Background voucher delete deferred:', err?.message||err);
+      }
+    })();
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -6888,8 +6918,15 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
+  persistAll();
   showUpperVoucher(r);toast('Upper Voucher updated');
-  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher edit deferred:', err?.message||err);
+    }
+  })();
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -7282,6 +7319,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__shoesLabelManUpperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__shoesLabelManUpperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
+  persistAll();
   render();
   showUpperVoucher(record);
   toast(`Upper Voucher #${voucherNo} created`);
@@ -7387,8 +7425,15 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
+    persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
+    (async()=>{
+      try{
+        await saveCriticalCloudState({ nonBlocking: true });
+      }catch(err){
+        console.warn('Background voucher delete deferred:', err?.message||err);
+      }
+    })();
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -8646,8 +8691,15 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
+  persistAll();
   showUpperVoucher(r);toast('Upper Voucher updated');
-  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher edit deferred:', err?.message||err);
+    }
+  })();
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -9147,8 +9199,15 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
+    persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
+    (async()=>{
+      try{
+        await saveCriticalCloudState({ nonBlocking: true });
+      }catch(err){
+        console.warn('Background voucher delete deferred:', err?.message||err);
+      }
+    })();
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -10240,8 +10299,15 @@ async function saveUpperDistributionEdit(id){
   }
   r.workerName=String(worker.name||'');r.lines=lines;r.totalItems=lines.reduce((n,l)=>n+l.qty,0);r.totalAmount=lines.reduce((n,l)=>n+l.labourExpense,0);
   auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Edited',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${oldItems} → ${r.totalItems} ATOMS — Kharcha ${upperMoney(oldAmount)} → ${upperMoney(r.totalAmount)}`});
+  persistAll();
   showUpperVoucher(r);toast('Upper Voucher updated');
-  syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Edit`);
+  (async()=>{
+    try{
+      await saveCriticalCloudState({ nonBlocking: true });
+    }catch(err){
+      console.warn('Background voucher edit deferred:', err?.message||err);
+    }
+  })();
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -10634,6 +10700,7 @@ function openWorkerModal(id,initialCategory=''){
 }
 function deleteUpperArticle(id){normalizeUpperFeatureState();const a=(settings.upperArticles||[]).find(x=>String(x.id)===String(id));if(!a)return;if(!confirm('Delete this Upper Article?'))return;settings.upperArticles=settings.upperArticles.filter(x=>String(x.id)!==String(id));persistAll();render();toast('Upper Article deleted');}
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__homeLaserAndStitchMan_upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__homeLaserAndStitchMan_upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
+  persistAll();
   render();
   showUpperVoucher(record);
   toast(`Upper Voucher #${voucherNo} created`);
@@ -10739,8 +10806,15 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
+    persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
+    (async()=>{
+      try{
+        await saveCriticalCloudState({ nonBlocking: true });
+      }catch(err){
+        console.warn('Background voucher delete deferred:', err?.message||err);
+      }
+    })();
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -14997,6 +15071,7 @@ function collectUpperDistributionDraft(){
 }
 
 async function createUpperDistribution(){if(criticalCloudSaveActive||cloudNeedsReload||window.__upperVoucherCreating){toast('Upper Voucher is already being saved. Please wait.');return;}window.__upperVoucherCreating=true;const createBtn=document.getElementById('btnCreateUpperVoucher');if(createBtn)createBtn.disabled=true;try{const entryPage=document.getElementById('mainArea'),entryNodes=entryPage?[...entryPage.childNodes]:[];normalizeUpperFeatureState();const draft=collectUpperDistributionDraft();if(!draft)return;const beforeSettings=JSON.stringify(settings),beforeAudit=JSON.stringify(auditLog),date=new Date().toISOString(),existingMax=(settings.upperDistributions||[]).reduce((m,r)=>Math.max(m,Number(r.voucherNo)||0),1000),voucherNo=Math.max(1001,Number(settings.nextUpperVoucherNo)||1001,existingMax+1);draft.lines.forEach(l=>{const a=l.articleId?settings.upperArticles.find(x=>String(x.id)===String(l.articleId)):null,m=l.materialId?settings.upperMaterials.find(x=>String(x.id)===String(l.materialId)):null;if(a&&!workerProductionArticleOnly(draft.workerCategory)&&!workerProductionShoeLamination(draft.workerCategory))a.stock-=l.qty;if(m&&!workerProductionArticleOnly(draft.workerCategory))m.stock-=l.qty;});settings.nextUpperVoucherNo=voucherNo+1;const record={id:uid(),workflowVersion:1,voucherNo,date,createdAt:date,workDate:draft.workDate,workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,lines:draft.lines.map(l=>({articleId:l.articleId,articleName:l.articleName,articleStockBefore:l.articleStockBefore,materialId:l.materialId,materialName:l.materialName,materialStockBefore:l.materialStockBefore,...upperSavedUnitFields(l),qty:l.qty,receivedQty:l.receivedQty,rate:l.rate,labourExpense:l.labourExpense,lineTotal:l.labourExpense})),totalItems:draft.totalItems,totalAmount:draft.totalAmount};if(draft.openingPending>0)settings.upperPendingRecords.push({id:uid(),date:draft.workDate+'T00:00:00',workerId:draft.workerId,workerName:draft.workerName,workerCategory:draft.workerCategory,qty:draft.openingPending,delta:draft.openingPending,action:'add'});settings.upperDistributions.push(record);auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Distributed',details:`Voucher #${voucherNo} — ${draft.workerName} — ${draft.totalItems} ATOMS — ${upperMoney(draft.totalAmount)}`});
+  persistAll();
   render();
   showUpperVoucher(record);
   toast(`Upper Voucher #${voucherNo} created`);
@@ -15703,8 +15778,15 @@ function deleteUpperDistribution(id){
     if(!articleOnly&&!workerProductionShoeLamination(upperProductionRecordCategory(r)))(r.lines||[]).forEach(l=>{const a=settings.upperArticles.find(x=>String(x.id)===String(l.articleId));const m=settings.upperMaterials.find(x=>String(x.id)===String(l.materialId));if(a)a.stock+=Number(l.qty)||0;if(m)m.stock+=Number(l.qty)||0;});
     settings.upperDistributions=settings.upperDistributions.filter(x=>String(x.id)!==String(id));
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
+    persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
+    (async()=>{
+      try{
+        await saveCriticalCloudState({ nonBlocking: true });
+      }catch(err){
+        console.warn('Background voucher delete deferred:', err?.message||err);
+      }
+    })();
   });
 }
 function openUpperVoucherCustomize(v){const fields=[['factoryName','Factory Name'],['title','Voucher Title'],['voucherNo','Voucher Number'],['date','Date'],['time','Time'],['worker','Worker'],['workerType','Worker Type'],['articleMaterial','Article / Material'],['quantity','Quantity'],['labourWeeklyKharcha','Labour Weekly Kharcha'],['receivingSummary','Receiving Summary'],['totalItems','Total Items']];const current=settings.upperVoucherCustomization||{};modal(`<h3 style="margin-top:0;">Customize Voucher</h3><div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Choose which fields are shown and which are bold.</div><div>${fields.map(([id,label])=>{const f=current[id]||{show:true,bold:false};return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);"><strong>${label}</strong><label style="font-size:12px;"><input type="checkbox" data-uv-show="${id}" ${f.show?'checked':''}> Show</label><label style="font-size:12px;"><input type="checkbox" data-uv-bold="${id}" ${f.bold?'checked':''}> Bold</label></div>`;}).join('')}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperVoucherCustomization" data-i18n=ui_Save>Save</button><button type="button" class="btn ghost" id="cancelUpperVoucherCustomization" data-i18n=ui_Cancel>Cancel</button></div>`);document.getElementById('cancelUpperVoucherCustomization').onclick=()=>showUpperVoucher(v);document.getElementById('saveUpperVoucherCustomization').onclick=async()=>{const before=JSON.stringify(settings);settings.upperVoucherCustomization=settings.upperVoucherCustomization||{};fields.forEach(([id])=>{settings.upperVoucherCustomization[id]={show:!!document.querySelector(`[data-uv-show="${id}"]`)?.checked,bold:!!document.querySelector(`[data-uv-bold="${id}"]`)?.checked};});if(await saveCriticalCloudState()){showUpperVoucher(v);toast('Voucher customization saved');}else{settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Voucher customization was NOT saved to D1. Please try again.');}};}
