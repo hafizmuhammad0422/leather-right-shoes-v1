@@ -251,9 +251,8 @@ async function saveShoeSoleReceiving(shopkeeperId,articleId,atoms,date,notes='',
     shopkeeper.dispatches.push(purchase);
     shopkeeper.dispatchVouchers.push({id:uid(),voucherNo,date,dispatchIds:[String(purchase.id)],notes,createdAt:time});
     settings.nextDispatchVoucherNo=(Number(settings.nextDispatchVoucherNo)||1001)+1;
-    if(!await saveCriticalCloudState('factorySale')){
-      settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Dispatch was not saved. Stock and receipt were restored.');return null;
-    }
+    saveDB();
+    syncVoucherInBackground('factorySale', `Shoe Sole Receiving #${voucherNo}`);
     request.saved=true;
     return {supplierIndex:getShoeSoleSuppliers().findIndex(s=>String(s.id)===String(shopkeeperId)),purchaseId:String(purchase.id),voucherNo};
   }finally{request.saving=false;window.__soleReceiveSaving=false;}

@@ -3365,15 +3365,21 @@ function rollStockUnitOptions(existing,selected=existing?.unit||'ROLL'){
       if(!Number.isFinite(currentStock))throw new Error('Enter valid stock quantities.');const item={...(existing||{}),id:existing?existing.id:uid(),name:existing?existing.name:materialName,unit,openingStock,addStock,currentStock};if(index>=0)items[index]=item;else items.push(item);
       entry={...(old||{}),id:old?.id||uid(),date:old?.date||new Date().toISOString(),supplierName,materialName:item.name,unit,qty,stockItemId:item.id};
     }catch(error){toast(error.message);return;}
-    settings.rollStockItems=items;settings.rollStockEntryHistory=old?previousHistory.map(value=>String(value.id)===String(old.id)?entry:value):[...(previousHistory||[]),entry];button.disabled=true;
-    try{if(!await saveCriticalCloudState())throw new Error('Stock entry save failed');openRollStockModal();toast('Stock saved');}catch(error){if(previousItems===undefined)delete settings.rollStockItems;else settings.rollStockItems=previousItems;if(previousHistory===undefined)delete settings.rollStockEntryHistory;else settings.rollStockEntryHistory=previousHistory;button.disabled=false;toast('Stock was not saved.');}
+    settings.rollStockItems=items;settings.rollStockEntryHistory=old?previousHistory.map(value=>String(value.id)===String(old.id)?entry:value):[...(previousHistory||[]),entry];
+    persistAll();
+    openRollStockModal();
+    toast('Stock saved');
+    syncVoucherInBackground('upper', 'Roll Stock Entry Save');
   }
   function deleteRollStockEntry(id){
     if(!(settings.rollStockEntryHistory||[]).some(entry=>String(entry.id)===String(id)))return;
     openConfirmModal('Delete this stock receipt and remove its stock quantity?',async()=>{
       const previousItems=settings.rollStockItems,previousHistory=settings.rollStockEntryHistory,entry=(previousHistory||[]).find(entry=>String(entry.id)===String(id));if(!entry)return;const items=(previousItems||[]).slice();try{rollStockRemoveContribution(items,entry);}catch(error){toast(error.message);return;}
       settings.rollStockItems=items;settings.rollStockEntryHistory=previousHistory.filter(value=>String(value.id)!==String(id));
-      try{if(!await saveCriticalCloudState())throw new Error('Stock receipt delete failed');openRollStockModal();toast('Stock receipt deleted');}catch(error){settings.rollStockItems=previousItems;settings.rollStockEntryHistory=previousHistory;toast('Stock receipt was not deleted.');}
+      persistAll();
+      openRollStockModal();
+      toast('Stock receipt deleted');
+      syncVoucherInBackground('upper', 'Roll Stock Entry Delete');
     });
   }
   function openRollStockItemModal(id){
@@ -3389,13 +3395,21 @@ function rollStockUnitOptions(existing,selected=existing?.unit||'ROLL'){
     const previous=settings.rollStockItems,items=(previous||[]).slice(),index=items.findIndex(item=>String(item.id)===String(id));if(id&&index<0){toast('Stock item not found');return;}
     const linked=(settings.rollStockEntryHistory||[]).filter(entry=>String(entry.stockItemId)===String(id)),linkedQuantity=linked.reduce((sum,entry)=>sum+Number(entry.qty),0);
     if(linked.length&&(name!==items[index].name||unit!==items[index].unit||!Number.isFinite(linkedQuantity)||addStock+1e-9<linkedQuantity)){toast('Edit linked receipts to change material/unit. Add Stock must include all linked receipt quantities.');return;}
-    const item={...(index>=0?items[index]:{}),id:index>=0?items[index].id:uid(),name,unit,openingStock,addStock,currentStock};if(index>=0)items[index]=item;else items.push(item);settings.rollStockItems=items;button.disabled=true;
-    try{if(!await saveCriticalCloudState())throw new Error('Stock save failed');openRollStockModal();toast('Stock saved');}catch(error){if(previous===undefined)delete settings.rollStockItems;else settings.rollStockItems=previous;button.disabled=false;toast('Stock was not saved.');}
+    const item={...(index>=0?items[index]:{}),id:index>=0?items[index].id:uid(),name,unit,openingStock,addStock,currentStock};if(index>=0)items[index]=item;else items.push(item);settings.rollStockItems=items;
+    persistAll();
+    openRollStockModal();
+    toast('Stock saved');
+    syncVoucherInBackground('upper', 'Roll Stock Item Save');
   }
   function deleteRollStockItem(id){
     if(!(settings.rollStockItems||[]).some(item=>String(item.id)===String(id)))return;
     if((settings.rollStockEntryHistory||[]).some(entry=>String(entry.stockItemId)===String(id))){toast('Delete linked stock receipts first.');return;}
-    openConfirmModal('Delete this stock item?',async()=>{if((settings.rollStockEntryHistory||[]).some(entry=>String(entry.stockItemId)===String(id))){toast('Delete linked stock receipts first.');return;}const previous=settings.rollStockItems;settings.rollStockItems=previous.filter(item=>String(item.id)!==String(id));try{if(!await saveCriticalCloudState())throw new Error('Stock delete failed');openRollStockModal();toast('Stock deleted');}catch(error){settings.rollStockItems=previous;toast('Stock was not deleted.');}});
+    openConfirmModal('Delete this stock item?',async()=>{if((settings.rollStockEntryHistory||[]).some(entry=>String(entry.stockItemId)===String(id))){toast('Delete linked stock receipts first.');return;}const previous=settings.rollStockItems;settings.rollStockItems=previous.filter(item=>String(item.id)!==String(id));
+      persistAll();
+      openRollStockModal();
+      toast('Stock deleted');
+      syncVoucherInBackground('upper', 'Roll Stock Item Delete');
+    });
   }
   function bind(){slRoleBindEntry();
     document.getElementById('rollStockHistory')?.addEventListener('click',event=>{const edit=event.target.closest('[data-roll-stock-history-edit]'),remove=event.target.closest('[data-roll-stock-history-delete]');if(edit)openRollStockEntryModal(edit.dataset.rollStockHistoryEdit);else if(remove)deleteRollStockEntry(remove.dataset.rollStockHistoryDelete);});
@@ -5570,9 +5584,8 @@ async function saveShoeSoleReceiving(supplierId,productId,atoms,date,notes='',ti
     supplier.purchases.push(purchase);
     supplier.receiveVouchers.push({id:uid(),voucherNo,date,purchaseIds:[String(purchase.id)],notes,createdAt:time});
     settings.nextShoeSoleReceiveVoucherNo=(Number(settings.nextShoeSoleReceiveVoucherNo)||1001)+1;
-    if(!await saveCriticalCloudState()){
-      settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Material receiving was not saved. Stock and receipt were restored.');return null;
-    }
+    saveDB();
+    syncVoucherInBackground(null, `Material Receiving #${voucherNo}`);
     request.saved=true;
     return {supplierIndex:getShoeSoleSuppliers().findIndex(s=>String(s.id)===String(supplierId)),purchaseId:String(purchase.id),voucherNo};
   }finally{request.saving=false;window.__wfm_soleReceiveSaving=false;}
@@ -6304,11 +6317,8 @@ function openShoeSoleReceiveSession(supplierIndex){
       });
       supplier.receiveVouchers=supplier.receiveVouchers||[];
       const receivingId=uid();supplier.receiveVouchers.push({id:receivingId,voucherNo,date:iso,purchaseIds,notes:document.getElementById('wfm_rsNotes').value.trim(),createdAt:iso});
-      if(!await saveCriticalCloudState()){
-        settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();
-        supplier=getShoeSoleSuppliers().find(item=>String(item.id)===supplierId);products=supplier?.products||[];
-        if(!supplier?.receiveVouchers?.some(v=>String(v.id)===String(receivingId))){toast('Receiving was not saved. Entered quantities were preserved.');return;}
-      }
+      saveDB();
+      syncVoucherInBackground(null, `Material Receiving Voucher #${voucherNo}`);
       submitted=true;
       closeModal();
       render();
@@ -16997,7 +17007,7 @@ function showShoeBoxSupplierBill(index,id,autoPrint=false){const bill=(getShoeBo
 function openShoeBoxSupplierBillModal(index){sbSupplierBillForm(index);}
 function sbSupplierBillHistoryHtml(index){const history=getShoeBoxSuppliers()[index]?.supplierBills||[],groups=new Map();history.filter(b=>!b.billingDeleted).forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=b.from||week.from,label=(b.from||week.from)+' to '+(b.to||week.to);if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th data-i18n=ui_Bill>Bill</th><th data-i18n=ui_Date_20__2f__20_Time>Date / Time</th><th data-i18n=ui_Amount>Amount</th><th data-i18n=ui_Grand_20_Total>Grand Total</th><th data-i18n=ui_Actions>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+formatMoney(b.billTotal)+'</td><td>'+formatMoney(sbSupplierBillGrandTotal(b))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-sb-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
 function sbBindSupplierBillHistory(index){document.querySelectorAll('[data-sb-bill-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.billId,action=button.getAttribute('data-sb-bill-action');if(action==='View'||action==='Print')showShoeBoxSupplierBill(index,id,action==='Print');else if(action==='Edit')sbSupplierBillEditor(index,id);else sbDeleteSupplierBill(index,id);});}
-async function sbSupplierBillCommit(snapshot){try{return await sbCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.');}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
+async function sbSupplierBillCommit(snapshot){try{return await sbCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.',{ nonBlocking:false });}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
 function sbDeleteSupplierBill(index,id){confirmBillAccountDelete(billAccountBoardsAdapter(index),id);}
 function sbSupplierBillEditor(index,id){const supplier=getShoeBoxSuppliers()[index],bill=(supplier?.supplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;sbSupplierBillForm(index,bill);}
 let sbSupplierBillSaving=false;
@@ -17055,8 +17065,14 @@ function sbCompactLegacySnapshots(){
     });
   });
 }
-async function sbCriticalCommit(snapshot,message){
+async function sbCriticalCommit(snapshot,message,{ nonBlocking=true }={}){
   sbCompactLegacySnapshots();
+  if(nonBlocking && typeof syncVoucherInBackground==='function'){
+    if(typeof saveDB==='function') saveDB();
+    else if(typeof persistAll==='function') persistAll();
+    syncVoucherInBackground('shoeBox', 'Shoe Box update');
+    return true;
+  }
   if(await saveCriticalCloudState('shoeBox')) return true;
   settings=JSON.parse(snapshot.settings); auditLog=JSON.parse(snapshot.auditLog);
   await reconcileCloudAfterCriticalRollback();
@@ -19770,7 +19786,13 @@ function nextUniqueGasVoucherNo(){
 function gasDeepSnapshot(){
   return {settings:JSON.stringify(settings),gasVouchers:JSON.stringify(gasVouchers),auditLog:JSON.stringify(auditLog)};
 }
-async function gasCriticalCommit(snapshot, failMessage){
+async function gasCriticalCommit(snapshot, failMessage, { nonBlocking=true }={}){
+  if(nonBlocking && typeof syncVoucherInBackground==='function'){
+    if(typeof saveDB==='function') saveDB();
+    else if(typeof persistAll==='function') persistAll();
+    syncVoucherInBackground('gas', 'Gas update');
+    return true;
+  }
   if(await saveCriticalCloudState('gas')) return true;
   settings=JSON.parse(snapshot.settings);
   gasVouchers=JSON.parse(snapshot.gasVouchers);
@@ -20185,7 +20207,7 @@ function showGasSupplierBill(id,autoPrint=false){const bill=(settings.gasSupplie
 function openGasSupplierBillModal(){gasSupplierBillForm();}
 function gasSupplierBillHistoryHtml(){const history=settings.gasSupplierBills||[],groups=new Map();history.filter(b=>!b.billingDeleted).forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=week.from,label=week.from+' to '+week.to;if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th data-i18n=ui_Bill>Bill</th><th data-i18n=ui_Date_20__2f__20_Time>Date / Time</th><th data-i18n=ui_Amount>Amount</th><th data-i18n=ui_Grand_20_Total>Grand Total</th><th data-i18n=ui_Actions>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+(b.gasAmount==null?'Not saved':formatMoney(b.gasAmount))+'</td><td>'+(gasSupplierBillGrandTotal(b)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(b)))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-gas-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
 function gasBindSupplierBillHistory(){document.querySelectorAll('[data-gas-bill-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.billId,action=button.getAttribute('data-gas-bill-action');if(action==='View'||action==='Print')showGasSupplierBill(id,action==='Print');else if(action==='Edit')gasSupplierBillEditor(id);else gasDeleteSupplierBill(id);});}
-async function gasSupplierBillCommit(snapshot){try{return await gasCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.');}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);gasVouchers=JSON.parse(snapshot.gasVouchers);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
+async function gasSupplierBillCommit(snapshot){try{return await gasCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.',{ nonBlocking:false });}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);gasVouchers=JSON.parse(snapshot.gasVouchers);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
 // Gas billing account belongs to the existing single Gas supplier slot.
 // Kept outside supplier details so editing its name/photo cannot drop balances.
 function gasBillAccountOpening(){
