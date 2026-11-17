@@ -1602,7 +1602,8 @@ function factorySaleManualBillHtml(bill,headerOption='footwear'){
     if(up.includes('12'))return 'ایٹم (12 جوڑے)';
     if(up.includes('24'))return 'سیٹ (24 جوڑے)';
     if(up.includes('32'))return 'سیٹ (32 جوڑے)';
-    const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'ایٹم','ITEMS':'ایٹم'};
+    if(up.includes('PAIR')||up.includes('جوڑے')||up.includes('پیئر'))return 'پیئر';
+    const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'پیئر','PAIRS':'پیئر','ITEM':'ایٹم','ITEMS':'ایٹم'};
     return map[up]||raw;
   };
 
@@ -1614,7 +1615,7 @@ function factorySaleManualBillHtml(bill,headerOption='footwear'){
       const found=catalogArticles.find(a=>String(a.id)===aId)||catalogArticles.find(a=>a.name===line.articleName);
       rawUnit=found?.unit||'';
     }
-    const unitDisplay=formatUrduUnit(rawUnit);
+    const unitDisplay=formatUrduUnit(line.unit||rawUnit);
     const lineQtyDisplay=qtyNum?(unitDisplay?(qtyNum+' '+unitDisplay):qtyNum):'';
     let displayRate='';
     if(line.rate!==undefined&&line.rate!==null&&line.rate!==''){
@@ -1631,7 +1632,7 @@ function factorySaleManualBillHtml(bill,headerOption='footwear'){
     const lineAmount=line.amount!==undefined&&line.amount!==null&&line.amount!==''?upperMoney(line.amount):'';
     return `<tr style="border-bottom:1px solid #000;">
       <td style="border:1px solid #000;padding:4px 3px;text-align:right;font-weight:700;">${esc(line.articleName||'')}</td>
-      <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;">${esc(lineQtyDisplay)}</td>
+      <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;direction:rtl;">${esc(lineQtyDisplay)}</td>
       <td style="border:1px solid #000;padding:4px 3px;text-align:center;white-space:nowrap;">${esc(displayRate)}</td>
       <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;white-space:nowrap;">${esc(lineAmount)}</td>
     </tr>`;
@@ -1794,7 +1795,7 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
   hours = hours % 12 || 12;
   const timeStr = String(hours).padStart(2, '0') + ':' + minutes + ' ' + period;
 
-  const map = {'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'ایٹم','ITEMS':'ایٹم'};
+  const map = {'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'پیئر','PAIRS':'پیئر','ITEM':'ایٹم','ITEMS':'ایٹم'};
 
   // Calculate required dynamic height
   const lines = Array.isArray(bill.lines) ? bill.lines : [];
@@ -1934,7 +1935,7 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
 
     const rawUnit = String(line.unit || '').trim();
     const up = rawUnit.toUpperCase();
-    const uName = up.includes('12') ? 'ایٹم (12 جوڑے)' : (up.includes('24') ? 'سیٹ (24 جوڑے)' : (up.includes('32') ? 'سیٹ (32 جوڑے)' : (map[up] || rawUnit)));
+    const uName = up.includes('12') ? 'ایٹم (12 جوڑے)' : (up.includes('24') ? 'سیٹ (24 جوڑے)' : (up.includes('32') ? 'سیٹ (32 جوڑے)' : (up.includes('PAIR') ? 'پیئر' : (map[up] || rawUnit))));
     const qtyStr = line.qty !== undefined && line.qty !== null && line.qty !== '' ? (line.qty + (uName ? (' ' + uName) : '')) : '-';
 
     const uRate = Number(line.rate) || 0;
@@ -1953,6 +1954,7 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
 
     // Qty (Center aligned in column)
     ctx.textAlign = 'center';
+    ctx.direction = 'rtl';
     ctx.fillText(qtyStr, xCol3 + colW2 / 2, y + 7);
 
     // Rate per pair (Center aligned in column)
@@ -2068,7 +2070,7 @@ function buildFactorySaleManualBillText(bill,headerOption='footwear'){
     }
   }
   const dateStr=String(bill.date||new Date().toISOString()).slice(0,10);
-  const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'ایٹم','ITEMS':'ایٹم'};
+  const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'پیئر','PAIRS':'پیئر','ITEM':'ایٹم','ITEMS':'ایٹم'};
   const textLines=[
     isLeatherRight ? '*LEATHER RIGHT SHOES BY ABID*' : '*FOOTWEAR FIND SHOES*',
     isLeatherRight ? 'اعلیٰ معیار کے جوتوں کا کارخانہ' : 'ہول سیل سپلائر شوز قصور',
@@ -2083,8 +2085,8 @@ function buildFactorySaleManualBillText(bill,headerOption='footwear'){
   (bill.lines||[]).forEach((line,idx)=>{
     const rawUnit=String(line.unit||'').trim();
     const up=rawUnit.toUpperCase();
-    const uName=up.includes('12')?'ایٹم (12 جوڑے)':(up.includes('24')?'سیٹ (24 جوڑے)':(up.includes('32')?'سیٹ (32 جوڑے)':(map[up]||rawUnit)));
-    const qtyStr=line.qty!==undefined&&line.qty!==null&&line.qty!==''?(line.qty+' '+uName):'-';
+    const uName=up.includes('12')?'ایٹم (12 جوڑے)':(up.includes('24')?'سیٹ (24 جوڑے)':(up.includes('32')?'سیٹ (32 جوڑے)':(up.includes('PAIR')?'پیئر':(map[up]||rawUnit))));
+    const qtyStr=line.qty!==undefined&&line.qty!==null&&line.qty!==''?(line.qty+(uName?(' '+uName):'')):'-';
     const uRate=Number(line.rate)||0;
     let uPairs=Number(line.unitPairs);
     if(!uPairs||uPairs<=0){
