@@ -2532,13 +2532,7 @@ function deleteUpperDistribution(id){
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
     persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    (async()=>{
-      try{
-        await saveCriticalCloudState({ nonBlocking: true });
-      }catch(err){
-        console.warn('Background voucher delete deferred:', err?.message||err);
-      }
-    })();
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -3144,14 +3138,24 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const articleOnly=upperVoucherArticleOnly(v),shoeLamination=workerProductionShoeLamination(upperProductionRecordCategory(v));
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
-  const records=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
-  const days=[];for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
-    const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
-    entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
-    const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
-    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  const isIndividual=Boolean(v&&Array.isArray(v.lines));
+  const records=isIndividual?[v]:(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
+  const days=[];
+  if(isIndividual){
+    const day=new Date(base);day.setHours(0,0,0,0);const next=new Date(day);next.setDate(next.getDate()+1);
+    const articles=new Map();
+    (v.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=v.workflowVersion===1?display.received:0;articles.set(key,item);});
+    const time=new Date(v.createdAt||v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:upperReceivedTotal(v),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  }else{
+    for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
+      const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
+      entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
+      const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+      days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+    }
   }
-  const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0);
+  const kharcha=isIndividual?(Number(v.totalAmount)||0):(records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0));
   const receivedArticles=new Map();records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const display=upperLineDisplay(l),qty=display.received;if(qty<=0||(!l.articleId&&!l.articleName))return;const key=(l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName))+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),a=receivedArticles.get(key)||{...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),articleIdentity:l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName),name:l.articleName||String(l.articleId),unit:display.unit,qty:0};a.qty+=qty;receivedArticles.set(key,a);}));
   return {...(workerProductionShoeLamination(upperProductionRecordCategory(v))?{receivedGroups:upperShoeQuantityGroups(records,'received'),pendingGroups:upperShoePendingState(v.workerId,settings.upperDistributions||[],null,through).groups}:{}),through,days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
 }
@@ -4203,13 +4207,7 @@ function deleteUpperDistribution(id){
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
     persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    (async()=>{
-      try{
-        await saveCriticalCloudState({ nonBlocking: true });
-      }catch(err){
-        console.warn('Background voucher delete deferred:', err?.message||err);
-      }
-    })();
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -4810,14 +4808,24 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const articleOnly=upperVoucherArticleOnly(v),shoeLaser=workerProductionShoeLaser(upperProductionRecordCategory(v));
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
-  const records=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
-  const days=[];for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
-    const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
-    entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLaser?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLaser?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
-    const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
-    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  const isIndividual=Boolean(v&&Array.isArray(v.lines));
+  const records=isIndividual?[v]:(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
+  const days=[];
+  if(isIndividual){
+    const day=new Date(base);day.setHours(0,0,0,0);const next=new Date(day);next.setDate(next.getDate()+1);
+    const articles=new Map();
+    (v.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLaser?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLaser?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=v.workflowVersion===1?display.received:0;articles.set(key,item);});
+    const time=new Date(v.createdAt||v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:upperReceivedTotal(v),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  }else{
+    for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
+      const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
+      entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLaser?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLaser?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
+      const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+      days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+    }
   }
-  const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0);
+  const kharcha=isIndividual?(Number(v.totalAmount)||0):(records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0));
   const receivedArticles=new Map();records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const display=upperLineDisplay(l),qty=display.received;if(qty<=0||(!l.articleId&&!l.articleName))return;const key=(l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName))+'|'+(shoeLaser?upperShoeUnitKey(l):display.unit),a=receivedArticles.get(key)||{...(shoeLaser?{unitKey:upperShoeUnitKey(l)}:{}),articleIdentity:l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName),name:l.articleName||String(l.articleId),unit:display.unit,qty:0};a.qty+=qty;receivedArticles.set(key,a);}));
   return {...(workerProductionShoeLaser(upperProductionRecordCategory(v))?{receivedGroups:upperShoeQuantityGroups(records,'received'),pendingGroups:upperShoePendingState(v.workerId,settings.upperDistributions||[],null,through).groups}:{}),through,days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
 }
@@ -5370,6 +5378,7 @@ const wholeFactoryMaterialsModule=(()=>{
 let settings={},currentPage='wholeFactoryMaterials',writeDepth=0;const ui={},window=new Proxy(globalThis.window,{get(target,key){if(String(key).startsWith('__'))return ui[key];const value=Reflect.get(target,key);return typeof value==='function'?value.bind(target):value;},set(target,key,value){if(String(key).startsWith('__')){ui[key]=value;return true;}return Reflect.set(target,key,value);}});
 function load(){if(writeDepth)return;settings=JSON.parse(JSON.stringify(wholeFactoryMaterialsServices.read()||wholeFactoryMaterialsServices.common()));normalizeShoeSoleSuppliers();normalizeShoeSoleReceiveVoucherFields();}
 function persistAll(){wholeFactoryMaterialsServices.publish(JSON.parse(JSON.stringify(settings)));return wholeFactoryMaterialsServices.persist();}
+function saveDB(){return persistAll();}
 async function saveCriticalCloudState(){const previous=wholeFactoryMaterialsServices.read(),existed=wholeFactoryMaterialsServices.exists();writeDepth++;wholeFactoryMaterialsServices.publish(JSON.parse(JSON.stringify(settings)));try{const ok=await wholeFactoryMaterialsServices.critical();if(!ok)wholeFactoryMaterialsServices.restore(previous,existed);return ok;}catch(error){wholeFactoryMaterialsServices.restore(previous,existed);throw error;}finally{writeDepth--;}}
 function reconcileCloudAfterCriticalRollback(){return wholeFactoryMaterialsServices.reconcile();}
 function goto(...args){return wholeFactoryMaterialsServices.navigate(...args);}function render(){return wholeFactoryMaterialsServices.render();}
@@ -5614,7 +5623,7 @@ async function saveShoeSoleReceiving(supplierId,productId,atoms,date,notes='',ti
     supplier.purchases.push(purchase);
     supplier.receiveVouchers.push({id:uid(),voucherNo,date,purchaseIds:[String(purchase.id)],notes,createdAt:time});
     settings.nextShoeSoleReceiveVoucherNo=(Number(settings.nextShoeSoleReceiveVoucherNo)||1001)+1;
-    saveDB();
+    persistAll();
     syncVoucherInBackground(null, `Material Receiving #${voucherNo}`);
     request.saved=true;
     return {supplierIndex:getShoeSoleSuppliers().findIndex(s=>String(s.id)===String(supplierId)),purchaseId:String(purchase.id),voucherNo};
@@ -6347,7 +6356,7 @@ function openShoeSoleReceiveSession(supplierIndex){
       });
       supplier.receiveVouchers=supplier.receiveVouchers||[];
       const receivingId=uid();supplier.receiveVouchers.push({id:receivingId,voucherNo,date:iso,purchaseIds,notes:document.getElementById('wfm_rsNotes').value.trim(),createdAt:iso});
-      saveDB();
+      persistAll();
       syncVoucherInBackground(null, `Material Receiving Voucher #${voucherNo}`);
       submitted=true;
       closeModal();
@@ -7427,13 +7436,7 @@ function deleteUpperDistribution(id){
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
     persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    (async()=>{
-      try{
-        await saveCriticalCloudState({ nonBlocking: true });
-      }catch(err){
-        console.warn('Background voucher delete deferred:', err?.message||err);
-      }
-    })();
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -8023,14 +8026,24 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const articleOnly=upperVoucherArticleOnly(v),shoeLamination=workerProductionShoeLamination(upperProductionRecordCategory(v));
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
-  const records=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
-  const days=[];for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
-    const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
-    entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
-    const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
-    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  const isIndividual=Boolean(v&&Array.isArray(v.lines));
+  const records=isIndividual?[v]:(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
+  const days=[];
+  if(isIndividual){
+    const day=new Date(base);day.setHours(0,0,0,0);const next=new Date(day);next.setDate(next.getDate()+1);
+    const articles=new Map();
+    (v.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=v.workflowVersion===1?display.received:0;articles.set(key,item);});
+    const time=new Date(v.createdAt||v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:upperReceivedTotal(v),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  }else{
+    for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
+      const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
+      entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
+      const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+      days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+    }
   }
-  const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0);
+  const kharcha=isIndividual?(Number(v.totalAmount)||0):(records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0));
   const receivedArticles=new Map();records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const display=upperLineDisplay(l),qty=display.received;if(qty<=0||(!l.articleId&&!l.articleName))return;const key=(l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName))+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),a=receivedArticles.get(key)||{...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),articleIdentity:l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName),name:l.articleName||String(l.articleId),unit:display.unit,qty:0};a.qty+=qty;receivedArticles.set(key,a);}));
   return {...(workerProductionShoeLamination(upperProductionRecordCategory(v))?{receivedGroups:upperShoeQuantityGroups(records,'received'),pendingGroups:upperShoePendingState(v.workerId,settings.upperDistributions||[],null,through).groups}:{}),through,days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
 }
@@ -9202,13 +9215,7 @@ function deleteUpperDistribution(id){
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
     persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    (async()=>{
-      try{
-        await saveCriticalCloudState({ nonBlocking: true });
-      }catch(err){
-        console.warn('Background voucher delete deferred:', err?.message||err);
-      }
-    })();
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -9855,14 +9862,24 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const articleOnly=upperVoucherArticleOnly(v),shoeLamination=workerProductionShoeLamination(upperProductionRecordCategory(v));
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
-  const records=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
-  const days=[];for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
-    const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
-    entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
-    const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
-    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  const isIndividual=Boolean(v&&Array.isArray(v.lines));
+  const records=isIndividual?[v]:(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
+  const days=[];
+  if(isIndividual){
+    const day=new Date(base);day.setHours(0,0,0,0);const next=new Date(day);next.setDate(next.getDate()+1);
+    const articles=new Map();
+    (v.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=v.workflowVersion===1?display.received:0;articles.set(key,item);});
+    const time=new Date(v.createdAt||v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:upperReceivedTotal(v),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  }else{
+    for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
+      const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
+      entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
+      const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+      days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+    }
   }
-  const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0);
+  const kharcha=isIndividual?(Number(v.totalAmount)||0):(records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0));
   const receivedArticles=new Map();records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const display=upperLineDisplay(l),qty=display.received;if(qty<=0||(!l.articleId&&!l.articleName))return;const key=(l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName))+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),a=receivedArticles.get(key)||{...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),articleIdentity:l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName),name:l.articleName||String(l.articleId),unit:display.unit,qty:0};a.qty+=qty;receivedArticles.set(key,a);}));
   return {...(workerProductionShoeLamination(upperProductionRecordCategory(v))?{receivedGroups:upperShoeQuantityGroups(records,'received'),pendingGroups:upperShoePendingState(v.workerId,settings.upperDistributions||[],null,through).groups}:{}),through,days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
 }
@@ -9943,15 +9960,16 @@ async function saveSupplierProductionBillHistory(workerId,billId,quantities,paid
   function shoesPressVoucherData(v,sourceRecordIds=null){
     const week=upperWeeklyVoucherData(v),base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,through=week.through,end=new Date(start);end.setDate(end.getDate()+7);
     const ids=Array.isArray(sourceRecordIds)&&sourceRecordIds.length?new Set(sourceRecordIds.map(String)):null,periodRecord=record=>{const date=upperWorkTimestamp(record);return date>=start&&date<through&&date<end&&date.getDay()!==5;};
-    const records=(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(v.workerId)&&periodRecord(record)),cuttingRecords=records.filter(record=>record.pressCutting===true&&(!ids||ids.has(String(record.id)))),meterRecords=pressVoucherIsStitch(v)?[]:pressCuttingMeterRecords().filter(record=>String(record.workerId)===String(v.workerId)&&periodRecord(record));
+    const isIndividual=!ids&&Boolean(v&&Array.isArray(v.lines));
+    const records=isIndividual?[v]:(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(v.workerId)&&periodRecord(record)),cuttingRecords=isIndividual?[v]:records.filter(record=>record.pressCutting===true&&(!ids||ids.has(String(record.id)))),meterRecords=pressVoucherIsStitch(v)?[]:pressCuttingMeterRecords().filter(record=>String(record.workerId)===String(v.workerId)&&(isIndividual?String(record.voucherId)===String(v.id):periodRecord(record)));
     const days=['ہفتہ','اتوار','پیر','منگل','بدھ','جمعرات'].map((name,index)=>{const date=new Date(start);date.setDate(date.getDate()+index);const key=upperLocalDateKey(date),cutting=new Map();let meters=0;
       cuttingRecords.filter(record=>upperLocalDateKey(upperWorkTimestamp(record))===key).forEach(record=>(record.lines||[]).forEach(line=>{const display=upperLineDisplay(line),qty=Number(display.received)||0,unit=String(display.unit||line.unit||'ATOMS');if(qty<=0)return;cutting.set(unit,(cutting.get(unit)||0)+qty);}));
-      meters=Number(pressMeterSum(meterRecords.filter(record=>record.workDate===key).map(record=>record.meterQuantityExact||record.meterQuantity)));
+      meters=Number(pressMeterSum(meterRecords.filter(record=>(record.workDate===key||String(record.date||'').slice(0,10)===key)).map(record=>record.meterQuantityExact||record.meterQuantity)));
       return {name,cutting:[...cutting].map(([unit,qty])=>({unit,qty})),meters};
     });
     const received=new Map();cuttingRecords.forEach(record=>(record.lines||[]).forEach(line=>{const display=upperLineDisplay(line),qty=Number(display.received)||0,name=String(line.articleName||line.articleId||''),unit=String(display.unit||line.unit||'ATOMS');if(qty<=0||!name)return;const key=JSON.stringify([name,unit]),item=received.get(key)||{name,unit,qty:0,amount:0};item.qty+=qty;item.amount+=qty*(Number(display.rate)||0);received.set(key,item);}));
     const weeklyMeterGroups=new Map();meterRecords.forEach(record=>{const id=String(record.cuttingMeterArticleId||record.materialId||record.articleName),name=String(record.articleName||id),key=JSON.stringify([id,name]),total=weeklyMeterGroups.get(key)||{name,meters:0};total.meterQuantityExact=pressMeterSum([total.meterQuantityExact||'0',record.meterQuantityExact||record.meterQuantity]);total.meters=Number(total.meterQuantityExact);if(record.allocationVersion===1)total.allocated=true;weeklyMeterGroups.set(key,total);});
-    return {days,received:[...received.values()],weeklyMeterGroups:[...weeklyMeterGroups.values()],weeklyKharcha:week.kharcha};
+    return {days,received:[...received.values()],weeklyMeterGroups:[...weeklyMeterGroups.values()],weeklyKharcha:isIndividual?(Number(v.totalAmount)||0):week.kharcha};
   }
   function shoesPressVoucherArticleUrdu(value){const name=String(value||'').trim().replace(/\s+/g,' '),key=name.toLowerCase(),labels={'astar haji abid':'استر حاجی عابد','got patti tota by haji abid':'گوٹ پٹی توتا حاجی عابد','got patti tota haji abid':'گوٹ پٹی توتا حاجی عابد','got patti by haji qurban':'گوٹ پٹی حاجی قربان','got patti haji qurban':'گوٹ پٹی حاجی قربان','pumpi':'پمپی','one piece kids moza':'ون پیس بچگانہ موزہ','kapra haji qurban':'کپڑا حاجی قربان','flexible':'فلیکسیبل','astar haji qurban':'استر حاجی قربان'};return labels[key]||productionWeeklyUrduText(name.replace(/\s+by\s+/ig,' ').replace(/\s+/g,' '),false);}
   function shoesPressVoucherTemplate({voucher={},sourceRecordIds=null,date=upperWorkTimestamp(voucher),time='',showMoneySummary=false}={}){
@@ -10809,13 +10827,7 @@ function deleteUpperDistribution(id){
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
     persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    (async()=>{
-      try{
-        await saveCriticalCloudState({ nonBlocking: true });
-      }catch(err){
-        console.warn('Background voucher delete deferred:', err?.message||err);
-      }
-    })();
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function upperWeeklyKharchaPrintHtml(){
@@ -11480,14 +11492,24 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const articleOnly=upperVoucherArticleOnly(v),shoeLamination=workerProductionShoeLamination(upperProductionRecordCategory(v));
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
-  const records=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
-  const days=[];for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
-    const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
-    entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
-    const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
-    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  const isIndividual=Boolean(v&&Array.isArray(v.lines));
+  const records=isIndividual?[v]:(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
+  const days=[];
+  if(isIndividual){
+    const day=new Date(base);day.setHours(0,0,0,0);const next=new Date(day);next.setDate(next.getDate()+1);
+    const articles=new Map();
+    (v.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=v.workflowVersion===1?display.received:0;articles.set(key,item);});
+    const time=new Date(v.createdAt||v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:upperReceivedTotal(v),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  }else{
+    for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
+      const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
+      entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
+      const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+      days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+    }
   }
-  const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0);
+  const kharcha=isIndividual?(Number(v.totalAmount)||0):(records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0));
   const receivedArticles=new Map();records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const display=upperLineDisplay(l),qty=display.received;if(qty<=0||(!l.articleId&&!l.articleName))return;const key=(l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName))+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),a=receivedArticles.get(key)||{...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),articleIdentity:l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName),name:l.articleName||String(l.articleId),unit:display.unit,qty:0};a.qty+=qty;receivedArticles.set(key,a);}));
   return {...(workerProductionShoeLamination(upperProductionRecordCategory(v))?{receivedGroups:upperShoeQuantityGroups(records,'received'),pendingGroups:upperShoePendingState(v.workerId,settings.upperDistributions||[],null,through).groups}:{}),through,days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
 }
@@ -15103,14 +15125,24 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const articleOnly=upperVoucherArticleOnly(v),shoeLamination=workerProductionShoeLamination(upperProductionRecordCategory(v));
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
-  const records=(settings.upperDistributions||[]).filter(r=>(!upperManRecord(v)||upperManRecord(r))&&String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
-  const days=[];for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
-    const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
-    entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
-    const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
-    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  const isIndividual=Boolean(v&&Array.isArray(v.lines));
+  const records=isIndividual?[v]:(settings.upperDistributions||[]).filter(r=>(!upperManRecord(v)||upperManRecord(r))&&String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=start&&upperWorkTimestamp(r)<through).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
+  const days=[];
+  if(isIndividual){
+    const day=new Date(base);day.setHours(0,0,0,0);const next=new Date(day);next.setDate(next.getDate()+1);
+    const articles=new Map();
+    (v.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=v.workflowVersion===1?display.received:0;articles.set(key,item);});
+    const time=new Date(v.createdAt||v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
+    days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:upperReceivedTotal(v),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+  }else{
+    for(const day=new Date(start);day<through;day.setDate(day.getDate()+1)){
+      const next=new Date(day);next.setDate(next.getDate()+1);const entries=records.filter(r=>upperWorkTimestamp(r)>=day&&upperWorkTimestamp(r)<next),articles=new Map();
+      entries.forEach(r=>(r.lines||[]).forEach(l=>{if(!l.articleName)return;const display=upperLineDisplay(l),key=String(l.articleId||l.articleName)+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),item=articles.get(key)||{name:l.articleName,unit:display.unit,...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),qty:0,issued:0,received:0};item.qty+=Number(l.qty)||0;item.issued+=display.issued;item.received+=r.workflowVersion===1?display.received:0;articles.set(key,item);}));
+      const last=entries[entries.length-1],time=last?new Date(last.createdAt||last.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}):'';
+      days.push({label:new Intl.DateTimeFormat('ur-PK',{weekday:'long',day:'numeric',month:'long'}).format(day)+(time?' \u2022 '+time:''),articles:[...articles.values()],received:entries.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,next).qty});
+    }
   }
-  const kharcha=records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0);
+  const kharcha=isIndividual?(Number(v.totalAmount)||0):(records.reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+productionKharchaRows('upper',v.workerId,base).filter(r=>new Date(r.date)<through).reduce((n,r)=>n+(Number(r.delta)||0),0));
   const receivedArticles=new Map();records.filter(r=>r.workflowVersion===1).forEach(r=>(r.lines||[]).forEach(l=>{const display=upperLineDisplay(l),qty=display.received;if(qty<=0||(!l.articleId&&!l.articleName))return;const key=(l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName))+'|'+(shoeLamination?upperShoeUnitKey(l):display.unit),a=receivedArticles.get(key)||{...(shoeLamination?{unitKey:upperShoeUnitKey(l)}:{}),articleIdentity:l.articleId?'id:'+String(l.articleId):'name:'+String(l.articleName),name:l.articleName||String(l.articleId),unit:display.unit,qty:0};a.qty+=qty;receivedArticles.set(key,a);}));
   return {...(upperManRecord(v)?{receivedGroups:upperManQuantityGroups(records,'received'),...upperManVoucherPendingData(v,through)}:{}),...(workerProductionShoeLamination(upperProductionRecordCategory(v))?{receivedGroups:upperShoeQuantityGroups(records,'received'),pendingGroups:upperShoePendingState(v.workerId,settings.upperDistributions||[],null,through).groups}:{}),through,days,received:records.reduce((n,r)=>n+upperReceivedTotal(r),0),pending:articleOnly?0:upperPendingState(v.workerId,settings.upperDistributions||[],null,through).qty,kharcha,receivedArticles:[...receivedArticles.values()]};
 }
@@ -15275,18 +15307,25 @@ function bfApplyVoucherBaqiAndKharcha(html,worker,allProduction=false){
 function upperManWeeklyVoucherHtml(v,allProduction=null){
   const base=upperWorkTimestamp(v),summary=allProduction?{records:allProduction.records,kharcha:allProduction.kharcha}:upperWorkerWeekSummary(v.workerId,base,new Date(new Date(base).setHours(23,59,59,999))),week=allProduction?{pendingGroups:[],legacyPendingGroups:[]}:upperWeeklyVoucherData(v),start=getUpperWorkWeekRange(base).start;
   const now=allProduction?allProduction.now:new Date(),currentWeek=getUpperWorkWeekRange(now),currentWeekVoucher=base>=currentWeek.start&&base<currentWeek.end,worker=workers.find(w=>String(w.id)===String(v.workerId));
-  if(currentWeekVoucher&&!allProduction){const through=new Date(now);through.setHours(24,0,0,0);summary.records=(settings.upperDistributions||[]).filter(r=>upperManRecord(r)&&String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=currentWeek.start&&upperWorkTimestamp(r)<currentWeek.end&&upperWorkTimestamp(r)<through);}
+  if(!allProduction){
+    summary.records=[v].filter(upperManRecord);
+  }else if(currentWeekVoucher){
+    const through=new Date(now);through.setHours(24,0,0,0);
+    summary.records=(settings.upperDistributions||[]).filter(r=>upperManRecord(r)&&String(r.workerId)===String(v.workerId)&&upperWorkTimestamp(r)>=currentWeek.start&&upperWorkTimestamp(r)<currentWeek.end&&upperWorkTimestamp(r)<through);
+  }
   summary.records=summary.records.filter(upperManRecord);
   const labourRows=allProduction?allProduction.labourRows:upperManQuantityGroups(summary.records,'received').filter(g=>g.qty>0).map(g=>{const rate=productionDisplayLabourRate(worker,'upper',g.articleId);return {...g,rate,amount:g.qty*(rate??0)};});
-  {summary.grossEarned=labourRows.reduce((n,row)=>n+row.amount,0);summary.netEarned=summary.grossEarned-summary.kharcha;}
   const displayThrough=currentWeekVoucher?now:base;
-  const expenseThrough=new Date(displayThrough);expenseThrough.setHours(24,0,0,0);const expenseEnd=getUpperWorkWeekRange(base).end;if(expenseThrough>expenseEnd)expenseThrough.setTime(expenseEnd.getTime());summary.kharcha=allProduction?allProduction.kharcha:summary.records.reduce((n,record)=>n+(Number(record.totalAmount)||0),0)+productionKharchaAdjustmentTotal('upper',v.workerId,base,new Date(expenseThrough.getTime()-1));summary.netEarned=summary.grossEarned-summary.kharcha;
+  const expenseThrough=new Date(displayThrough);expenseThrough.setHours(24,0,0,0);const expenseEnd=getUpperWorkWeekRange(base).end;if(expenseThrough>expenseEnd)expenseThrough.setTime(expenseEnd.getTime());
+  summary.kharcha=allProduction?allProduction.kharcha:(Number(v.totalAmount)||0);
+  summary.grossEarned=labourRows.reduce((n,row)=>n+row.amount,0);
+  summary.netEarned=summary.grossEarned-summary.kharcha;
   const receivedUnits=new Map();labourRows.forEach(row=>{const rows=receivedUnits.get(row.unit)||[];rows.push(row);receivedUnits.set(row.unit,rows);});
   const receivedSummaryRows=[...receivedUnits.values()].flatMap(rows=>new Set(rows.map(row=>row.rate)).size===1?[{unit:rows[0].unit,rate:rows[0].rate,qty:rows.reduce((n,row)=>n+row.qty,0),amount:rows.reduce((n,row)=>n+row.amount,0)}]:rows);
-  const receivedBreakdown=allProduction?productionDisplayReceivedHtml(allProduction.articleRows,false,true)+(labourRows.some(row=>row.rate===null)?'<div style="font-size:3mm;padding:1mm">* Totals incomplete: saved labour rate missing.</div>':''):productionDisplayReceivedHtml(labourRows,true,false);
+  const receivedBreakdown=productionDisplayReceivedHtml(allProduction?allProduction.articleRows:labourRows,allProduction?false:true,allProduction?true:false)+(labourRows.some(row=>row.rate===null)?'<div style="font-size:3mm;padding:1mm">* Totals incomplete: saved labour rate missing.</div>':'');
   const totals=new Map();upperManQuantityGroups(summary.records,'received').forEach(g=>{if(g.qty>0)totals.set(g.unit,(totals.get(g.unit)||0)+g.qty);});
   const names=['ہفتہ','اتوار','پیر','منگل','بدھ','جمعرات'];
-  const days=names.map((name,index)=>{const date=new Date(start);date.setDate(date.getDate()+index);const entries=summary.records.filter(r=>upperLocalDateKey(upperWorkTimestamp(r))===upperLocalDateKey(date)),groups=upperManQuantityGroups(entries,'received');return '<tr><td dir="rtl">'+name+'</td><td'+(!groups.some(g=>g.qty>0)&&date<=displayThrough?' class="um-holiday" dir="rtl"':'')+'>'+esc(groups.some(g=>g.qty>0)?upperManQuantityText(groups):date<=displayThrough?'چھٹی':'')+'</td></tr>';}).join('')+(allProduction?'<tr><td>WEEKLY TOTAL</td><td>'+esc(upperManQuantityText(allProduction.groups))+'</td></tr>':'');
+  const days=names.map((name,index)=>{const date=new Date(start);date.setDate(date.getDate()+index);const entries=summary.records.filter(r=>upperLocalDateKey(upperWorkTimestamp(r))===upperLocalDateKey(date)),groups=upperManQuantityGroups(entries,'received');return '<tr><td dir="rtl">'+name+'</td><td'+(allProduction&&!groups.some(g=>g.qty>0)&&date<=displayThrough?' class="um-holiday" dir="rtl"':'')+'>'+esc(groups.some(g=>g.qty>0)?upperManQuantityText(groups):allProduction&&date<=displayThrough?'چھٹی':'')+'</td></tr>';}).join('')+(allProduction?'<tr><td>WEEKLY TOTAL</td><td>'+esc(upperManQuantityText(allProduction.groups))+'</td></tr>':'');
   const pending=upperManQuantityText([...week.pendingGroups,...week.legacyPendingGroups]);
   const pendingBlock=[...week.pendingGroups,...week.legacyPendingGroups].some(group=>Number(group.qty)>0)?`<div class="um-frame um-pending"><table><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr><td>PENDING</td><td>${esc(pending)}</td></tr></tbody></table></div>`:'';
   const stamp=new Date(v.createdAt||v.date),date=base.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),time=stamp.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
@@ -15781,13 +15820,7 @@ function deleteUpperDistribution(id){
     auditLog.push({id:uid(),date:new Date().toISOString(),action:'Upper Voucher Deleted',details:`Voucher #${r.voucherNo} — ${r.workerName} — ${r.totalItems} ATOMS — ${upperMoney(r.totalAmount)}`});
     persistAll();
     closeModal();render();toast(`Upper Voucher #${r.voucherNo} deleted`);
-    (async()=>{
-      try{
-        await saveCriticalCloudState({ nonBlocking: true });
-      }catch(err){
-        console.warn('Background voucher delete deferred:', err?.message||err);
-      }
-    })();
+    syncVoucherInBackground('upper', `Upper Voucher #${r.voucherNo} Delete`);
   });
 }
 function openUpperVoucherCustomize(v){const fields=[['factoryName','Factory Name'],['title','Voucher Title'],['voucherNo','Voucher Number'],['date','Date'],['time','Time'],['worker','Worker'],['workerType','Worker Type'],['articleMaterial','Article / Material'],['quantity','Quantity'],['labourWeeklyKharcha','Labour Weekly Kharcha'],['receivingSummary','Receiving Summary'],['totalItems','Total Items']];const current=settings.upperVoucherCustomization||{};modal(`<h3 style="margin-top:0;">Customize Voucher</h3><div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Choose which fields are shown and which are bold.</div><div>${fields.map(([id,label])=>{const f=current[id]||{show:true,bold:false};return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);"><strong>${label}</strong><label style="font-size:12px;"><input type="checkbox" data-uv-show="${id}" ${f.show?'checked':''}> Show</label><label style="font-size:12px;"><input type="checkbox" data-uv-bold="${id}" ${f.bold?'checked':''}> Bold</label></div>`;}).join('')}</div><div class="modal-actions"><button type="button" class="btn brass" id="saveUpperVoucherCustomization" data-i18n=ui_Save>Save</button><button type="button" class="btn ghost" id="cancelUpperVoucherCustomization" data-i18n=ui_Cancel>Cancel</button></div>`);document.getElementById('cancelUpperVoucherCustomization').onclick=()=>showUpperVoucher(v);document.getElementById('saveUpperVoucherCustomization').onclick=async()=>{const before=JSON.stringify(settings);settings.upperVoucherCustomization=settings.upperVoucherCustomization||{};fields.forEach(([id])=>{settings.upperVoucherCustomization[id]={show:!!document.querySelector(`[data-uv-show="${id}"]`)?.checked,bold:!!document.querySelector(`[data-uv-bold="${id}"]`)?.checked};});if(await saveCriticalCloudState()){showUpperVoucher(v);toast('Voucher customization saved');}else{settings=JSON.parse(before);await reconcileCloudAfterCriticalRollback();toast('Voucher customization was NOT saved to D1. Please try again.');}};}
@@ -21636,15 +21669,19 @@ function bfWeeklyVoucherHtml(module,v,allProduction=null){
  const finished=module==='finished',name=allProduction?(finished?'تمام فنش مین':'تمام بٹم مین'):finished?finishedMansWorkerName(v.workerId):batamMansWorkerName(v.workerId),articleName=finished?finishedMansArticleName:batamMansArticleName,worker=workers.find(w=>String(w.id)===String(v.workerId)),vouchers=settings[module+'MansProductionVouchers']||[],entries=settings[module+'MansProduction']||[],articles=settings[module+'MansProductionArticles']||[];
  const dateOf=r=>r.workDate?new Date(r.workDate+'T00:00:00'):new Date(r.date||r.createdAt),base=dateOf(v),range=getUpperWorkWeekRange(base),now=allProduction?allProduction.now:new Date(),currentRange=getUpperWorkWeekRange(now),displayThrough=base>=currentRange.start&&base<currentRange.end?now:base,through=new Date(displayThrough);through.setHours(24,0,0,0);if(through>range.end)through.setTime(range.end.getTime());
  const active=r=>!r.deletedAt&&r.deleted!==true,inPeriod=date=>date>=range.start&&date<through&&date.getDay()!==5,rows=allProduction?allProduction.rows:[];
- if(!allProduction)entries.filter(r=>active(r)&&String(r.workerId)===String(v.workerId)).forEach(r=>{const parent=r.voucherId?vouchers.find(x=>String(x.id)===String(r.voucherId)):null;if(r.voucherId&&(!parent||!active(parent)||String(parent.workerId)!==String(v.workerId)))return;const workDate=dateOf(r.workDate?r:parent||r),qty=Math.max(0,Number(r.reportedQty)||0);if(!inPeriod(workDate)||qty<=0)return;const article=articles.find(a=>String(a.id)===String(r.articleId)),unit=typeof r.unit==='string'&&r.unit.trim()?r.unit:typeof article?.unit==='string'&&article.unit.trim()?article.unit:bfArticleUnit(article),rate=productionDisplayLabourRate(worker,module,r.articleId);rows.push({date:workDate,articleId:r.articleId,name:articleName(r.articleId),unit,qty,rate,amount:qty*(rate??0)});});
+ if(!allProduction){
+   const isThisVoucher=r=>String(r.voucherId)===String(v.id)||(v.items||[]).some(i=>String(i.id)===String(r.id));
+   entries.filter(r=>active(r)&&String(r.workerId)===String(v.workerId)&&isThisVoucher(r)).forEach(r=>{const workDate=dateOf(r.workDate?r:v),qty=Math.max(0,Number(r.reportedQty)||0);if(qty<=0)return;const article=articles.find(a=>String(a.id)===String(r.articleId)),unit=typeof r.unit==='string'&&r.unit.trim()?r.unit:typeof article?.unit==='string'&&article.unit.trim()?article.unit:bfArticleUnit(article),rate=productionDisplayLabourRate(worker,module,r.articleId);rows.push({date:workDate,articleId:r.articleId,name:articleName(r.articleId),unit,qty,rate,amount:qty*(rate??0)});});
+   if(!rows.length&&(v.items||[]).length){(v.items||[]).forEach(i=>{const qty=Math.max(0,Number(i.reportedQty)||0);if(qty<=0)return;const article=articles.find(a=>String(a.id)===String(i.articleId)),unit=typeof i.unit==='string'&&i.unit.trim()?i.unit:typeof article?.unit==='string'&&article.unit.trim()?article.unit:bfArticleUnit(article),rate=productionDisplayLabourRate(worker,module,i.articleId);rows.push({date:base,articleId:i.articleId,name:articleName(i.articleId),unit,qty,rate,amount:qty*(rate??0)});});}
+ }
  const quantityText=list=>{const totals=new Map();list.forEach(row=>totals.set(row.unit,(totals.get(row.unit)||0)+row.qty));return [...totals].filter(([,qty])=>qty!==0).map(([unit,qty])=>qty+' '+unit).join(' / ')||'0';};
  const labourArticles=new Map();rows.forEach(row=>{const key=JSON.stringify(allProduction?[String(row.articleId),row.unit]:[String(row.articleId),row.unit,row.rate]),total=labourArticles.get(key)||{...row,qty:0,amount:0,...(allProduction?{rate:0}:{})};total.qty+=row.qty;total.amount+=row.amount;labourArticles.set(key,total);});
  const receivedUnits=new Map();[...labourArticles.values()].forEach(row=>{const list=receivedUnits.get(row.unit)||[];list.push(row);receivedUnits.set(row.unit,list);});
  const receivedSummaryRows=[...receivedUnits.values()].flatMap(list=>{const rates=new Map();list.forEach(row=>{const group=rates.get(row.rate)||[];group.push(row);rates.set(row.rate,group);});return [...rates.values()].map(group=>{const qty=group.reduce((n,row)=>n+row.qty,0);return {name:group.length===1&&rates.size>1?group[0].name:undefined,unit:group[0].unit,rate:group[0].rate,qty,amount:qty*(group[0].rate??0)};});});
- const week=allProduction?{kharcha:allProduction.kharcha}:bfWeeklyVoucherData(module,{...v,workDate:bfWeeklyDateKey(new Date(through.getTime()-1))}),summary={grossEarned:rows.reduce((n,row)=>n+row.amount,0),kharcha:week.kharcha};summary.netEarned=summary.grossEarned-summary.kharcha;
+ const week=allProduction?{kharcha:allProduction.kharcha}:bfWeeklyVoucherData(module,{...v,workDate:bfWeeklyDateKey(new Date(through.getTime()-1))}),summary={grossEarned:rows.reduce((n,row)=>n+row.amount,0),kharcha:allProduction?week.kharcha:(Number(v.expenseAmount)||0)};summary.netEarned=summary.grossEarned-summary.kharcha;
  const receivedBreakdown=productionDisplayReceivedHtml([...labourArticles.values()],module==='batam'&&!allProduction,true)+(allProduction&&rows.some(row=>row.rate===null)?'<div style="font-size:3mm;padding:1mm">* Totals incomplete: saved labour rate missing.</div>':''),totalReceived=receivedSummaryRows.length?receivedBreakdown:'<div class="um-frame um-total-single"><span>TOTAL RECEIVED</span><span>0</span></div>',storedVoucherNo=String(v.voucherNo||''),displayVoucherNo=storedVoucherNo.replace(/^BMP-0*/i,'')||storedVoucherNo;
  const names=JSON.parse('["\u06c1\u0641\u062a\u06c1","\u0627\u062a\u0648\u0627\u0631","\u067e\u06cc\u0631","\u0645\u0646\u06af\u0644","\u0628\u062f\u06be","\u062c\u0645\u0639\u0631\u0627\u062a"]');
- const days=names.map((dayName,index)=>{const day=new Date(range.start);day.setDate(day.getDate()+index);const daily=rows.filter(row=>bfWeeklyDateKey(row.date)===bfWeeklyDateKey(day)),holiday=!daily.length&&day<=displayThrough;return '<tr><td dir="rtl">'+dayName+'</td><td'+(holiday?' class="um-holiday" dir="rtl"':'')+'>'+esc(daily.length?quantityText(daily):holiday?'\u0686\u06be\u0679\u06cc':'')+'</td></tr>';}).join('')+(allProduction?'<tr><td>ہفتہ وار ٹوٹل</td><td>'+esc(quantityText(rows))+'</td></tr>':'');
+ const days=names.map((dayName,index)=>{const day=new Date(range.start);day.setDate(day.getDate()+index);const daily=rows.filter(row=>bfWeeklyDateKey(row.date)===bfWeeklyDateKey(day)),holiday=allProduction&&!daily.length&&day<=displayThrough;return '<tr><td dir="rtl">'+dayName+'</td><td'+(holiday?' class="um-holiday" dir="rtl"':'')+'>'+esc(daily.length?quantityText(daily):holiday?'\u0686\u06be\u0679\u06cc':'')+'</td></tr>';}).join('')+(allProduction?'<tr><td>ہفتہ وار ٹوٹل</td><td>'+esc(quantityText(rows))+'</td></tr>':'');
  const stamp=new Date(v.createdAt||v.date),date=base.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),time=stamp.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
   return bfApplyVoucherBaqiAndKharcha(urduProductionWeeklyVoucherHtml(`<div class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;"><div class="bf-weekly-voucher"><style>
     .bf-weekly-voucher{box-sizing:border-box;width:100%;padding:4mm 0 1mm;color:#000;background:#fff;font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif;font-weight:600;line-height:1.1;text-align:center;}
