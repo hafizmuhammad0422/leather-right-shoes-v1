@@ -8526,16 +8526,40 @@ function pressWorkerWeeks(workerId){
       weeks.set(weekKey,{weekKey,monthKey,monthLabel,label,latestRecord:record});
     }
   });
+  if(!weeks.has(currentWeekKey)){
+    const currentRange=getUpperWorkWeekRange(new Date());
+    const thu=new Date(currentRange.start);thu.setDate(thu.getDate()+5);
+    const monthKey=currentWeekKey.slice(0,7),monthLabel=currentRange.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+    const label=fmt(currentRange.start)+' – '+fmt(thu)+' (Current Week)';
+    const worker=workers.find(w=>String(w.id)===String(workerId));
+    const emptyRecord={
+      id:'__press_current_week__',
+      workerId:String(workerId),
+      workerName:worker?.name||'',
+      workerCategory:worker?.category||'Shoes Press Man',
+      date:new Date().toISOString(),
+      workDate:upperLocalDateKey(new Date()),
+      voucherNo:'—',
+      lines:[],
+      workflowVersion:1,
+      pressCutting:true,
+      latestWeekly:true
+    };
+    weeks.set(currentWeekKey,{weekKey:currentWeekKey,monthKey,monthLabel,label,latestRecord:emptyRecord});
+  }
   return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
 }
 function pressOpenLatestWorkerVoucher(workerId){
+  const allWeeks=pressWorkerWeeks(workerId);
+  const currentWeekKey=upperLocalDateKey(getUpperWorkWeekRange(new Date()).start);
+  const currentEntry=allWeeks.find(w=>w.weekKey===currentWeekKey);
   const {start,end}=getUpperWorkWeekRange(new Date());
   const current=(settings.upperDistributions||[]).filter(record=>{
     if(String(record.workerId)!==String(workerId)||!upperProductionRecordMatches(record)||record.deletedAt||record.deleted===true)return false;
     const dt=upperWorkTimestamp(record);
     return dt>=start&&dt<end;
   }).sort((a,b)=>(new Date(b.createdAt||b.date).getTime()||0)-(new Date(a.createdAt||a.date).getTime()||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0))[0];
-  const latest=current||pressWorkerWeeks(workerId)[0]?.latestRecord;
+  const latest=current||currentEntry?.latestRecord||allWeeks[0]?.latestRecord;
   if(!latest){toast('No saved production voucher exists for this worker.');return;}
   showUpperVoucher({...latest,latestWeekly:true});
 }
@@ -9284,8 +9308,8 @@ function upperProductionWorkerMatches(worker){return !!worker&&!worker.archived&
 function upperProductionRecords(records=settings.upperDistributions||[]){return records.filter(record=>upperProductionRecordMatches(record)&&(!supplierProductionContextScope()||String(record.workerId)===String(supplierProductionActiveWorker()?.id||'')));}
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
-  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
-  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
+  const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const prevWeek=new Date(start);prevWeek.setDate(prevWeek.getDate()-7);
+  return {today:upperLocalDateKey(today),min:upperLocalDateKey(prevWeek)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
   const groups=new Map(),events=[];let valid=true;
@@ -9721,7 +9745,7 @@ function collectUpperDistributionDraft(){
   const articleOnly=workerProductionArticleOnly(),shoeLamination=workerProductionShoeLamination();
   const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w)),lines=[],articleNeed={},materialNeed={};let invalid=false;
   const workDate=document.getElementById('upperWorkDate')?.value||'',range=upperEntryWorkDateRange();
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be within the current or previous week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const issuedRollQty=supplierProductionContextScope()?0:Number(document.getElementById('pressIssuedRolls')?.value||0),primaryArticleId=supplierProductionContextScope()?'':document.getElementById('pressIssuedRollArticle')?.value||'',rollArticle=upperCategoryArticles().find(a=>String(a.id)===String(primaryArticleId));
   if(!Number.isFinite(issuedRollQty)||issuedRollQty<0||(issuedRollQty>0&&!rollArticle)){toast('Select a Cutting ROLE Article and enter a valid non-negative Cutting ROLE Quantity.');return null;}
