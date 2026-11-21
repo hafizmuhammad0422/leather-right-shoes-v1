@@ -1754,7 +1754,7 @@ function mountBillAccountOpening(adapter){
   opening.readOnly=false;
   if(saveOpening){const original=saveOpening.onclick;saveOpening.disabled=false;saveOpening.onclick=async()=>{if(!adapter.read().account){if(original)await original();return;}const snapshot=JSON.stringify(adapter.read());try{await billAccountCommit(adapter,snapshot,{type:'accountOpening',opening:opening.value,id:uid()});adapter.back();toast('Opening Amount saved.');}catch(error){toast(error.message);}};}
   const create=document.getElementById(adapter.cancelId.replace(/Cancel$/,adapter.openingKey==='pendingAmount'?'Create':'Save'));
-  if(create){const original=create.onclick;create.onclick=async()=>{if(create.disabled||adapter.busy())return;try{const data=adapter.read();if(data.account&&billAccountCents(opening.value)!==billAccountCents(data.account.currentBalance))await billAccountCommit(adapter,JSON.stringify(data),{type:'accountOpening',opening:opening.value,id:uid()});if(original)await original();}catch(error){toast(error.message);}};}
+  if(create){const original=create.onclick;create.onclick=async()=>{if(create.disabled||adapter.busy())return;try{const data=adapter.read();const currentBal=data.account?(data.account.currentBalance??data.account.openingAmount??0):null,openVal=(opening&&String(opening.value).trim()!=='')?opening.value:(currentBal??0);if(data.account&&currentBal!==null&&billAccountCents(openVal)!==billAccountCents(currentBal))await billAccountCommit(adapter,JSON.stringify(data),{type:'accountOpening',opening:openVal,id:uid()});if(original)await original();}catch(error){toast(error.message);}};}
 }
 function mountBillAccountEditor(adapter,fields){
   const opening=document.getElementById(fields.opening),paid=document.getElementById(fields.paid),save=document.getElementById(fields.save);if(!opening||!paid||!save)return;
@@ -1769,7 +1769,7 @@ function mountBillAccountEditor(adapter,fields){
 function billAccountLineAdapter(options){
   const id=String(options.id),ownerKey=options.ownerKey||'supplierId';
   return {...options,openingKey:'pendingAmount',weekly:billAccountLineWeekly,
-    read:()=>{const state=options.get()||{};return {account:state.accounts?.[id]||null,bills:(state.bills||[]).filter(bill=>String(bill[ownerKey])===id)};},
+    read:()=>{const state=options.get()||{},rawAccount=state.accounts?.[id]||null;const account=rawAccount?{...rawAccount,currentBalance:rawAccount.currentBalance??rawAccount.openingAmount??0,startingBalance:rawAccount.startingBalance??rawAccount.currentBalance??rawAccount.openingAmount??0}:null;return {account,bills:(state.bills||[]).filter(bill=>String(bill[ownerKey])===id)};},
     write:data=>{const state=options.get()||{},byId=new Map(data.bills.map(bill=>[String(bill.id),bill]));options.set({...state,accounts:{...(state.accounts||{}),[id]:data.account},bills:(state.bills||[]).map(bill=>String(bill[ownerKey])===id?(byId.get(String(bill.id))||bill):bill)});}
   };
 }
@@ -6537,10 +6537,15 @@ function supplierProductionReceivedBillData(worker){
  const records=(worker.purchases||[]).filter(record=>{const date=new Date(record.date);return !closed.has(String(record.id))||(date>=start&&date<end&&date.getDay()!==5)||released.has(String(record.id));}),unbilled=(worker.purchases||[]).filter(record=>!closed.has(String(record.id))),present=value=>(typeof value==='number'||typeof value==='string')&&(typeof value!=='string'||value.trim()!==''),name=value=>String(value||'received record');
  const add=(record,articleId,articleName,unit,rate,qty)=>{if(!record.id)throw Error('Missing saved received-record ID for '+name(articleName));if(!unit||!String(unit).trim())throw Error('Missing saved Unit for '+name(articleName));const key=JSON.stringify([String(articleId),unit,rate]),line=lines.get(key)||{articleId:String(articleId),articleName,unit,rate,qty:0};line.qty=line.qty+qty;lines.set(key,line);if(!sourceRecordIds.includes(String(record.id)))sourceRecordIds.push(String(record.id));};
  unbilled.forEach(record=>{const rawQty=record.atoms??record.items??record.boxes;if(!present(rawQty))throw Error('Invalid/missing received quantity for '+name(record.productName));const qty=Number(rawQty);if(!Number.isFinite(qty)||qty<0)throw Error('Invalid/missing received quantity for '+name(record.productName));if(qty===0)return;
-  const article=(worker.products||[]).find(a=>String(a.id)===String(record.productId));if(!article)throw Error('Missing saved article/material: '+name(record.productName));
-  const productUnit=shoeSoleProductDisplayUnit(article),unit=record.unit==='Custom'?String(record.customUnit||productUnit):String(record.unit||productUnit);if(!unit.trim()||unit==='Unit unavailable')throw Error('Missing saved Unit for '+name(record.productName||article.name));
-  const rawRate=record.ratePerUnit??article.ratePerUnit;if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(record.productName||article.name));if(!present(record.ratePerUnit)&&unit!==productUnit)throw Error('Missing saved rate for received Unit '+unit+' of '+name(record.productName||article.name));
-  add(record,article.id,record.productName||article.name,unit,Number(rawRate),qty);});
+  const article=(worker.products||[]).find(a=>String(a.id)===String(record.productId))||(worker.products||[]).find(a=>record.productName&&a.name&&String(a.name).trim().toLowerCase()===String(record.productName).trim().toLowerCase());
+  if(!article&&(!present(record.ratePerUnit)||!Number.isFinite(Number(record.ratePerUnit))||Number(record.ratePerUnit)<0||!present(record.unit)||!String(record.unit).trim()||record.unit==='Unit unavailable'))throw Error('Missing saved article/material: '+name(record.productName));
+  const articleId=article?.id||record.productId||record.id,articleName=record.productName||article?.name||'Material';
+  const productUnit=article?shoeSoleProductDisplayUnit(article):String(record.unit||''),unit=record.unit==='Custom'?String(record.customUnit||productUnit):String(record.unit||productUnit);
+  if(!unit.trim()||unit==='Unit unavailable')throw Error('Missing saved Unit for '+name(articleName));
+  const rawRate=record.ratePerUnit??article?.ratePerUnit;
+  if(!present(rawRate)||!Number.isFinite(Number(rawRate))||Number(rawRate)<0)throw Error('Missing/invalid saved rate for '+name(articleName));
+  if(!present(record.ratePerUnit)&&article&&unit!==productUnit)throw Error('Missing saved rate for received Unit '+unit+' of '+name(articleName));
+  add(record,articleId,articleName,unit,Number(rawRate),qty);});
  if(sourceRecordIds.length&&history.some(b=>!Array.isArray(b.sourceRecordIds)&&new Date(b.date)>=start&&new Date(b.date)<end))throw Error('This period has a legacy bill without received-record links. Rebilling is blocked to protect history.');
  const emptyReason=lines.size?'':records.length>unbilled.length?'Already billed: received records for this period are closed.':'No received records for selected period.';
  return {lines:[...lines.values()],sourceRecordIds,periodFrom:upperLocalDateKey(start),periodTo:upperLocalDateKey(new Date(end.getTime()-86400000)),emptyReason};
