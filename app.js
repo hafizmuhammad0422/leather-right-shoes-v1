@@ -21051,38 +21051,10 @@ function openCreateGasVoucherModal(){
 }
 
 function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHER', unbilledCycle=false){
-  const enabledFields = (settings.gasVoucherFields||[]).filter(f=>f.enabled);
-  const rows = enabledFields.map(f=>{
-    let val;
-    if(f.id==='totalGasKg'&&(previewMode||unbilledCycle)){
-      const receiving=gasUnbilledReceivingState(),draftQty=Number(voucher?.qtyKg);
-      const extra=previewMode&&!receiving.ids?.includes(String(voucher?.id))&&Number.isFinite(draftQty)&&draftQty>0?draftQty:0;
-      val=receiving.safe?String(Math.round((receiving.qty+extra+Number.EPSILON)*100)/100)+' KG':'Unverified';
-    }else val=gasFieldValue(voucher, f.id, previewMode);
-    if(!val) return '';
+  const stamp = new Date(voucher?.date || voucher?.createdAt || Date.now());
+  const dateStr = stamp.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+  const timeStr = stamp.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', hour12:true});
 
-    const boldStyle = f.bold===true ? 'font-weight:900;' : '';
-    const labelStyle = f.bold===true ? 'font-weight:900;' : '';
-    const valueStyle = f.bold===true ? 'font-weight:900;' : '';
-
-    if(f.id==='qtyKg'){
-      return `<div class="rline" style="margin:8px 0;padding:7px 6px;border:1px solid var(--line,#ddd);border-radius:6px;font-size:16px;font-weight:900;${boldStyle}">
-        <span style="${labelStyle}">${esc(f.label)}:</span><span style="font-weight:900;">${esc(val)}</span>
-      </div>`;
-    }
-
-    if(f.id==='pendingGasKg' || f.id==='totalGasKg'){
-      return `<div class="rline" style="${boldStyle}">
-        <span style="${labelStyle}">${esc(f.label)}:</span><span style="${valueStyle}">${esc(val)}</span>
-      </div>`;
-    }
-
-    return `<div class="rline" style="${boldStyle}"><span style="${labelStyle}">${esc(f.label)}:</span><span style="${valueStyle}">${esc(val)}</span></div>`;
-  }).join('');
-
-  // Print/thermal/share must carry the same selected-worker information that
-  // is shown on the Create Gas Voucher screen. This is display-only and does
-  // not change voucher calculations or stored data.
   const workerRecordId = String(voucher?.workerRecordId||'');
   const workerName = String(voucher?.workerName||'').trim();
   const selectedWorker = workers.find(w=>{
@@ -21090,40 +21062,138 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
     return String(w.name||'').trim().toLowerCase()===workerName.toLowerCase();
   }) || null;
 
-  const printWorkerName = selectedWorker?.name || workerName;
-  const printWorkerType = String(selectedWorker?.category||'').trim() || '—';
+  const printWorkerName = selectedWorker?.name || workerName || 'Worker';
+  const urduWorkerName = (typeof productionWeeklyUrduText === 'function')
+    ? productionWeeklyUrduText(printWorkerName, true)
+    : printWorkerName;
+
+  const storedVoucherNo = String(voucher?.voucherNo || (previewMode ? (settings.nextGasVoucherNo || '') : '') || '');
+  const displayVoucherNo = storedVoucherNo.replace(/^BMP-0*/i, '') || storedVoucherNo || '—';
+
+  const isSameWorker = v => {
+    const vid = String(v?.workerRecordId||'');
+    if(workerRecordId && vid && vid===workerRecordId) return true;
+    return String(v?.workerName||'').trim().toLowerCase() === printWorkerName.toLowerCase();
+  };
+
+  const range = (typeof getUpperWorkWeekRange === 'function')
+    ? getUpperWorkWeekRange(stamp)
+    : { start: new Date(stamp.getFullYear(), stamp.getMonth(), stamp.getDate() - stamp.getDay()), end: new Date(stamp.getFullYear(), stamp.getMonth(), stamp.getDate() - stamp.getDay() + 6) };
+
+  const weekVouchers = (gasVouchers||[])
+    .filter(v=>!v.voided && !v.deletedAt)
+    .filter(isSameWorker)
+    .filter(v=>{
+      const d = new Date(v.date||0);
+      return d >= range.start && d < range.end && d.getDay() !== 5;
+    });
+
+  if(previewMode && Number(voucher?.qtyKg)>0){
+    const draftDate = new Date(voucher.date||Date.now());
+    if(draftDate >= range.start && draftDate < range.end && draftDate.getDay() !== 5){
+      const alreadyIncluded = weekVouchers.some(v=>String(v.id)===String(voucher?.id) || (voucher?.voucherNo && v.voucherNo===voucher.voucherNo));
+      if(!alreadyIncluded) weekVouchers.push(voucher);
+    }
+  }
+
+  const names = ['ہفتہ', 'اتوار', 'پیر', 'منگل', 'بدھ', 'جمعرات'];
+  const dateKey = typeof bfWeeklyDateKey === 'function'
+    ? bfWeeklyDateKey
+    : (d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
+
+  const daysHtml = names.map((dayName, index)=>{
+    const day = new Date(range.start);
+    day.setDate(day.getDate() + index);
+    const dayKey = dateKey(day);
+    const dailyVouchers = weekVouchers.filter(v=>dateKey(new Date(v.date||0)) === dayKey);
+    const dayGas = dailyVouchers.reduce((sum,v)=>sum+(Number(v.qtyKg)||0), 0);
+    const text = dayGas > 0 ? `${Math.round((dayGas + Number.EPSILON) * 100) / 100} KG` : '';
+    return `<tr><td dir="rtl">${dayName}</td><td>${esc(text)}</td></tr>`;
+  }).join('');
+
+  const totalWeekGasKg = Math.round((weekVouchers.reduce((sum,v)=>sum+(Number(v.qtyKg)||0), 0) + Number.EPSILON) * 100) / 100;
+  const daysWithGas = new Set(weekVouchers.filter(v=>(Number(v.qtyKg)||0)>0).map(v=>dateKey(new Date(v.date||0)))).size;
+  const avgPerDay = daysWithGas > 0 ? Math.round((totalWeekGasKg / daysWithGas + Number.EPSILON) * 100) / 100 : 0;
+
   const totalGas = voucher && voucher.workerTotalGasKgSnapshot!=null
     ? Number(voucher.workerTotalGasKgSnapshot)||0
     : gasVouchers
         .filter(v=>!v.voided && !v.deletedAt)
-        .filter(v=>new Date(v.date||0).getTime()<=new Date(voucher?.date||0).getTime())
-        .filter(v=>{
-          const voucherWorkerId = String(v.workerRecordId||'');
-          if(workerRecordId && voucherWorkerId && voucherWorkerId===workerRecordId) return true;
-          return String(v.workerName||'').trim().toLowerCase()===String(printWorkerName||'').trim().toLowerCase();
-        })
+        .filter(v=>new Date(v.date||0).getTime()<=stamp.getTime())
+        .filter(isSameWorker)
         .reduce((sum,v)=>sum+(Number(v.qtyKg)||0),0);
-  const printWorkerTotalLabel = `${printWorkerName} Total Gas`;
+  const calDays = typeof gasWorkerCalendarDays === 'function' ? gasWorkerCalendarDays(voucher, previewMode) : 0;
+  const totalGasFormatted = String(Math.round((totalGas + Number.EPSILON) * 100) / 100);
 
-  const selectedWorkerPrintRows = printWorkerName ? `
-    <div style="margin:2px 0 8px;padding:6px 0;font-size:13px;font-weight:900;">
-      <div style="display:grid;grid-template-columns:minmax(120px,42%) minmax(0,58%);gap:5px 8px;align-items:center;">
-        <div style="font-weight:900;text-align:left;" data-i18n=ui_Worker_20_Name>Worker Name</div>
-        <div style="font-weight:900;text-align:right;overflow-wrap:anywhere;">${esc(printWorkerName)}</div>
-        <div style="font-weight:900;text-align:left;" data-i18n=ui_Worker_20_Type>Worker Type</div>
-        <div style="font-weight:900;text-align:right;overflow-wrap:anywhere;">${esc(printWorkerType)}</div>
-        <div style="font-weight:900;text-align:left;overflow-wrap:anywhere;">${esc(printWorkerTotalLabel)}</div>
-        <div style="font-weight:900;text-align:right;white-space:nowrap;">${esc(String(Math.round((totalGas + Number.EPSILON) * 100) / 100))} KG (${gasWorkerCalendarDays(voucher,previewMode)} Days)</div>
-      </div>
-    </div>` : '';
+  let overallGasVal;
+  if(previewMode || unbilledCycle){
+    const receiving = typeof gasUnbilledReceivingState === 'function' ? gasUnbilledReceivingState() : { safe: false, qty: 0, ids: [] };
+    const draftQty = Number(voucher?.qtyKg);
+    const extra = previewMode && !receiving.ids?.includes(String(voucher?.id)) && Number.isFinite(draftQty) && draftQty > 0 ? draftQty : 0;
+    overallGasVal = receiving.safe ? String(Math.round((receiving.qty + extra + Number.EPSILON) * 100) / 100) + ' KG' : 'Unverified';
+  } else {
+    overallGasVal = typeof gasFieldValue === 'function' ? gasFieldValue(voucher, 'totalGasKg', previewMode) : '';
+  }
 
-  return `<div class="brand-head"><h3>${esc(String(settings.factoryName||'LEATHER RIDE SHOES BY HAJI ABID'))}</h3></div>
-    <div class="sub" style="font-weight:800;letter-spacing:1px;">${esc(titleText)}</div>
-    <hr>
-    ${selectedWorkerPrintRows}
-    ${rows}
-    <hr>
-    <div class="footer">${esc(settings.thankYou||'Thank you!')}</div>`;
+  const weekExtraAmount = (settings.gasExtraBalances||[])
+    .filter(e => {
+      const d = new Date(e.date||0);
+      return d >= range.start && d < range.end;
+    })
+    .reduce((sum, e) => sum + (Number(e.amount)||0), 0);
+  const unbilledExtra = typeof gasExtraBalanceTotal === 'function' ? gasExtraBalanceTotal() : 0;
+  const weeklyExtra = (previewMode || unbilledCycle)
+    ? (unbilledExtra > 0 ? unbilledExtra : weekExtraAmount)
+    : (weekExtraAmount > 0 ? weekExtraAmount : (Number(voucher?.extraBalanceAmount) || unbilledExtra));
+  const extraVal = typeof formatMoney === 'function' ? formatMoney(weeklyExtra) : ('Rs. ' + weeklyExtra);
+
+  const extraRows = [
+    `<tr><td>ہفتہ وار ٹوٹل گیس</td><td>${esc(overallGasVal || (totalWeekGasKg + ' KG'))}</td></tr>`,
+    `<tr><td>اضافی خرچہ</td><td>${esc(extraVal)}</td></tr>`
+  ];
+
+  const detailsTableHtml = `
+    <div class="um-frame">
+      <table class="um-money">
+        <colgroup><col style="width:58%"><col style="width:42%"></colgroup>
+        <tbody>${extraRows.join('')}</tbody>
+      </table>
+    </div>`;
+
+  const rawHtml = `<div class="bf-weekly-voucher">
+    <style>
+      .bf-weekly-voucher{box-sizing:border-box;width:100%;padding:4mm 0 1mm;color:#000;background:#fff;font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif;font-weight:600;line-height:1.1;text-align:center;}
+      .bf-weekly-voucher *{box-sizing:border-box;}.bf-weekly-voucher .um-brand{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:700;font-size:5.2mm;letter-spacing:0;white-space:nowrap;}.bf-weekly-voucher .um-title{font-family:"Arial Narrow",Arial,sans-serif;font-weight:600;display:flex;align-items:center;gap:1.5mm;font-size:4.25mm;margin:1.5mm 0 2mm;white-space:nowrap;}.bf-weekly-voucher .um-title:before,.bf-weekly-voucher .um-title:after{content:'';flex:1;border-top:1px solid #000;}
+      .bf-weekly-voucher .um-person{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1mm;font-size:4.6mm;min-height:7mm;align-items:center;}.bf-weekly-voucher .um-person span{min-width:0;white-space:nowrap;text-align:left;}.bf-weekly-voucher .um-person span+span{white-space:nowrap;padding-left:2mm;text-align:right;border-left:1px solid #000;}.bf-weekly-voucher .um-stamp{font-weight:600;display:flex;justify-content:space-between;align-items:center;font-family:'Arial Narrow',Arial,sans-serif;font-size:3.6mm;margin:2mm 0;}
+      .bf-weekly-voucher .um-rule{border:0;border-top:1px dashed #000;margin:2mm 0;}.bf-weekly-voucher .um-frame{border:1.5px solid #000;border-radius:1.2mm;overflow:hidden;margin-top:1mm;}.bf-weekly-voucher table{border-collapse:collapse;table-layout:fixed;width:100%;margin:0;color:#000;font-size:4.4mm;}.bf-weekly-voucher th,.bf-weekly-voucher td{padding:0 1mm;height:6.25mm;text-align:center;border:0;border-bottom:1px solid #000;font-weight:600;background:#fff;}.bf-weekly-voucher tr:last-child td{border-bottom:0;}.bf-weekly-voucher th+th,.bf-weekly-voucher td+td{border-left:1px solid #000;}.bf-weekly-voucher th{font-family:"Arial Narrow",Arial,sans-serif;background:#fff!important;color:#000!important;font-weight:700;height:7.5mm;font-size:4.3mm;}.bf-weekly-voucher td[dir=rtl]{color:#000!important;font-weight:700;}.bf-weekly-voucher td[dir=rtl],.bf-weekly-voucher th[dir=rtl],.bf-weekly-voucher td.um-holiday{font-family:'Noto Naskh Arabic',serif;font-size:4.8mm;}
+      .bf-weekly-voucher .um-total-title{font-family:"Arial Narrow",Arial,sans-serif;font-weight:700;height:7mm;display:flex;align-items:center;justify-content:center;font-size:4.8mm;}.bf-weekly-voucher .um-total-single{display:flex;justify-content:space-between;align-items:center;gap:1mm;padding:1mm 2mm;min-height:7mm;font-family:"Arial Narrow",Arial,sans-serif;font-size:3.8mm;font-weight:600;}.bf-weekly-voucher .um-totals{display:flex;gap:1mm;margin-top:1mm;}.bf-weekly-voucher .um-unit{font-family:"Arial Narrow",Arial,sans-serif;font-weight:600;flex:1;min-width:0;border:1.5px solid #000;border-radius:1mm;height:8mm;display:flex;align-items:center;justify-content:center;font-size:5mm;white-space:nowrap;}.bf-weekly-voucher .um-money td:first-child,.bf-weekly-voucher .um-pending td:first-child{text-align:left;padding-left:2mm;}.bf-weekly-voucher .um-money td{font-size:4mm;height:6mm;}.bf-weekly-voucher .um-money .um-remaining td{height:8mm;font-size:5.5mm;font-weight:700;}.bf-weekly-voucher .um-footer{font-family:'Arial Narrow',Arial,sans-serif;font-size:3mm;font-weight:700;letter-spacing:.15mm;}
+      .bf-weekly-voucher .um-total-single span:first-child,.bf-weekly-voucher .um-pending td{font-weight:700;}
+    </style>
+    <div class="um-brand">LEATHER RIGHT SHOES BY ABID</div>
+    <div class="um-title">GAS FILLING WEEKLY VOUCHER</div>
+    <div class="um-person"><span style="white-space:nowrap">${esc(urduWorkerName)}</span><span>#${esc(displayVoucherNo)}</span></div>
+    <div class="um-stamp"><span>${esc(dateStr)}</span><span>●</span><span>${esc(timeStr)}</span></div>
+    <hr class="um-rule">
+    <div class="um-frame">
+      <table>
+        <colgroup><col style="width:52%"><col style="width:48%"></colgroup>
+        <thead><tr><th dir="rtl">دن</th><th>گیس فلنگ</th></tr></thead>
+        <tbody>${daysHtml}</tbody>
+      </table>
+    </div>
+    <div class="um-frame um-total-single">
+      <span>ٹوٹل گیس فلنگ</span>
+      <span>${esc(totalWeekGasKg)} KG</span>
+    </div>
+    ${detailsTableHtml}
+    <hr class="um-rule">
+    <div class="um-footer">For Contact Dial 03226574565</div>
+  </div>`;
+
+  if(typeof urduProductionWeeklyVoucherHtml === 'function' && typeof document !== 'undefined'){
+    return urduProductionWeeklyVoucherHtml(rawHtml);
+  }
+  return rawHtml;
 }
 
 function openGasVoucherPreviewModal(){
