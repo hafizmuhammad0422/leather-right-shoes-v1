@@ -2593,7 +2593,8 @@ function upperProductionRecords(records=settings.upperDistributions||[]){return 
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
   const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
-  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
+  min.setDate(min.getDate()-7);
+  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
   const groups=new Map(),events=[];let valid=true;
@@ -2990,7 +2991,7 @@ function collectUpperDistributionDraft(){
   const articleOnly=workerProductionArticleOnly(),shoeLamination=workerProductionShoeLamination();
   const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w)),lines=[],articleNeed={},materialNeed={};let invalid=false;
   const workDate=document.getElementById('upperWorkDate')?.value||'',range=upperEntryWorkDateRange();
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be within the current or previous Saturday-Friday week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const defaultMaterial=shoeLamination?null:upperDefaultMaterial(worker);
   if(!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
@@ -4271,7 +4272,8 @@ function upperProductionRecords(records=settings.upperDistributions||[]){return 
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
   const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
-  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
+  min.setDate(min.getDate()-7);
+  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min)};
 }
 function laserPendingEligibleRecords(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null){
   let ordered=records.filter(record=>record.workflowVersion===1&&String(record.workerId)===String(workerId)&&(!throughDate||upperWorkTimestamp(record)<throughDate)).slice().sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
@@ -4665,7 +4667,7 @@ function collectUpperDistributionDraft(){
   const articleOnly=workerProductionArticleOnly(),shoeLaser=workerProductionShoeLaser();
   const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w)),lines=[],articleNeed={},materialNeed={};let invalid=false;
   const workDate=document.getElementById('upperWorkDate')?.value||'',range=upperEntryWorkDateRange();
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be within the current or previous Saturday-Friday week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const defaultMaterial=shoeLaser?null:upperDefaultMaterial(worker);
   if(!shoeLaser&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
@@ -7573,7 +7575,8 @@ function upperProductionRecords(records=settings.upperDistributions||[]){return 
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
   const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
-  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
+  min.setDate(min.getDate()-7);
+  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
   const groups=new Map(),events=[];let valid=true;
@@ -7956,7 +7959,7 @@ function collectUpperDistributionDraft(){
   const articleOnly=workerProductionArticleOnly(),shoeLamination=workerProductionShoeLamination();
   const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w)),lines=[],articleNeed={},materialNeed={};let invalid=false;
   const workDate=document.getElementById('upperWorkDate')?.value||'',range=upperEntryWorkDateRange();
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be within the current or previous Saturday-Friday week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const defaultMaterial=shoeLamination?null:upperDefaultMaterial(worker);
   if(!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
@@ -9472,11 +9475,12 @@ function upperPendingState(workerId,records=settings.upperDistributions||[],thro
 function showUpperVoucher(v,saved=true){
   let activeVoucher=v;
   const isPressWeekly=Boolean(v.latestWeekly)&&workerCategoryCompareKey(upperProductionRecordCategory(v))==='shoes press man';
+  const isWeeklyNav=isPressWeekly;
   const weeks=isPressWeekly?pressWorkerWeeks(v.workerId):[];
   const months=[];const seenMonths=new Set();
   weeks.forEach(w=>{if(!seenMonths.has(w.monthKey)){seenMonths.add(w.monthKey);months.push({key:w.monthKey,label:w.monthLabel});}});
-  const initialWeekKey=isPressWeekly?upperLocalDateKey(getUpperWorkWeekRange(upperWorkTimestamp(v)).start):'';
-  const selectorBar=isPressWeekly&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:520px;box-sizing:border-box;">
+  const initialWeekKey=isWeeklyNav?upperLocalDateKey(getUpperWorkWeekRange(upperWorkTimestamp(v)).start):'';
+  const selectorBar=isWeeklyNav&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:520px;box-sizing:border-box;">
       <select id="pressVoucherMonthFilter" style="min-width:115px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
         <option value="all">All Months</option>
         ${months.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('')}
@@ -9500,7 +9504,7 @@ function showUpperVoucher(v,saved=true){
         <button type="button" class="btn ghost" id="upperVoucherClose" data-i18n=ui_Close>Close</button>
       </div>
     </div>`);
-  if(isPressWeekly&&weeks.length){
+  if(isWeeklyNav&&weeks.length){
     const monthEl=document.getElementById('pressVoucherMonthFilter'),weekEl=document.getElementById('pressVoucherWeekSelect'),prevBtn=document.getElementById('pressVoucherPrevWeek'),nextBtn=document.getElementById('pressVoucherNextWeek');
     let filteredWeeks=weeks;
     const syncNavButtons=()=>{
@@ -10997,7 +11001,8 @@ function upperProductionRecords(records=settings.upperDistributions||[]){return 
 function upperProductionWeeklyKharchaTotal(){return upperWeeklyRecords().reduce((n,r)=>n+(Number(r.totalAmount)||0),0)+upperProductionKharchaRows().reduce((n,r)=>n+(Number(r.delta)||0),0);}
 function upperEntryWorkDateRange(now=new Date()){
   const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
-  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
+  min.setDate(min.getDate()-7);
+  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min)};
 }
 function upperShoePendingState(workerId,records=settings.upperDistributions||[],throughId=null,throughDate=null,openingRecords=settings.upperPendingRecords||[]){
   const groups=new Map(),events=[];let valid=true;
@@ -11455,7 +11460,7 @@ function collectUpperDistributionDraft(){
   const articleOnly=workerProductionArticleOnly(),shoeLamination=workerProductionShoeLamination();
   const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w)),lines=[],articleNeed={},materialNeed={};let invalid=false;
   const workDate=document.getElementById('upperWorkDate')?.value||'',range=upperEntryWorkDateRange();
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be within the current or previous Saturday-Friday week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const defaultMaterial=shoeLamination?null:upperDefaultMaterial(worker);
   if(!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
@@ -14974,7 +14979,8 @@ function upperReceivedTotal(record){return record.workflowVersion===1?(record.li
 function upperLocalDateKey(date){return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
 function upperEntryWorkDateRange(now=new Date()){
   const today=new Date(now);today.setHours(0,0,0,0);const start=getUpperWorkWeekRange(today).start;const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
-  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min<start?start:min)};
+  min.setDate(min.getDate()-7);
+  return {today:upperLocalDateKey(today),min:upperLocalDateKey(min)};
 }
 function upperWorkTimestamp(record){
   const created=new Date(record.createdAt||record.date);
@@ -15178,7 +15184,7 @@ function collectUpperDistributionDraft(){
   const articleOnly=workerProductionArticleOnly(),shoeLamination=workerProductionShoeLamination();
   const workerId=getUpperSelectedWorkerId(),worker=workers.find(w=>String(w.id)===String(workerId)&&upperProductionWorkerMatches(w)),lines=[],articleNeed={},materialNeed={};let invalid=false;
   const workDate=document.getElementById('upperWorkDate')?.value||'',range=upperEntryWorkDateRange();
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be today or the previous two days within the current Saturday-Friday week.');return null;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(workDate)||workDate<range.min||workDate>range.today||upperLocalDateKey(new Date(workDate+'T00:00:00'))!==workDate){toast('Work Date must be within the current or previous Saturday-Friday week.');return null;}
   if(!worker){toast('Please select a worker from the chosen category');return null;}
   const defaultMaterial=shoeLamination?null:upperDefaultMaterial(worker);
   if(!workerEditorDefaultModules(worker).includes('upper')&&!shoeLamination&&!articleOnly&&!defaultMaterial){toast('No valid Default Material is saved for this worker. Set it in Edit Worker before saving.');return null;}
@@ -15963,6 +15969,42 @@ function printUpperWeeklyVoucherDirect(v){
   win.focus();
   win.print();
 }
+function upperWorkerWeeks(workerId){
+  const records=(settings.upperDistributions||[]).filter(record=>String(record.workerId)===String(workerId)&&upperManRecord(record)&&!record.deletedAt&&record.deleted!==true).slice().sort((a,b)=>(new Date(b.createdAt||b.date).getTime()||0)-(new Date(a.createdAt||a.date).getTime()||0)||(Number(b.voucherNo)||0)-(Number(a.voucherNo)||0));
+  const currentWeekKey=upperLocalDateKey(getUpperWorkWeekRange(new Date()).start),weeks=new Map();
+  const fmt=d=>d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  records.forEach(record=>{
+    const ts=upperWorkTimestamp(record);if(!Number.isFinite(+ts))return;
+    const range=getUpperWorkWeekRange(ts),weekKey=upperLocalDateKey(range.start);
+    if(!weeks.has(weekKey)){
+      const thu=new Date(range.start);thu.setDate(thu.getDate()+5);
+      const monthKey=weekKey.slice(0,7),monthLabel=range.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+      const label=fmt(range.start)+' – '+fmt(thu)+(weekKey===currentWeekKey?' (Current Week)':'');
+      weeks.set(weekKey,{weekKey,monthKey,monthLabel,label,latestRecord:record});
+    }
+  });
+  if(!weeks.has(currentWeekKey)){
+    const currentRange=getUpperWorkWeekRange(new Date());
+    const thu=new Date(currentRange.start);thu.setDate(thu.getDate()+5);
+    const monthKey=currentWeekKey.slice(0,7),monthLabel=currentRange.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+    const label=fmt(currentRange.start)+' – '+fmt(thu)+' (Current Week)';
+    const worker=workers.find(w=>String(w.id)===String(workerId));
+    const emptyRecord={
+      id:'__upper_current_week__',
+      workerId:String(workerId),
+      workerName:worker?.name||'',
+      workerCategory:worker?.category||'UPPER MANS',
+      date:new Date().toISOString(),
+      workDate:upperLocalDateKey(new Date()),
+      voucherNo:'—',
+      lines:[],
+      workflowVersion:1,
+      latestWeekly:true
+    };
+    weeks.set(currentWeekKey,{weekKey:currentWeekKey,monthKey,monthLabel,label,latestRecord:emptyRecord});
+  }
+  return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
+}
 function showUpperVoucher(v,saved=true){
   if(v.workflowVersion===1&&workerCategoryCompareKey(upperProductionRecordCategory(v))==='shoes, magzi dori & batawa suppliers'){
     const html=upperVoucherHtml(v),title=upperVoucherCategoryTitle(v)+' Weekly Voucher';
@@ -15978,25 +16020,71 @@ function showUpperVoucher(v,saved=true){
     document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
     return;
   }
-  const directWeekly=v.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)));
-  const rows=(v.lines||[]).map(l=>`<tr><td>${esc(l.articleName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr><tr><td>${esc(l.materialName||'')}</td><td>${esc(String(l.qty||0))} ITEMS</td></tr>`).join('');
-  modal(`<h3 style="margin-top:0;">${esc(upperVoucherCategoryTitle(v))} Receive Voucher #${v.voucherNo}</h3>
+  let activeVoucher=v;
+  const isUpperManWeekly=Boolean(v.latestWeekly)&&upperManRecord(v);
+  const weeks=isUpperManWeekly?upperWorkerWeeks(v.workerId):[];
+  const months=[];const seenMonths=new Set();
+  weeks.forEach(w=>{if(!seenMonths.has(w.monthKey)){seenMonths.add(w.monthKey);months.push({key:w.monthKey,label:w.monthLabel});}});
+  const initialWeekKey=isUpperManWeekly?upperLocalDateKey(getUpperWorkWeekRange(upperWorkTimestamp(v)).start):'';
+  const selectorBar=isUpperManWeekly&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:520px;box-sizing:border-box;">
+      <select id="pressVoucherMonthFilter" style="min-width:115px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+        <option value="all">All Months</option>
+        ${months.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('')}
+      </select>
+      <button type="button" class="btn ghost small" id="pressVoucherPrevWeek" title="Previous Week">◀ Prev</button>
+      <select id="pressVoucherWeekSelect" style="flex:1;min-width:190px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+        ${weeks.map(w=>`<option value="${esc(w.weekKey)}" ${w.weekKey===initialWeekKey?'selected':''}>${esc(w.label)} • #${esc(w.latestRecord.voucherNo)}</option>`).join('')}
+      </select>
+      <button type="button" class="btn ghost small" id="pressVoucherNextWeek" title="Next Week">Next ▶</button>
+    </div>`:'';
+  const directWeeklyFor=rec=>rec.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(rec)));
+  modal(`<h3 id="pressVoucherModalTitle" style="margin-top:0;">${esc(upperVoucherCategoryTitle(activeVoucher))} Receive Voucher #${activeVoucher.voucherNo}</h3>
     <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+      ${selectorBar}
       <div id="upperVoucherPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">
-        ${upperVoucherHtml(v)}
+        ${upperVoucherHtml(activeVoucher)}
       </div>
       <div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;">
-        <button type="button" class="btn brass" id="upperVoucherPrint">🖨️ Print</button>${v.workflowVersion===1?'':'<button type="button" class="btn ghost" id="upperVoucherCustomize">Customize Voucher</button>'}
+        <button type="button" class="btn brass" id="upperVoucherPrint">🖨️ Print</button>${activeVoucher.workflowVersion===1?'':'<button type="button" class="btn ghost" id="upperVoucherCustomize">Customize Voucher</button>'}
         ${saved?`<button type="button" class="btn ghost" id="upperVoucherEdit" data-i18n=ui_Edit>Edit</button><button type="button" class="btn red" id="upperVoucherDelete" data-i18n=ui_Delete>Delete</button>`:''}
         <button type="button" class="btn ghost" id="upperVoucherClose" data-i18n=ui_Close>Close</button>
       </div>
     </div>`);
-  document.getElementById('upperVoucherPrint').onclick=()=>directWeekly?printUpperWeeklyVoucherDirect(v):v.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Weekly Voucher','element',{settledSizing:/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(v)))}):printElement('upperVoucherPrintArea');document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(v));
-  document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(v.id));
-  document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(v.id));
+  if(isUpperManWeekly&&weeks.length){
+    const monthEl=document.getElementById('pressVoucherMonthFilter'),weekEl=document.getElementById('pressVoucherWeekSelect'),prevBtn=document.getElementById('pressVoucherPrevWeek'),nextBtn=document.getElementById('pressVoucherNextWeek');
+    let filteredWeeks=weeks;
+    const syncNavButtons=()=>{
+      const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);
+      if(prevBtn)prevBtn.disabled=idx<0||idx>=filteredWeeks.length-1;
+      if(nextBtn)nextBtn.disabled=idx<=0;
+    };
+    const renderSelectedWeek=weekKey=>{
+      const entry=filteredWeeks.find(w=>w.weekKey===weekKey)||filteredWeeks[0];if(!entry)return;
+      activeVoucher={...entry.latestRecord,latestWeekly:true};
+      const titleEl=document.getElementById('pressVoucherModalTitle');if(titleEl)titleEl.textContent=`${upperVoucherCategoryTitle(activeVoucher)} Receive Voucher #${activeVoucher.voucherNo}`;
+      const area=document.getElementById('upperVoucherPrintArea');if(area)area.innerHTML=upperVoucherHtml(activeVoucher);
+      weekEl.value=entry.weekKey;
+      syncNavButtons();
+    };
+    monthEl?.addEventListener('change',()=>{
+      const m=monthEl.value;
+      filteredWeeks=m==='all'?weeks:weeks.filter(w=>w.monthKey===m);
+      weekEl.innerHTML=filteredWeeks.map(w=>`<option value="${esc(w.weekKey)}">${esc(w.label)} • #${esc(w.latestRecord.voucherNo)}</option>`).join('');
+      if(filteredWeeks.length)renderSelectedWeek(filteredWeeks[0].weekKey);
+      else syncNavButtons();
+    });
+    weekEl?.addEventListener('change',()=>renderSelectedWeek(weekEl.value));
+    prevBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>=0&&idx<filteredWeeks.length-1)renderSelectedWeek(filteredWeeks[idx+1].weekKey);});
+    nextBtn?.addEventListener('click',()=>{const idx=filteredWeeks.findIndex(w=>w.weekKey===weekEl.value);if(idx>0)renderSelectedWeek(filteredWeeks[idx-1].weekKey);});
+    syncNavButtons();
+  }
+  document.getElementById('upperVoucherPrint').onclick=()=>directWeeklyFor(activeVoucher)?printUpperWeeklyVoucherDirect(activeVoucher):activeVoucher.workflowVersion===1?printAggregateThermal(document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(activeVoucher)+' Weekly Voucher','element',{settledSizing:/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(activeVoucher)))}):printElement('upperVoucherPrintArea');
+  document.getElementById('upperVoucherCustomize')?.addEventListener('click',()=>openUpperVoucherCustomize(activeVoucher));
+  document.getElementById('upperVoucherEdit')?.addEventListener('click',()=>openUpperDistributionEditor(activeVoucher.id));
+  document.getElementById('upperVoucherDelete')?.addEventListener('click',()=>deleteUpperDistribution(activeVoucher.id));
   document.getElementById('upperVoucherClose').onclick=()=>{closeModal();render();};
 
-  if(v.workflowVersion===1&&workerCategoryCompareKey(upperProductionRecordCategory(v))==='shoes, magzi dori & batawa suppliers')bindSupplierVoucherPrintActions('upperVoucherPrint',()=>document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(v)+' Weekly Voucher');
+  if(activeVoucher.workflowVersion===1&&workerCategoryCompareKey(upperProductionRecordCategory(activeVoucher))==='shoes, magzi dori & batawa suppliers')bindSupplierVoucherPrintActions('upperVoucherPrint',()=>document.getElementById('upperVoucherPrintArea').outerHTML,upperVoucherCategoryTitle(activeVoucher)+' Weekly Voucher');
 }
 function supplierVoucherLabel(label){
   return ({PENDING:'Baqaya Articles','TOTAL AMOUNT':'Total Raqam'})[label]||label;
@@ -21821,7 +21909,8 @@ function batamWorkerWeekSummary(workerId,baseDate=new Date(),throughDate=null){
 function bfWeeklyDateKey(date){return date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0')+'-'+String(date.getDate()).padStart(2,'0');}
 function bfWeeklyWorkDateRange(now=new Date()){
  const today=new Date(now);today.setHours(0,0,0,0);const start=new Date(today);start.setDate(start.getDate()-(start.getDay()+1)%7);const min=new Date(start);if(today.getDay()===5)today.setDate(today.getDate()-1);
- return {today:bfWeeklyDateKey(today),min:bfWeeklyDateKey(min<start?start:min)};
+ min.setDate(min.getDate()-7);
+ return {today:bfWeeklyDateKey(today),min:bfWeeklyDateKey(min)};
 }
 function bfWeeklyWorkDateValid(value,now=new Date()){
  const range=bfWeeklyWorkDateRange(now);return /^\d{4}-\d{2}-\d{2}$/.test(value)&&value>=range.min&&value<=range.today&&bfWeeklyDateKey(new Date(value+'T00:00:00'))===value;
@@ -21938,11 +22027,28 @@ function bfWorkerWeeks(module,workerId){
     if(!weeks.has(weekKey)){
       const thu=new Date(range.start);thu.setDate(thu.getDate()+5);
       const monthKey=weekKey.slice(0,7),monthLabel=range.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
-      const storedNo=String(v.voucherNo||''),shortNo=storedNo.replace(/^BMP-0*/i,'')||storedNo;
+      const storedNo=String(v.voucherNo||''),shortNo=storedNo.replace(/^BMP-0*|^FMP-0*/i,'')||storedNo;
       const label=fmt(range.start)+' – '+fmt(thu)+(weekKey===currentWeekKey?' (Current Week)':'');
       weeks.set(weekKey,{weekKey,monthKey,monthLabel,label,shortNo,latestRecord:v});
     }
   });
+  if(!weeks.has(currentWeekKey)){
+    const currentRange=getUpperWorkWeekRange(new Date());
+    const thu=new Date(currentRange.start);thu.setDate(thu.getDate()+5);
+    const monthKey=currentWeekKey.slice(0,7),monthLabel=currentRange.start.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
+    const label=fmt(currentRange.start)+' – '+fmt(thu)+' (Current Week)';
+    const worker=workers.find(w=>String(w.id)===String(workerId));
+    const emptyRecord={
+      id:`__${module}_current_week__`,
+      workerId:String(workerId),
+      workerName:worker?.name||'',
+      date:new Date().toISOString(),
+      workDate:bfWeeklyDateKey(new Date()),
+      voucherNo:'—',
+      latestWeekly:true
+    };
+    weeks.set(currentWeekKey,{weekKey:currentWeekKey,monthKey,monthLabel,label,shortNo:'—',latestRecord:emptyRecord});
+  }
   return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
 }
 function bfFormatComparisonQty(n){
@@ -22282,7 +22388,7 @@ function bfComparisonCardHtml(module,workerId,baseDate){
 }
 function openBfVoucherModal(module,id,printNow=false,latestWeekly=false){
   const list=module==='batam'?batamMansVouchers():finishedMansVouchers();
-  const v=list.find(x=>String(x.id)===String(id));if(!v)return;
+  const v=typeof id==='object'&&id?id:list.find(x=>String(x.id)===String(id));if(!v)return;
   const printFn=module==='batam'?printBatamMansHtml:printFinishedMansHtml;
   let activeVoucher=latestWeekly?{...v,latestWeekly:true}:v;
   if(printNow){printFn(bfWeeklyVoucherHtml(module,activeVoucher));return;}
@@ -23127,7 +23233,7 @@ async function createBatamProductionVoucher(){
  try{
  if(!batamMansSelectedWorker){toast('Select Batam Man first.');return;}
  const workDate=document.getElementById('bmWorkDate')?.value||'';
- if(!bfWeeklyWorkDateValid(workDate)){toast('Work Date must be today or the previous two local days within the current Saturday-Friday week.');return;}
+ if(!bfWeeklyWorkDateValid(workDate)){toast('Work Date must be within the current or previous Saturday-Friday week.');return;}
  const voucherDraftItems=batamMansDraftItems.slice();
  const currentArticle=document.getElementById('bmArticle')?.value||'',currentQty=Number(document.getElementById('bmReported')?.value);
  if(currentArticle||document.getElementById('bmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole quantities.');return;}voucherDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
@@ -23909,7 +24015,7 @@ async function createFinishedProductionVoucher(){
  try{
  if(!finishedMansSelectedWorker){toast('Select Finished Man first.');return;}
  const workDate=document.getElementById('fmWorkDate')?.value||'';
- if(!bfWeeklyWorkDateValid(workDate)){toast('Work Date must be today or the previous two local days within the current Saturday-Friday week.');return;}
+ if(!bfWeeklyWorkDateValid(workDate)){toast('Work Date must be within the current or previous Saturday-Friday week.');return;}
  const voucherDraftItems=finishedMansDraftItems.slice();
  const currentArticle=document.getElementById('fmArticle')?.value||'',currentQty=Number(document.getElementById('fmReported')?.value);
  if(currentArticle||document.getElementById('fmReported')?.value){if(!currentArticle||!Number.isInteger(currentQty)||currentQty<=0){toast('Select Production Article and enter positive whole quantities.');return;}voucherDraftItems.push({id:uid(),articleId:currentArticle,reportedQty:currentQty});}
@@ -24407,12 +24513,24 @@ function sizeCurrentWeekWorkerVoucherPreview(){
  box.style.setProperty('box-sizing','border-box','important');box.style.setProperty('width','min(480px, calc(100vw - 24px))','important');box.style.setProperty('max-width','480px','important');box.style.setProperty('height','calc(100dvh - 32px)','important');box.style.setProperty('max-height','calc(100dvh - 32px)','important');box.style.setProperty('overflow','auto','important');
 }
 function openCurrentWeekUpperManCardVoucher(workerId){
+ const allWeeks=upperWorkerWeeks(workerId);
+ const currentWeekKey=upperLocalDateKey(getUpperWorkWeekRange(new Date()).start);
+ const currentEntry=allWeeks.find(w=>w.weekKey===currentWeekKey);
  const range=getUpperWorkWeekRange(new Date()),vouchers=(settings.upperDistributions||[]).filter(record=>!record.deletedAt&&record.deleted!==true&&upperManRecord(record)&&String(record.workerId)===String(workerId)&&upperWorkTimestamp(record)>=range.start&&upperWorkTimestamp(record)<range.end).sort((a,b)=>upperWorkTimestamp(a)-upperWorkTimestamp(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
- const voucher=vouchers[vouchers.length-1];if(!voucher){toast('No current-week Upper Man voucher found for this worker.');return;}showUpperVoucher({...voucher,latestWeekly:true},false);sizeCurrentWeekWorkerVoucherPreview();
+ const latest=vouchers[vouchers.length-1]||currentEntry?.latestRecord||allWeeks[0]?.latestRecord;
+ if(!latest){toast('No saved production voucher exists for this worker.');return;}
+ showUpperVoucher({...latest,latestWeekly:true},false);
+ sizeCurrentWeekWorkerVoucherPreview();
 }
 function openCurrentWeekBfWorkerCardVoucher(module,workerId){
+ const allWeeks=bfWorkerWeeks(module,workerId);
+ const currentWeekKey=bfWeeklyDateKey(getUpperWorkWeekRange(new Date()).start);
+ const currentEntry=allWeeks.find(w=>w.weekKey===currentWeekKey);
  const range=getUpperWorkWeekRange(new Date()),dateOf=v=>v.workDate?new Date(v.workDate+'T00:00:00'):new Date(v.date||v.createdAt),vouchers=(settings[module+'MansProductionVouchers']||[]).filter(v=>!v.deletedAt&&v.deleted!==true&&String(v.workerId)===String(workerId)&&dateOf(v)>=range.start&&dateOf(v)<range.end).sort((a,b)=>dateOf(a)-dateOf(b)||new Date(a.createdAt||a.date)-new Date(b.createdAt||b.date));
- const voucher=vouchers[vouchers.length-1]||bfWorkerWeeks(module,workerId)[0]?.latestRecord;if(!voucher){toast('No saved weekly voucher found for this worker.');return;}if(module==='batam')openBatamVoucher(voucher.id,false,true);else openFinishedVoucher(voucher.id,false,true);sizeCurrentWeekWorkerVoucherPreview();
+ const latest=vouchers[vouchers.length-1]||currentEntry?.latestRecord||allWeeks[0]?.latestRecord;
+ if(!latest){toast('No saved weekly voucher found for this worker.');return;}
+ openBfVoucherModal(module,latest,false,true);
+ sizeCurrentWeekWorkerVoucherPreview();
 }
 function bindCurrentWeekWorkerVoucherDoubleClick(){
  if(document.__currentWeekWorkerVoucherDoubleClickBound)return;document.__currentWeekWorkerVoucherDoubleClickBound=true;let previous=null;
