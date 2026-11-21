@@ -5443,6 +5443,29 @@ function getShoeSoleSuppliers(){
 function shoeSoleSupplierDisplayName(supplier, index){
   return (supplier && supplier.name) ? supplier.name : `Supplier ${index+1}`;
 }
+function wfmSupplierUrduName(value){
+  const text=String(value??'').trim();
+  if(!text||!/[A-Za-z]/.test(text))return text;
+  const terms={
+    supplier:'سپلائر',suppliers:'سپلائرز',material:'مٹیریل',materials:'مٹیریل',
+    store:'سٹور',stores:'سٹورز',trader:'ٹریڈر',traders:'ٹریڈرز',trading:'ٹریڈنگ',
+    house:'ہاؤس',company:'کمپنی',co:'کمپنی',industry:'انڈسٹری',industries:'انڈسٹریز',
+    enterprise:'انٹرپرائز',enterprises:'انٹرپرائزز',center:'سینٹر',centre:'سینٹر',
+    agency:'ایجنسی',point:'پوائنٹ',market:'مارکیٹ',shop:'شاپ',
+    master:'ماسٹر',royal:'رائل',star:'سٹار',crown:'کراؤن',super:'سپر',new:'نیا',
+    leather:'چمڑہ',rubber:'ربڑ',foam:'فوم',sheet:'شیٹ',sheets:'شیٹس',
+    sole:'سول',soles:'سول',lacker:'لیکر',buckle:'بکل',elastic:'الاسٹک',
+    thread:'دھاگہ',tape:'ٹیپ',solution:'سلوشن',pvc:'پی وی سی',pu:'پی یو',
+    tpr:'ٹی پی آر',eva:'ای وی اے',footprint:'فٹ پرنٹ',box:'باکس',maker:'میکر',makers:'میکرز',
+    shoes:'شوز',shoe:'شوز'
+  };
+  return text.replace(/[A-Za-z]+/g,word=>{
+    const lower=word.toLowerCase();
+    if(terms[lower])return terms[lower];
+    const translated=productionWeeklyUrduText(word,true);
+    return (translated!==word&&!/[A-Za-z]/.test(translated))?translated:word;
+  });
+}
 function shoeSoleProductDisplayUnit(product){return product?.unit==='Custom'?String(product.customUnit||'Unit unavailable'):String(product?.unit||'Unit unavailable');}
 function shoeSolePurchaseItems(purchase){
   const direct=Number(purchase?.items);
@@ -5661,12 +5684,12 @@ function wfmWeeklyVoucherHtml(supplier,selectedDate=new Date(),mode='monthly'){
     .bf-weekly-voucher .um-total-single{display:flex;justify-content:space-between;align-items:center;gap:1mm;padding:1mm 2mm;min-height:7mm;font-family:"Arial Narrow",Arial,sans-serif;font-size:3.8mm;font-weight:600;}.bf-weekly-voucher .um-money td:first-child{text-align:left;padding-left:2mm;}.bf-weekly-voucher .um-money td{font-size:4mm;height:6mm;}.bf-weekly-voucher .um-footer{font-family:'Arial Narrow',Arial,sans-serif;font-size:3mm;font-weight:700;letter-spacing:.15mm;}
     .bf-weekly-voucher .um-received-title{font-family:"Arial Narrow",Arial,sans-serif;font-size:4.8mm;font-weight:700;padding:1mm;}.bf-weekly-voucher .um-received-row{display:grid;grid-template-columns:36% 28% 36%;align-items:center;border-top:1px solid #000;padding:1mm .5mm;font-size:3.4mm;gap:0;}.bf-weekly-voucher .um-received-article{grid-template-columns:34% 24% 20% 22%;font-size:3mm;}.bf-weekly-voucher .um-received-row span{min-width:0;overflow-wrap:anywhere;}.bf-weekly-voucher .um-received-article span:first-child{text-align:left;}
     .wfm-weekly-voucher .wfm-compact-header{direction:ltr;grid-template-columns:auto minmax(0,1fr);}.wfm-weekly-voucher .wfm-compact-header>div{min-width:0;text-align:left;}.wfm-weekly-voucher .wfm-compact-header>div+div{overflow-wrap:anywhere;padding-left:2mm;border-left:1px solid #000;text-align:right;}
-  </style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title" style="white-space:normal;">WHOLE FACTORY MATERIAL SUPPLIERS ${mode==='weekly'?'WEEKLY':'MONTHLY'} VOUCHER</div><div class="um-person wfm-compact-header"><div dir="rtl">${esc(monthRange)}</div><div dir="rtl">${esc(productionWeeklyUrduText(shoeSoleSupplierDisplayName(supplier,index),true))}</div></div><div class="um-stamp"><span dir="rtl">${esc(stamp)}</span><span>●</span><span dir="ltr">${esc(currentTime)}</span></div><hr class="um-rule"><div class="um-frame"><table><colgroup><col style="width:52%"><col style="width:48%"></colgroup><thead><tr><th dir="rtl">دن اور تاریخ</th><th>وصول آئٹمز</th></tr></thead><tbody>${days}</tbody></table></div><div class="um-frame um-total-single"><span>کل وصول شدہ آئٹمز</span><span>${esc(week.total)}</span></div>${received}<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr><td>TOTAL AMOUNT</td><td>${esc(upperMoney(week.amount))}</td></tr></tbody></table></div><hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div></div>`);
+  </style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title" style="white-space:normal;">WHOLE FACTORY MATERIAL SUPPLIERS ${mode==='weekly'?'WEEKLY':'MONTHLY'} VOUCHER</div><div class="um-person wfm-compact-header"><div dir="rtl">${esc(monthRange)}</div><div dir="rtl">${esc(wfmSupplierUrduName(shoeSoleSupplierDisplayName(supplier,index)))}</div></div><div class="um-stamp"><span dir="rtl">${esc(stamp)}</span><span>●</span><span dir="ltr">${esc(currentTime)}</span></div><hr class="um-rule"><div class="um-frame"><table><colgroup><col style="width:52%"><col style="width:48%"></colgroup><thead><tr><th dir="rtl">دن اور تاریخ</th><th>وصول آئٹمز</th></tr></thead><tbody>${days}</tbody></table></div><div class="um-frame um-total-single"><span>کل وصول شدہ آئٹمز</span><span>${esc(week.total)}</span></div>${received}<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr><td>TOTAL AMOUNT</td><td>${esc(upperMoney(week.amount))}</td></tr></tbody></table></div><hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div></div>`);
   return html;
 }
 function openWfmWeeklyVoucher(supplierId,selectedDate=new Date(),mode='weekly'){
   const supplier=(settings.shoeSoleSuppliers||[]).find(s=>String(s.id)===String(supplierId));if(!supplier)return;
-  modal('<h3>'+esc(productionWeeklyUrduText(shoeSoleSupplierDisplayName(supplier,(settings.shoeSoleSuppliers||[]).indexOf(supplier)),true))+' — '+(mode==='weekly'?'Weekly':'Monthly')+' Voucher</h3><label>Period<select id="wfm_voucherMode"><option value="weekly" '+(mode==='weekly'?'selected':'')+'>Current Week</option><option value="monthly" '+(mode==='monthly'?'selected':'')+'>Monthly</option></select></label>'+(mode==='monthly'?'<label>Month<input id="wfm_weeklyDate" type="month" value="'+shoeSoleReportDateKey(selectedDate).slice(0,7)+'"></label>':'')+'<div id="wfm_weeklyPreview">'+wfmWeeklyVoucherHtml(supplier,selectedDate,mode)+'</div><div class="modal-actions"><button class="btn brass" id="wfm_weeklyPrint" data-i18n=ui_Print>Print</button><button class="btn ghost" id="wfm_weeklyClose" data-i18n=ui_Close>Close</button></div>');
+  modal('<h3>'+esc(wfmSupplierUrduName(shoeSoleSupplierDisplayName(supplier,(settings.shoeSoleSuppliers||[]).indexOf(supplier))))+' — '+(mode==='weekly'?'Weekly':'Monthly')+' Voucher</h3><label>Period<select id="wfm_voucherMode"><option value="weekly" '+(mode==='weekly'?'selected':'')+'>Current Week</option><option value="monthly" '+(mode==='monthly'?'selected':'')+'>Monthly</option></select></label>'+(mode==='monthly'?'<label>Month<input id="wfm_weeklyDate" type="month" value="'+shoeSoleReportDateKey(selectedDate).slice(0,7)+'"></label>':'')+'<div id="wfm_weeklyPreview">'+wfmWeeklyVoucherHtml(supplier,selectedDate,mode)+'</div><div class="modal-actions"><button class="btn brass" id="wfm_weeklyPrint" data-i18n=ui_Print>Print</button><button class="btn ghost" id="wfm_weeklyClose" data-i18n=ui_Close>Close</button></div>');
   document.getElementById('wfm_voucherMode').onchange=event=>openWfmWeeklyVoucher(supplierId,new Date(),event.target.value);
   document.getElementById('wfm_weeklyDate')?.addEventListener('change',event=>{const date=shoeSoleReportDay(event.target.value+'-01');if(date)openWfmWeeklyVoucher(supplierId,date,'monthly');});
   document.getElementById('wfm_weeklyPrint').onclick=()=>printAggregateThermal(wfmWeeklyVoucherHtml(supplier,selectedDate,mode),'Whole Factory Material '+(mode==='weekly'?'Weekly':'Monthly')+' Voucher','element',{settledSizing:true,continuousReceipt:true});
@@ -5676,7 +5699,7 @@ function wfmLatestReceivingData(selectedDate=new Date(),mode='weekly'){
   const days=[];
   (settings.shoeSoleSuppliers||[]).forEach((supplier,index)=>{
     wfmWeeklyVoucherData(supplier,selectedDate,mode).days.forEach(day=>{
-      if(day.rows.length)days.push({...day,supplierName:productionWeeklyUrduText(shoeSoleSupplierDisplayName(supplier,index),true)});
+      if(day.rows.length)days.push({...day,supplierName:wfmSupplierUrduName(shoeSoleSupplierDisplayName(supplier,index))});
     });
   });
   days.sort((a,b)=>a.date-b.date);
@@ -6592,13 +6615,14 @@ function deleteSupplierProductionBill(workerId,billId){const adapter=supplierPro
 function showSupplierProductionBill(bill){
   if(String(supplierProductionActiveWorker()?.id||'')!==String(bill?.supplierId)){toast('Select this Supplier Card first.');return;}
   if(!supplierProductionBillWorker(bill.supplierId))return;
-  modal(`<h3 style="margin-top:0;">Weekly Voucher #${esc(String(bill.voucherNo))}</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="wfm_wfm_supplierBillPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">${supplierProductionBillHtml(bill)}</div><div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;"><button type="button" class="btn brass" id="wfm_supplierBillPrint" data-i18n=ui_Print>Print</button><button type="button" class="btn ghost" id="wfm_supplierBillShare">Share</button><button type="button" class="btn ghost" id="wfm_supplierBillClose" data-i18n=ui_Close>Close</button></div></div>`);
-  document.getElementById('wfm_supplierBillPrint').onclick=()=>printAggregateThermal(document.getElementById('wfm_wfm_supplierBillPrintArea').outerHTML,'Whole Factory Materials Weekly Voucher','element');
+  modal(`<h3 style="margin-top:0;">Weekly Voucher #${esc(String(bill.voucherNo))}</h3>${supplierVoucherPreviewPanels(supplierProductionBillHtml(bill),'supplierBillPrintArea','supplierBillPrint')}<div class="modal-actions" style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:12px;"><button type="button" class="btn ghost" id="wfm_supplierBillShare">Share</button><button type="button" class="btn ghost" id="wfm_supplierBillClose" data-i18n=ui_Close>Close</button></div>`);
+  bindSupplierVoucherPreviewPrintActions('supplierBillPrintArea','supplierBillPrint','Whole Factory Materials Weekly Voucher');
   document.getElementById('wfm_supplierBillShare').onclick=async()=>{
     try{const canvas=buildSupplierProductionBillCanvas(bill);canvas.toBlob(async blob=>{try{if(!blob){toast('Could not generate voucher image');return;}await shareImageToWhatsApp(blob,`supplier-weekly-voucher-${bill.voucherNo}.png`,`Weekly Voucher #${bill.voucherNo}`);}catch(error){toast('Could not share voucher image');}},'image/png');}
     catch(error){toast('Could not generate voucher image');}
   };
   document.getElementById('wfm_supplierBillClose').onclick=()=>{closeModal();render();};
+  bindSupplierVoucherPrintActions('supplierBillPrint',()=>document.getElementById('supplierBillPrintArea').outerHTML,'Whole Factory Materials Weekly Voucher');
 }
 async function saveSupplierProductionBillHistory(workerId,billId,quantities,paidValue=0){
  if(String(supplierProductionActiveWorker()?.id||'')!==String(workerId)){toast('Select this Supplier Card first.');return false;}
@@ -6626,8 +6650,49 @@ function supplierProductionBillTotals(bill){
 }
 function supplierProductionBillHtml(bill){
   const totals=supplierProductionBillTotals(bill);
-  const rule='<hr style="border:0;border-top:2px solid #000;margin:4px 0;">';
-  return `<div style="font-weight:900;font-size:12px;line-height:1.2;color:#000;overflow-wrap:anywhere;"><div style="text-align:center;font-size:21px;font-weight:1000;">LEATHER RIGHT SHOES BY ABID</div><div style="text-align:center;margin:3px 0;">WHOLE FACTORY MATERIALS WEEKLY VOUCHER</div><div style="text-align:center;margin-top:3px;">${esc(bill.supplierName)} | #${esc(String(bill.voucherNo))}</div><div class="rline"><span>Date: ${esc(bill.date.slice(0,10))}</span><span>${esc(fmtTime(new Date(bill.date)))}</span></div>${rule}<table style="width:100%;table-layout:fixed;"><thead><tr><th data-i18n=ui_Material>Material</th><th data-i18n=ui_Quantity>Quantity</th><th data-i18n=ui_Rate_20_Per_20_Unit>Rate Per Unit</th><th data-i18n=ui_Amount>Amount</th></tr></thead><tbody>${bill.lines.map(line=>`<tr><td>${esc(line.articleName)}</td><td>${esc(String(line.qty))} ${esc(line.unit)}</td><td>${upperMoney(line.rate)}</td><td>${upperMoney(line.amount)}</td></tr>`).join('')}</tbody></table>${rule}<div class="rline"><strong>Weekly Total</strong><strong>${upperMoney(totals.weeklyTotal)}</strong></div><div class="rline"><strong>Pending Amount</strong><strong>${upperMoney(totals.pendingAmount)}</strong></div><div class="rline"><strong>Extra Balance</strong><strong>${upperMoney(totals.extraBalanceAmount)}</strong></div><div class="rline"><strong>Grand Total</strong><strong>${upperMoney(totals.grandTotal)}</strong></div><div class="rline" style="font-weight:500;"><span data-i18n=ui_Paid_20_Amount>Paid Amount</span><span>${bill.paidAmount==null?'Not saved':upperMoney(bill.paidAmount)}</span></div><div class="rline" style="font-weight:900;font-size:14px;"><strong>Remaining Balance</strong><strong>${bill.remainingBalance==null?'Not saved':upperMoney(bill.remainingBalance)}</strong></div>${rule}<div style="text-align:center;">For Contact Dial 03226574565</div></div>`;
+  const supplier=supplierProductionBillWorker(bill.supplierId);
+  const index=(settings.shoeSoleSuppliers||[]).indexOf(supplier);
+  const linkedIds=Array.isArray(bill.sourceRecordIds)?new Set(bill.sourceRecordIds.map(String)):null;
+  const start=new Date((bill.periodFrom||upperLocalDateKey(getUpperWorkWeekRange(new Date(bill.date)).start))+'T00:00:00');
+  const last=new Date((bill.periodTo||upperLocalDateKey(new Date(getUpperWorkWeekRange(new Date(bill.date)).end.getTime()-86400000)))+'T00:00:00');
+  const through=new Date(last);through.setHours(24,0,0,0);
+  const purchases=(supplier?.purchases||[]).filter(p=>{
+    const d=new Date(p.date),qty=Number(p.atoms??p.items??p.boxes);
+    if(!p.id||!Number.isFinite(qty)||qty<=0||p.deletedAt||p.deleted===true||p.voided)return false;
+    return linkedIds?linkedIds.has(String(p.id)):(d>=start&&d<through);
+  });
+  const days=Array.from({length:6},(_,i)=>{
+    const date=new Date(start);date.setDate(date.getDate()+i);
+    const daily=purchases.filter(p=>shoeSoleReportDateKey(new Date(p.date))===shoeSoleReportDateKey(date));
+    return {date,rows:daily};
+  });
+  const month=start.toLocaleDateString('ur-PK-u-ca-gregory',{month:'long'});
+  const monthRange=month+' '+start.getDate()+' تا '+(last.getMonth()===start.getMonth()?'':last.toLocaleDateString('ur-PK-u-ca-gregory',{month:'long'})+' ')+last.getDate();
+  const stamp=new Date(bill.date).toLocaleDateString('ur-PK-u-ca-gregory-nu-latn',{timeZone:'Asia/Karachi',weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const currentTime=fmtTime(new Date(bill.date));
+  const supplierName=supplier?wfmSupplierUrduName(shoeSoleSupplierDisplayName(supplier,index)):wfmSupplierUrduName(bill.supplierName);
+  const daysHtml=days.filter(d=>d.rows.length>0).map(day=>'<tr><td dir="rtl">'+esc(day.date.toLocaleDateString('ur-PK',{weekday:'long'})+'، '+day.date.toLocaleDateString('ur-PK-u-ca-gregory-nu-latn',{day:'numeric',month:'long'}))+'</td><td>'+esc(wfmTotals(day.rows))+'</td></tr>').join('');
+  const totalItems=wfmTotals(purchases);
+  const receivedArticles=(bill.lines||[]).map(l=>({name:l.articleName,qty:l.qty,unit:l.unit,rate:l.rate,amount:l.amount}));
+  const receivedHtml=productionDisplayReceivedHtml(receivedArticles,false,true).replace('TOTAL RECEIVED','کل وصول شدہ آئٹمز');
+  const moneyRow=(label,value,remaining=false)=>'<tr'+(remaining?' class="um-remaining"':'')+'><td>'+esc(label)+'</td><td>'+esc(value==null?'محفوظ نہیں':upperMoney(value))+'</td></tr>';
+  const moneyHtml='<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody>'+
+    moneyRow('پچھلی رقم',totals.pendingAmount)+
+    moneyRow('اس ہفتے کی رقم',totals.weeklyTotal)+
+    (totals.extraBalanceAmount>0?moneyRow('اضافی رقم',totals.extraBalanceAmount)+(String(bill.extraBalanceNote||'').trim()?'<tr><td colspan="2" style="height:auto;padding:1mm 2mm;font-size:3mm;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;">'+esc(bill.extraBalanceNote)+'</td></tr>':''):'')+
+    moneyRow('ٹوٹل رقم',totals.grandTotal)+
+    moneyRow('ادا شدہ رقم',bill.paidAmount)+
+    moneyRow('بقایا',bill.remainingBalance,true)+
+    '</tbody></table></div>';
+  return urduProductionWeeklyVoucherHtml(`<div class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;"><div class="bf-weekly-voucher wfm-weekly-voucher"><style>
+    .bf-weekly-voucher{box-sizing:border-box;width:100%;padding:4mm 0 1mm;color:#000;background:#fff;font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif;font-weight:600;line-height:1.1;text-align:center;}
+    .bf-weekly-voucher *{box-sizing:border-box;}.bf-weekly-voucher .um-brand{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:700;font-size:5.2mm;letter-spacing:0;white-space:nowrap;}.bf-weekly-voucher .um-title{font-family:"Arial Narrow",Arial,sans-serif;font-weight:600;display:flex;align-items:center;gap:1.5mm;font-size:4.25mm;margin:1.5mm 0 2mm;white-space:nowrap;}.bf-weekly-voucher .um-title:before,.bf-weekly-voucher .um-title:after{content:'';flex:1;border-top:1px solid #000;}
+    .bf-weekly-voucher .um-person{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1mm;font-size:4.6mm;min-height:7mm;align-items:center;}.bf-weekly-voucher .um-person span{min-width:0;white-space:nowrap;text-align:left;}.bf-weekly-voucher .um-stamp{font-weight:600;display:flex;justify-content:space-between;align-items:center;font-family:'Arial Narrow',Arial,sans-serif;font-size:3.6mm;margin:2mm 0;}
+    .bf-weekly-voucher .um-rule{border:0;border-top:1px dashed #000;margin:2mm 0;}.bf-weekly-voucher .um-frame{border:1.5px solid #000;border-radius:1.2mm;overflow:hidden;margin-top:1mm;}.bf-weekly-voucher table{border-collapse:collapse;table-layout:fixed;width:100%;margin:0;color:#000;font-size:4.4mm;}.bf-weekly-voucher th,.bf-weekly-voucher td{padding:0 1mm;height:6.25mm;text-align:center;border:0;border-bottom:1px solid #000;font-weight:600;background:#fff;}.bf-weekly-voucher tr:last-child td{border-bottom:0;}.bf-weekly-voucher th+th,.bf-weekly-voucher td+td{border-left:1px solid #000;}.bf-weekly-voucher th{font-family:"Arial Narrow",Arial,sans-serif;background:#fff!important;color:#000!important;font-weight:700;height:7.5mm;font-size:4.3mm;}.bf-weekly-voucher td[dir=rtl]{color:#000!important;font-weight:700;font-family:'Noto Naskh Arabic',serif;font-size:4.8mm;}
+    .bf-weekly-voucher .um-total-single{display:flex;justify-content:space-between;align-items:center;gap:1mm;padding:1mm 2mm;min-height:7mm;font-family:"Arial Narrow",Arial,sans-serif;font-size:3.8mm;font-weight:600;}.bf-weekly-voucher .um-money td:first-child{text-align:left;padding-left:2mm;}.bf-weekly-voucher .um-money td{font-size:4mm;height:6mm;}.bf-weekly-voucher .um-footer{font-family:'Arial Narrow',Arial,sans-serif;font-size:3mm;font-weight:700;letter-spacing:.15mm;}
+    .bf-weekly-voucher .um-received-title{font-family:"Arial Narrow",Arial,sans-serif;font-size:4.8mm;font-weight:700;padding:1mm;}.bf-weekly-voucher .um-received-row{display:grid;grid-template-columns:36% 28% 36%;align-items:center;border-top:1px solid #000;padding:1mm .5mm;font-size:3.4mm;gap:0;}.bf-weekly-voucher .um-received-article{grid-template-columns:34% 24% 20% 22%;font-size:3mm;}.bf-weekly-voucher .um-received-row span{min-width:0;overflow-wrap:anywhere;}.bf-weekly-voucher .um-received-article span:first-child{text-align:left;}
+    .wfm-weekly-voucher .wfm-compact-header{direction:ltr;grid-template-columns:auto minmax(0,1fr);}.wfm-weekly-voucher .wfm-compact-header>div{min-width:0;text-align:left;}.wfm-weekly-voucher .wfm-compact-header>div+div{overflow-wrap:anywhere;padding-left:2mm;border-left:1px solid #000;text-align:right;}
+  </style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title" style="white-space:normal;">WHOLE FACTORY MATERIALS WEEKLY VOUCHER</div><div class="um-person wfm-compact-header"><div dir="rtl">${esc(monthRange)}</div><div dir="rtl">${esc(supplierName)} | #${esc(String(bill.voucherNo))}</div></div><div class="um-stamp"><span dir="rtl">${esc(stamp)}</span><span>●</span><span dir="ltr">${esc(currentTime)}</span></div><hr class="um-rule"><div class="um-frame"><table><colgroup><col style="width:52%"><col style="width:48%"></colgroup><thead><tr><th dir="rtl">دن اور تاریخ</th><th>وصول آئٹمز</th></tr></thead><tbody>${daysHtml||'<tr><td colspan="2">کوئی وصولی نہیں</td></tr>'}</tbody></table></div><div class="um-frame um-total-single"><span>کل وصول شدہ آئٹمز</span><span>${esc(totalItems)}</span></div>${receivedHtml}${moneyHtml}<hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div></div>`);
 }
 function buildSupplierProductionBillCanvas(bill){
   const width=640,pad=24,canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),items=[];let height=pad;
@@ -14713,8 +14778,8 @@ function supplierVoucherPrintHtml(html,language){
   const urdu=language==='ur',labels=urdu?{
     'TOTAL RECEIVED':'ٹوٹل وصول ایٹمز','TOTAL ISSUED':'ٹوٹل جاری ایٹمز',[supplierVoucherLabel('PENDING')]:'\u0628\u0642\u0627\u06cc\u0627 \u0622\u0631\u0679\u06cc\u06a9\u0644\u0632','Old Pending':'\u067e\u0631\u0627\u0646\u0627 \u0628\u0642\u0627\u06cc\u0627',
     'Article':'\u0622\u0631\u0679\u06cc\u06a9\u0644','Received':'وصول','Issued':'جاری','Amount':'\u0631\u0642\u0645',
-    'OPENING AMOUNT':'پچھلی رقم',[supplierVoucherLabel('TOTAL AMOUNT')]:bill?'اس ہفتے کی رقم':'\u0679\u0648\u0679\u0644 \u0631\u0642\u0645','EXTRA BALANCE':'\u0627\u0636\u0627\u0641\u06cc \u0631\u0642\u0645',
-    'GRAND TOTAL':'ٹوٹل رقم','PAID AMOUNT':'ادا رقم','REMAINING':'\u0628\u0627\u0642\u06cc \u0631\u0642\u0645',
+    'OPENING AMOUNT':'پچھلی رقم','Opening Amount':'پچھلی رقم',[supplierVoucherLabel('TOTAL AMOUNT')]:bill?'اس ہفتے کی رقم':'\u0679\u0648\u0679\u0644 \u0631\u0642\u0645','TOTAL AMOUNT':'اس ہفتے کی رقم','Weekly Total':'اس ہفتے کی رقم','EXTRA BALANCE':'\u0627\u0636\u0627\u0641\u06cc \u0631\u0642\u0645','Extra Balance':'\u0627\u0636\u0627\u0641\u06cc \u0631\u0642\u0645',
+    'GRAND TOTAL':'ٹوٹل رقم','Grand Total':'ٹوٹل رقم','PAID AMOUNT':'ادا شدہ رقم','Paid Amount':'ادا شدہ رقم','REMAINING':'بقایا','Remaining':'بقایا','Remaining Balance':'بقایا',
     'Not saved':'\u0645\u062d\u0641\u0648\u0638 \u0646\u06c1\u06cc\u06ba','For Contact Dial 03226574565':'\u0631\u0627\u0628\u0637\u06d2 \u06a9\u06d2 \u0644\u06cc\u06d2 \u0688\u0627\u0626\u0644 \u06a9\u0631\u06cc\u06ba 03226574565'
   }:{};
   const replaceLabel=node=>{const text=node.textContent.trim();if(Object.prototype.hasOwnProperty.call(labels,text))node.textContent=labels[text];};
@@ -14730,7 +14795,7 @@ function supplierVoucherPrintHtml(html,language){
   host.className='supplier-voucher-urdu';host.lang='ur';host.dir='rtl';
   host.querySelectorAll('.um-person span,.um-stamp span,.um-total-single span:last-child,.um-received-row:not([style]) span,.um-day-quantity:not([dir=rtl])').forEach(node=>{node.dir='ltr';node.style.unicodeBidi='isolate';});
 
-  const names={'billa magzi wala':'بلا مغزی والا','pumpi doori':'پمپی ڈوری','pumpy dori':'پمپی ڈوری','btava shoes':'بتاوا شوز','batava shoes':'بتاوا شوز','batawa shoes':'بتاوا شوز'};
+  const names={'billa magzi wala':'بلا مغزی والا','pumpi doori':'پمپی ڈوری','pumpy dori':'پمپی ڈوری','btava shoes':'بتاوا شوز','batava shoes':'بتاوا شوز','batawa shoes':'بتاوا شوز','shoes lacker':'شوز لیکر'};
   const words={'ATOMS':'ایٹمز','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑا','PAIRS':'جوڑے','ROLL':'رول','ROLLS':'رول','METER':'میٹر','METERS':'میٹر','Legacy / unknown':'پرانا / نامعلوم','Note':'نوٹ','Voucher':'واؤچر','Date':'تاریخ','Time':'وقت','AM':'صبح','PM':'شام','Jan':'جنوری','Feb':'فروری','Mar':'مارچ','Apr':'اپریل','May':'مئی','Jun':'جون','Jul':'جولائی','Aug':'اگست','Sep':'ستمبر','Oct':'اکتوبر','Nov':'نومبر','Dec':'دسمبر'};
   host.querySelectorAll('.um-person span+span').forEach(node=>{node.textContent='واؤچر نمبر '+node.textContent;});
   const walker=document.createTreeWalker(host,4);let textNode;
@@ -15278,12 +15343,14 @@ function productionDisplayReceivedHtml(rows,showMissingRateWarning=true,separate
 function productionWeeklyUrduText(value,isName=false){
   const text=String(value??''),labels={
     'TOTAL RECEIVED':'ٹوٹل وصول آئٹمز','Received Items':'وصول آئٹمز','Article':'آرٹیکل','Received':'وصول','Amount':'رقم',
-    'PENDING':'بقایا','Old Pending':'پرانا بقایا','Legacy / unknown':'پرانا / نامعلوم','TOTAL LABOUR':'ٹوٹل رقم','TOTAL AMOUNT':'ٹوٹل رقم','WEEKLY KHARCHA':'ہفتہ وار خرچہ','REMAINING':'باقی رقم','Not saved':'محفوظ نہیں',
+    'PENDING':'بقایا','Old Pending':'پرانا بقایا','Legacy / unknown':'پرانا / نامعلوم','TOTAL LABOUR':'ٹوٹل رقم','TOTAL AMOUNT':'اس ہفتے کی رقم','Total Amount':'اس ہفتے کی رقم','Weekly Total':'اس ہفتے کی رقم','WEEKLY KHARCHA':'ہفتہ وار خرچہ','REMAINING':'بقایا','Remaining':'بقایا','Remaining Balance':'بقایا','Not saved':'محفوظ نہیں',
+    'OPENING AMOUNT':'پچھلی رقم','Opening Amount':'پچھلی رقم','Pending Amount':'پچھلی رقم','GRAND TOTAL':'ٹوٹل رقم','Grand Total':'ٹوٹل رقم','PAID AMOUNT':'ادا شدہ رقم','Paid Amount':'ادا شدہ رقم','EXTRA BALANCE':'اضافی رقم','Extra Balance':'اضافی رقم',
     'For Contact Dial 03226574565':'رابطے کے لیے ڈائل کریں 03226574565','* Totals incomplete: saved labour rate missing.':'* محفوظ اجرت موجود نہیں، ٹوٹل نامکمل ہے۔'
   };
   if(Object.prototype.hasOwnProperty.call(labels,text.trim()))return text.replace(text.trim(),labels[text.trim()]);
   const words={
     atoms:'ایٹمز',atom:'ایٹم',items:'آئٹمز',item:'آئٹم',set:'سیٹ',sets:'سیٹ',pair:'جوڑا',pairs:'جوڑے',roll:'رول',rolls:'رول',rule:'رول',meter:'میٹر',meters:'میٹر',kg:'کلوگرام',piece:'عدد',pieces:'عدد',packet:'پیکٹ',box:'باکس',
+    lacker:'لیکر',sole:'سول',soles:'سول',footprint:'فٹ پرنٹ',buckle:'بکل',elastic:'الاسٹک',thread:'دھاگہ',tape:'ٹیپ',solution:'سلوشن',material:'مٹیریل',materials:'مٹیریل',factory:'فیکٹری',whole:'تمام',
     jan:'جنوری',feb:'فروری',mar:'مارچ',apr:'اپریل',may:'مئی',jun:'جون',jul:'جولائی',aug:'اگست',sep:'ستمبر',oct:'اکتوبر',nov:'نومبر',dec:'دسمبر',am:'صبح',pm:'شام',
     muhammad:'محمد',mohammad:'محمد',mohammed:'محمد',muhammed:'محمد',mohd:'محمد',ahmed:'احمد',ahmad:'احمد',ali:'علی',hassan:'حسن',hasan:'حسن',hussain:'حسین',hussein:'حسین',abdul:'عبدال',abdullah:'عبداللہ',rehman:'رحمان',rahman:'رحمان',abid:'عابد',
     imran:'عمران',nadeem:'ندیم',naeem:'نعیم',nasir:'ناصر',naseer:'نصیر',zahid:'زاہد',zeeshan:'ذیشان',usman:'عثمان',umar:'عمر',omar:'عمر',asif:'آصف',arif:'عارف',akram:'اکرم',azam:'اعظم',irfan:'عرفان',shafiq:'شفیق',ashfaq:'اشفاق',
@@ -15295,6 +15362,7 @@ function productionWeeklyUrduText(value,isName=false){
     azeem:'عظیم',asad:'اسد',ahsan:'احسن',fadi:'فادی',hira:'ہیرا',sabir:'صابر',sabar:'سابر',umair:'عمیر',ilyas:'الیاس',naveed:'نوید',awaise:'اویس',tahir:'طاہر',hamza:'حمزہ',mohsin:'محسن',gopal:'گوپال',dogar:'ڈوگر',bismillah:'بسم اللہ',rasheed:'رشید',rangilahi:'رنگ الٰہی',mangah:'مانگا'
   };
   const phrases={
+    'shoes lacker':'شوز لیکر','shoes sole':'شوز سول','whole factory materials':'تمام فیکٹری مٹیریل',
     'one piece upper':'ون پیس اپر','pumpi upper':'پمپی اپر','8814 moza upper':'8814 موزہ اپر','flexible upper':'فلیکسیبل اپر',
     'role cutting kids pumpi':'رول کٹنگ کڈز پمپی','role cutting pumpi':'رول کٹنگ پمپی','one piece new rate':'ون پیس نیا ریٹ',
     'one piece baby moza':'ون پیس بیبی موزہ','one piece moza':'ون پیس موزہ','8814 tinda moza':'8814 ٹنڈا موزہ','double color moza':'ڈبل کلر موزہ',
@@ -15325,7 +15393,7 @@ function urduProductionWeeklyVoucherHtml(html){
   const walker=document.createTreeWalker(host,4);let node;
   while((node=walker.nextNode())){
     if(node.parentElement?.closest('style,script,.um-brand,.um-title'))continue;
-    const isName=!!node.parentElement?.closest('.um-person > span:first-child,.um-received-row:not([style]) > span:first-child');
+    const isName=!!node.parentElement?.closest('.um-person > span:first-child,.um-person > div:last-child,.wfm-compact-header > div:last-child,.um-received-row:not([style]) > span:first-child');
     node.nodeValue=productionWeeklyUrduText(node.nodeValue,isName);
   }
   host.querySelectorAll('.um-person > span:last-child').forEach(node=>{node.textContent='واؤچر نمبر '+node.textContent;});
