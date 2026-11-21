@@ -21286,19 +21286,52 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
     ? bfWeeklyDateKey
     : (d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
 
+  const stampKey = dateKey(stamp);
   const daysHtml = names.map((dayName, index)=>{
     const day = new Date(range.start);
     day.setDate(day.getDate() + index);
     const dayKey = dateKey(day);
+    if(dayKey > stampKey) return null;
     const dailyVouchers = weekVouchers.filter(v=>dateKey(new Date(v.date||0)) === dayKey);
     const dayGas = dailyVouchers.reduce((sum,v)=>sum+(Number(v.qtyKg)||0), 0);
     const text = dayGas > 0 ? `${Math.round((dayGas + Number.EPSILON) * 100) / 100} KG` : '';
     return `<tr><td dir="rtl">${dayName}</td><td>${esc(text)}</td></tr>`;
-  }).join('');
+  }).filter(Boolean).join('');
 
   const totalWeekGasKg = Math.round((weekVouchers.reduce((sum,v)=>sum+(Number(v.qtyKg)||0), 0) + Number.EPSILON) * 100) / 100;
   const daysWithGas = new Set(weekVouchers.filter(v=>(Number(v.qtyKg)||0)>0).map(v=>dateKey(new Date(v.date||0)))).size;
   const avgPerDay = daysWithGas > 0 ? Math.round((totalWeekGasKg / daysWithGas + Number.EPSILON) * 100) / 100 : 0;
+
+  const getWorkerWeeklyProductionItems = () => {
+    if(!selectedWorker?.id) return 0;
+    const wid = String(selectedWorker.id);
+    const dateOf = r => r.workDate ? new Date(r.workDate+'T00:00:00') : new Date(r.date||r.createdAt);
+    const inWeek = d => d >= range.start && d < range.end && d.getDay() !== 5;
+    let items = 0;
+    const bEntries = (settings.batamMansProduction||[]).filter(r=>!r.deletedAt&&r.deleted!==true&&String(r.workerId)===wid&&inWeek(dateOf(r)));
+    const bQty = bEntries.reduce((s,r)=>s+(Math.max(0,Number(r.reportedQty)||0)), 0);
+    if(bQty > 0) items += bQty;
+    else if(typeof batamWorkerWeekSummary === 'function'){
+      items += (batamWorkerWeekSummary(wid, stamp, stamp).totalAtoms || 0);
+    }
+    const fEntries = (settings.finishedMansProduction||[]).filter(r=>!r.deletedAt&&r.deleted!==true&&String(r.workerId)===wid&&inWeek(dateOf(r)));
+    const fQty = fEntries.reduce((s,r)=>s+(Math.max(0,Number(r.reportedQty)||0)), 0);
+    if(fQty > 0) items += fQty;
+    else if(typeof finishedWorkerWeekSummary === 'function'){
+      items += (finishedWorkerWeekSummary(wid, stamp, stamp).totalAtoms || 0);
+    }
+    const uEntries = (settings.upperDistributions||[]).filter(r=>!r.deletedAt&&r.deleted!==true&&String(r.workerId)===wid&&inWeek(typeof upperWorkTimestamp==='function'?upperWorkTimestamp(r):dateOf(r)));
+    const uQty = uEntries.reduce((s,r)=>s+(Math.max(0,Number(r.totalItems)||0)), 0);
+    if(uQty > 0) items += uQty;
+    return items;
+  };
+  const workerWeeklyItems = getWorkerWeeklyProductionItems();
+  const gasAverage = (totalWeekGasKg > 0 && workerWeeklyItems > 0)
+    ? Math.round((workerWeeklyItems / totalWeekGasKg) * 10) / 10
+    : 0;
+  const gasAverageText = gasAverage > 0
+    ? (Number.isInteger(gasAverage) ? String(gasAverage) : gasAverage.toFixed(1))
+    : '0';
 
   const totalGas = voucher && voucher.workerTotalGasKgSnapshot!=null
     ? Number(voucher.workerTotalGasKgSnapshot)||0
@@ -21356,7 +21389,7 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
     </style>
     <div class="um-brand">LEATHER RIGHT SHOES BY ABID</div>
     <div class="um-title">GAS FILLING WEEKLY VOUCHER</div>
-    <div class="um-person"><span style="white-space:nowrap">${esc(urduWorkerName)}</span><span>#${esc(displayVoucherNo)}</span></div>
+    <div class="um-person"><span style="white-space:nowrap">${esc(urduWorkerName)}</span><span>گیس ایوریج ${esc(gasAverageText)}</span></div>
     <div class="um-stamp"><span>${esc(dateStr)}</span><span>●</span><span>${esc(timeStr)}</span></div>
     <hr class="um-rule">
     <div class="um-frame">
@@ -21376,7 +21409,14 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
   </div>`;
 
   if(typeof urduProductionWeeklyVoucherHtml === 'function' && typeof document !== 'undefined'){
-    return urduProductionWeeklyVoucherHtml(rawHtml);
+    const urduHtml = urduProductionWeeklyVoucherHtml(rawHtml);
+    const host = document.createElement('div');
+    host.innerHTML = urduHtml;
+    const avgNode = host.querySelector('.um-person > span:last-child');
+    if(avgNode){
+      avgNode.textContent = `گیس ایوریج ${gasAverageText}`;
+    }
+    return host.innerHTML;
   }
   return rawHtml;
 }
