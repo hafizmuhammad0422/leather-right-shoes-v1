@@ -9480,20 +9480,19 @@ function showUpperVoucher(v,saved=true){
   const months=[];const seenMonths=new Set();
   weeks.forEach(w=>{if(!seenMonths.has(w.monthKey)){seenMonths.add(w.monthKey);months.push({key:w.monthKey,label:w.monthLabel});}});
   const initialWeekKey=isWeeklyNav?upperLocalDateKey(getUpperWorkWeekRange(upperWorkTimestamp(v)).start):'';
-  const selectorBar=isWeeklyNav&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:520px;box-sizing:border-box;">
-      <select id="pressVoucherMonthFilter" style="min-width:115px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+  const selectorBar=isWeeklyNav&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:440px;box-sizing:border-box;">
+      <select id="pressVoucherMonthFilter" style="min-width:110px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
         <option value="all">All Months</option>
         ${months.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('')}
       </select>
       <button type="button" class="btn ghost small" id="pressVoucherPrevWeek" title="Previous Week">◀ Prev</button>
-      <select id="pressVoucherWeekSelect" style="flex:1;min-width:190px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+      <select id="pressVoucherWeekSelect" style="flex:1;min-width:180px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
         ${weeks.map(w=>`<option value="${esc(w.weekKey)}" ${w.weekKey===initialWeekKey?'selected':''}>${esc(w.label)} • #${esc(w.latestRecord.voucherNo)}</option>`).join('')}
       </select>
       <button type="button" class="btn ghost small" id="pressVoucherNextWeek" title="Next Week">Next ▶</button>
     </div>`:'';
   const directWeeklyFor=rec=>rec.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(rec)));
-  modal(`<h3 id="pressVoucherModalTitle" style="margin-top:0;">${esc(upperVoucherCategoryTitle(activeVoucher))} Receive Voucher #${activeVoucher.voucherNo}</h3>
-    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+  modal(`<div style="display:flex;flex-direction:column;align-items:center;width:100%;">
       ${selectorBar}
       <div id="upperVoucherPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">
         ${upperVoucherHtml(activeVoucher)}
@@ -9970,6 +9969,7 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
   const isWeekly=Boolean(v?.latestWeekly);
+  if(isWeekly){const currentStart=getUpperWorkWeekRange(now).start;if(start<currentStart){const weekEnd=new Date(start);weekEnd.setDate(weekEnd.getDate()+6);if(through<weekEnd)through.setTime(weekEnd.getTime());}}
   const isIndividual=!isWeekly&&Boolean(v&&(Array.isArray(v.lines)||v.id));
   const dayKey=upperLocalDateKey(base);
   const dayRecords=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperLocalDateKey(upperWorkTimestamp(r))===dayKey);
@@ -10238,7 +10238,7 @@ function upperVoucherFieldStyle(id){const f=(settings.upperVoucherCustomization|
 
     document.querySelectorAll('[data-upper-pickworker] .entity-photo.zoomable').forEach(photo=>photo.addEventListener('click',event=>{event.stopPropagation();const card=photo.closest('[data-upper-pickworker]'),worker=workers.find(item=>String(item.id)===String(card?.dataset.upperPickworker));if(worker?.photo)openImageLightbox(worker.photo);}));
   }
-  return {route:workerProductionRoute,renderPage,bind};
+  return {route:workerProductionRoute,renderPage,bind,openLatestWorkerVoucher:pressOpenLatestWorkerVoucher};
 })();
 function shoesPressManRoute(page){return shoesPressManModule.route(page);}
 function shoesPressManRender(){const route=shoesPressManRoute(currentPage);updateTopbar();applyWallpaper();renderNav();document.getElementById('mainArea').innerHTML=shoesPressManModule.renderPage(currentPage);attachPageHandlers();wireDashboardSearch();document.body.classList.toggle('upper-mans-production-active',route?.view==='distributeUpper');}
@@ -24576,9 +24576,9 @@ function bindCurrentWeekWorkerVoucherDoubleClick(){
  if(document.__currentWeekWorkerVoucherDoubleClickBound)return;document.__currentWeekWorkerVoucherDoubleClickBound=true;let previous=null;
  document.addEventListener('click',event=>{
   if(!event.detail){previous=null;return;}const card=event.target?.closest?.('[data-upper-pickworker],[data-batam-pickworker],[data-finished-pickworker]');if(!card){previous=null;return;}
-  let module='',workerId='';if(card.hasAttribute('data-upper-pickworker')){if(workerCategoryCompareKey(upperProductionCategory)!=='upper mans'){previous=null;return;}module='upper';workerId=card.dataset.upperPickworker;}else if(card.hasAttribute('data-batam-pickworker')){module='batam';workerId=card.dataset.batamPickworker;}else{module='finished';workerId=card.dataset.finishedPickworker;}
+  let module='',workerId='';if(card.hasAttribute('data-upper-pickworker')){if(shoesPressManRoute(currentPage)){module='press';workerId=card.dataset.upperPickworker;}else if(workerCategoryCompareKey(upperProductionCategory)!=='upper mans'){previous=null;return;}else{module='upper';workerId=card.dataset.upperPickworker;}}else if(card.hasAttribute('data-batam-pickworker')){module='batam';workerId=card.dataset.batamPickworker;}else{module='finished';workerId=card.dataset.finishedPickworker;}
   const now=Date.now(),isDouble=previous&&previous.module===module&&previous.workerId===String(workerId)&&now-previous.time<=650;
-  if(isDouble){previous=null;if(module==='upper')event.__upperWeeklyVoucherDoubleClick=true;window.setTimeout(()=>{if(module==='upper')openCurrentWeekUpperManCardVoucher(workerId);else openCurrentWeekBfWorkerCardVoucher(module,workerId);},0);}else previous={module,workerId:String(workerId),time:now};
+  if(isDouble){previous=null;if(module==='press')window.setTimeout(()=>shoesPressManModule.openLatestWorkerVoucher?.(workerId),0);else if(module==='upper')event.__upperWeeklyVoucherDoubleClick=true,window.setTimeout(()=>{openCurrentWeekUpperManCardVoucher(workerId);},0);else openCurrentWeekBfWorkerCardVoucher(module,workerId);}else previous={module,workerId:String(workerId),time:now};
  },true);
 }
 
