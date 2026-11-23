@@ -21577,8 +21577,8 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
   ];
 
   const detailsTableHtml = `
-    <div class="um-frame">
-      <table class="um-money">
+    <div class="um-frame gas-supplier-summary-frame">
+      <table class="um-money gas-supplier-summary-table">
         <colgroup><col style="width:58%"><col style="width:42%"></colgroup>
         <tbody>${extraRows.join('')}</tbody>
       </table>
@@ -21592,6 +21592,7 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
       .bf-weekly-voucher .um-rule{border:0;border-top:1px dashed #000;margin:2mm 0;}.bf-weekly-voucher .um-frame{border:1.5px solid #000;border-radius:1.2mm;overflow:hidden;margin-top:1mm;}.bf-weekly-voucher table{border-collapse:collapse;table-layout:fixed;width:100%;margin:0;color:#000;font-size:4.4mm;}.bf-weekly-voucher th,.bf-weekly-voucher td{padding:0 1mm;height:6.25mm;text-align:center;border:0;border-bottom:1px solid #000;font-weight:600;background:#fff;}.bf-weekly-voucher tr:last-child td{border-bottom:0;}.bf-weekly-voucher th+th,.bf-weekly-voucher td+td{border-left:1px solid #000;}.bf-weekly-voucher th{font-family:"Arial Narrow",Arial,sans-serif;background:#fff!important;color:#000!important;font-weight:700;height:7.5mm;font-size:4.3mm;}.bf-weekly-voucher td[dir=rtl]{color:#000!important;font-weight:700;}.bf-weekly-voucher td[dir=rtl],.bf-weekly-voucher th[dir=rtl],.bf-weekly-voucher td.um-holiday{font-family:'Noto Naskh Arabic',serif;font-size:4.8mm;}
       .bf-weekly-voucher .um-total-title{font-family:"Arial Narrow",Arial,sans-serif;font-weight:700;height:7mm;display:flex;align-items:center;justify-content:center;font-size:4.8mm;}.bf-weekly-voucher .um-total-single{display:flex;justify-content:space-between;align-items:center;gap:1mm;padding:1mm 2mm;min-height:7mm;font-family:"Arial Narrow",Arial,sans-serif;font-size:3.8mm;font-weight:600;}.bf-weekly-voucher .um-totals{display:flex;gap:1mm;margin-top:1mm;}.bf-weekly-voucher .um-unit{font-family:"Arial Narrow",Arial,sans-serif;font-weight:600;flex:1;min-width:0;border:1.5px solid #000;border-radius:1mm;height:8mm;display:flex;align-items:center;justify-content:center;font-size:5mm;white-space:nowrap;}.bf-weekly-voucher .um-money td:first-child,.bf-weekly-voucher .um-pending td:first-child{text-align:left;padding-left:2mm;}.bf-weekly-voucher .um-money td{font-size:4mm;height:6mm;}.bf-weekly-voucher .um-money .um-remaining td{height:8mm;font-size:5.5mm;font-weight:700;}.bf-weekly-voucher .um-footer{font-family:'Arial Narrow',Arial,sans-serif;font-size:3mm;font-weight:700;letter-spacing:.15mm;}
       .bf-weekly-voucher .um-total-single span:first-child,.bf-weekly-voucher .um-pending td{font-weight:700;}
+      .bf-weekly-voucher .gas-supplier-summary-frame{border:2px solid #000;margin-top:1.6mm;}.bf-weekly-voucher .gas-supplier-summary-table td{font-size:4.6mm;font-weight:800!important;height:7.2mm;padding:.6mm 1.5mm;color:#000!important;}.bf-weekly-voucher .gas-supplier-summary-table tr+tr td{border-top:1.5px solid #000;}.bf-weekly-voucher .gas-supplier-summary-table td+td{border-left:1.5px solid #000;border-right:1.5px solid #000;}
     </style>
     <div class="um-brand">LEATHER RIGHT SHOES BY ABID</div>
     <div class="um-title">GAS FILLING WEEKLY VOUCHER</div>
