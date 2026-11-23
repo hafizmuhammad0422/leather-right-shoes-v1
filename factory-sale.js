@@ -1602,8 +1602,7 @@ function factorySaleManualBillHtml(bill,headerOption='footwear'){
     if(up.includes('12'))return 'ایٹم (12 جوڑے)';
     if(up.includes('24'))return 'سیٹ (24 جوڑے)';
     if(up.includes('32'))return 'سیٹ (32 جوڑے)';
-    if(up.includes('PAIR')||up.includes('جوڑے')||up.includes('پیئر'))return 'پیئر';
-    const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'پیئر','PAIRS':'پیئر','ITEM':'ایٹم','ITEMS':'ایٹم'};
+    const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'ایٹم','ITEMS':'ایٹم'};
     return map[up]||raw;
   };
 
@@ -1615,24 +1614,17 @@ function factorySaleManualBillHtml(bill,headerOption='footwear'){
       const found=catalogArticles.find(a=>String(a.id)===aId)||catalogArticles.find(a=>a.name===line.articleName);
       rawUnit=found?.unit||'';
     }
-    const unitDisplay=formatUrduUnit(line.unit||rawUnit);
+    const unitDisplay=String(line.unit||rawUnit||'').trim();
     const lineQtyDisplay=qtyNum?(unitDisplay?(qtyNum+' '+unitDisplay):qtyNum):'';
     let displayRate='';
     if(line.rate!==undefined&&line.rate!==null&&line.rate!==''){
       const uRate=Number(line.rate)||0;
-      let uPairs=Number(line.unitPairs);
-      if(!uPairs||uPairs<=0){
-        const aId=String(line.articleId||line.articleKey||'');
-        const found=catalogArticles.find(a=>String(a.id)===aId)||catalogArticles.find(a=>a.name===line.articleName);
-        uPairs=Number(found?.unitPairs);
-      }
-      const calcRate=(uPairs&&uPairs>0)?(uRate/uPairs):uRate;
-      displayRate=upperMoney(calcRate);
+      displayRate=upperMoney(uRate);
     }
     const lineAmount=line.amount!==undefined&&line.amount!==null&&line.amount!==''?upperMoney(line.amount):'';
     return `<tr style="border-bottom:1px solid #000;">
       <td style="border:1px solid #000;padding:4px 3px;text-align:right;font-weight:700;">${esc(line.articleName||'')}</td>
-      <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;direction:rtl;">${esc(lineQtyDisplay)}</td>
+      <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;direction:ltr;unicode-bidi:isolate;">${esc(lineQtyDisplay)}</td>
       <td style="border:1px solid #000;padding:4px 3px;text-align:center;white-space:nowrap;">${esc(displayRate)}</td>
       <td style="border:1px solid #000;padding:4px 3px;text-align:center;font-weight:700;white-space:nowrap;">${esc(lineAmount)}</td>
     </tr>`;
@@ -1700,7 +1692,13 @@ function factorySaleManualBillHtml(bill,headerOption='footwear'){
     </table>
 
     <!-- Amount Summary Box -->
-    <div style="border:1px solid #000;border-radius:4px;padding:3px 6px;margin-bottom:6px;font-size:12px;">
+    ${(()=>{
+      const netBillVal=Number(bill.netBillAmount??bill.totalAmount)||0;
+      const pendingVal=Number(bill.pendingAmount??bill.openingAmount??0)||0;
+      const paidVal=Number(bill.paidAmount??0)||0;
+      const thisBillRem=bill.currentBillRemaining!==undefined?Number(bill.currentBillRemaining)||0:Math.max(0,(Math.round(netBillVal*100)-Math.round(paidVal*100))/100);
+      const totalRemVal=bill.remainingBalance!==undefined&&bill.remainingBalance!==null&&bill.remainingBalance!==''?Number(bill.remainingBalance)||0:(Math.round(netBillVal*100)+Math.round(pendingVal*100)-Math.round(paidVal*100))/100;
+      return `<div style="border:1px solid #000;border-radius:4px;padding:3px 6px;margin-bottom:6px;font-size:12px;">
       <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
         <span>ٹوٹل رقم</span>
         <span style="font-weight:700;">${valOrBlank(bill.totalAmount)}</span>
@@ -1711,27 +1709,28 @@ function factorySaleManualBillHtml(bill,headerOption='footwear'){
       </div>`: ''}
       <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
         <span>بل کی رقم</span>
-        <span style="font-weight:700;">${valOrBlank(bill.netBillAmount??bill.totalAmount)}</span>
+        <span style="font-weight:700;">${valOrBlank(netBillVal)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
         <span>وصول رقم</span>
-        <span style="font-weight:700;">${valOrBlank(bill.paidAmount)}</span>
+        <span style="font-weight:700;">${valOrBlank(paidVal)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px dashed #ccc;">
         <span>اس بل کی باقی رقم</span>
-        <span style="font-weight:700;">${valOrBlank(bill.remainingBalance)}</span>
+        <span style="font-weight:700;">${valOrBlank(thisBillRem)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:2px 0;">
         <span>پچھلا بقایا</span>
-        <span style="font-weight:700;">${valOrBlank(bill.pendingAmount??bill.openingAmount)}</span>
+        <span style="font-weight:700;">${valOrBlank(pendingVal)}</span>
       </div>
     </div>
 
     <!-- Prominent Remaining Balance Box -->
     <div style="border:2px solid #000;border-radius:8px;padding:5px 8px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
       <div style="font-size:14px;font-weight:900;">ٹوٹل باقی رقم</div>
-      <div style="font-size:16px;font-weight:900;">${valOrBlank(bill.remainingBalance)}</div>
-    </div>
+      <div style="font-size:16px;font-weight:900;">${valOrBlank(totalRemVal)}</div>
+    </div>`;
+    })()}
 
     <!-- Payment Mode & Note -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;font-size:11.5px;">
@@ -1795,7 +1794,7 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
   hours = hours % 12 || 12;
   const timeStr = String(hours).padStart(2, '0') + ':' + minutes + ' ' + period;
 
-  const map = {'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'پیئر','PAIRS':'پیئر','ITEM':'ایٹم','ITEMS':'ایٹم'};
+  const map = {'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'ایٹم','ITEMS':'ایٹم'};
 
   // Calculate required dynamic height
   const lines = Array.isArray(bill.lines) ? bill.lines : [];
@@ -1933,19 +1932,11 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
     ctx.moveTo(xCol4, y); ctx.lineTo(xCol4, y + rowHeight);
     ctx.stroke();
 
-    const rawUnit = String(line.unit || '').trim();
-    const up = rawUnit.toUpperCase();
-    const uName = up.includes('12') ? 'ایٹم (12 جوڑے)' : (up.includes('24') ? 'سیٹ (24 جوڑے)' : (up.includes('32') ? 'سیٹ (32 جوڑے)' : (up.includes('PAIR') ? 'پیئر' : (map[up] || rawUnit))));
-    const qtyStr = line.qty !== undefined && line.qty !== null && line.qty !== '' ? (line.qty + (uName ? (' ' + uName) : '')) : '-';
+    const unitName = String(line.unit || '').trim();
+    const qtyStr = line.qty !== undefined && line.qty !== null && line.qty !== '' ? (line.qty + (unitName ? (' ' + unitName) : '')) : '-';
 
     const uRate = Number(line.rate) || 0;
-    let uPairs = Number(line.unitPairs);
-    if(!uPairs || uPairs <= 0){
-      const aId = String(line.articleId || line.articleKey || '');
-      const found = cat.find(a => String(a.id) === aId) || cat.find(a => a.name === line.articleName);
-      uPairs = Number(found?.unitPairs);
-    }
-    const pairRate = (uPairs && uPairs > 0) ? (uRate / uPairs) : uRate;
+    const pairRate = uRate;
 
     // Article Name (Right aligned inside cell)
     ctx.font = "bold 13px 'Segoe UI', Tahoma, sans-serif";
@@ -1954,7 +1945,7 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
 
     // Qty (Center aligned in column)
     ctx.textAlign = 'center';
-    ctx.direction = 'rtl';
+    ctx.direction = 'ltr';
     ctx.fillText(qtyStr, xCol3 + colW2 / 2, y + 7);
 
     // Rate per pair (Center aligned in column)
@@ -2013,14 +2004,20 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
     return num.toLocaleString('en-US') + ' روپے';
   };
 
+  const netBillVal = Number(bill.netBillAmount ?? bill.totalAmount) || 0;
+  const pendingVal = Number(bill.pendingAmount ?? bill.openingAmount ?? 0) || 0;
+  const paidVal = Number(bill.paidAmount ?? 0) || 0;
+  const thisBillRem = bill.currentBillRemaining !== undefined ? Number(bill.currentBillRemaining) || 0 : Math.max(0, (Math.round(netBillVal * 100) - Math.round(paidVal * 100)) / 100);
+  const totalRemVal = bill.remainingBalance !== undefined && bill.remainingBalance !== null && bill.remainingBalance !== '' ? Number(bill.remainingBalance) || 0 : (Math.round(netBillVal * 100) + Math.round(pendingVal * 100) - Math.round(paidVal * 100)) / 100;
+
   drawSummaryLine('ٹوٹل رقم', fmtVal(bill.totalAmount), true);
   if(hasDiscount){
     drawSummaryLine('ڈسکاؤنٹ', fmtVal(bill.discount), false);
   }
-  drawSummaryLine('بل کی رقم', fmtVal(bill.netBillAmount ?? bill.totalAmount), true);
-  drawSummaryLine('وصول رقم', fmtVal(bill.paidAmount ?? 0), false);
-  drawSummaryLine('اس بل کی باقی رقم', fmtVal(bill.remainingBalance ?? bill.totalAmount), true);
-  drawSummaryLine('پچھلا بقایا', fmtVal(bill.pendingAmount ?? bill.openingAmount ?? 0), false);
+  drawSummaryLine('بل کی رقم', fmtVal(netBillVal), true);
+  drawSummaryLine('وصول رقم', fmtVal(paidVal), false);
+  drawSummaryLine('اس بل کی باقی رقم', fmtVal(thisBillRem), true);
+  drawSummaryLine('پچھلا بقایا', fmtVal(pendingVal), false);
 
   y += summaryBoxHeight + 10;
 
@@ -2032,7 +2029,7 @@ function buildFactorySaleManualBillCanvas(bill,headerOption='footwear'){
   ctx.fillText('ٹوٹل باقی رقم', width - pad - 14, y + 13);
   ctx.font = "900 18px 'Segoe UI', Tahoma, sans-serif";
   ctx.textAlign = 'left';
-  ctx.fillText(fmtVal(bill.remainingBalance ?? bill.totalAmount), pad + 14, y + 12);
+  ctx.fillText(fmtVal(totalRemVal), pad + 14, y + 12);
   y += 56;
 
   // 6. Note if any
@@ -2070,7 +2067,7 @@ function buildFactorySaleManualBillText(bill,headerOption='footwear'){
     }
   }
   const dateStr=String(bill.date||new Date().toISOString()).slice(0,10);
-  const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'پیئر','PAIRS':'پیئر','ITEM':'ایٹم','ITEMS':'ایٹم'};
+  const map={'ATOMS':'ایٹم','ATOM':'ایٹم','SET':'سیٹ','SETS':'سیٹ','PAIR':'جوڑے','PAIRS':'جوڑے','ITEM':'ایٹم','ITEMS':'ایٹم'};
   const textLines=[
     isLeatherRight ? '*LEATHER RIGHT SHOES BY ABID*' : '*FOOTWEAR FIND SHOES*',
     isLeatherRight ? 'اعلیٰ معیار کے جوتوں کا کارخانہ' : 'ہول سیل سپلائر شوز قصور',
@@ -2083,24 +2080,17 @@ function buildFactorySaleManualBillText(bill,headerOption='footwear'){
   textLines.push('--------------------------------');
   textLines.push('*تفصیل آئٹمز:*');
   (bill.lines||[]).forEach((line,idx)=>{
-    const rawUnit=String(line.unit||'').trim();
-    const up=rawUnit.toUpperCase();
-    const uName=up.includes('12')?'ایٹم (12 جوڑے)':(up.includes('24')?'سیٹ (24 جوڑے)':(up.includes('32')?'سیٹ (32 جوڑے)':(up.includes('PAIR')?'پیئر':(map[up]||rawUnit))));
-    const qtyStr=line.qty!==undefined&&line.qty!==null&&line.qty!==''?(line.qty+(uName?(' '+uName):'')):'-';
+    const unitName=String(line.unit||'').trim();
+    const qtyStr=line.qty!==undefined&&line.qty!==null&&line.qty!==''?(line.qty+(unitName?(' '+unitName):'')):'-';
     const uRate=Number(line.rate)||0;
-    let uPairs=Number(line.unitPairs);
-    if(!uPairs||uPairs<=0){
-      const aId=String(line.articleId||line.articleKey||'');
-      const found=cat.find(a=>String(a.id)===aId)||cat.find(a=>a.name===line.articleName);
-      uPairs=Number(found?.unitPairs);
-    }
-    const pairRate=(uPairs&&uPairs>0)?(uRate/uPairs):uRate;
+    const pairRate=uRate;
     textLines.push((idx+1) + '. *' + (line.articleName||'آئٹم') + '*\n   تعداد: ' + qtyStr + ' | ریٹ: Rs. ' + upperMoney(pairRate) + ' | رقم: Rs. ' + upperMoney(line.amount));
   });
   textLines.push('--------------------------------');
   textLines.push('*ٹوٹل رقم:* Rs. ' + upperMoney(bill.totalAmount));
   if(Number(bill.discount)>0) textLines.push('*ڈسکاؤنٹ:* Rs. ' + upperMoney(bill.discount));
   textLines.push('*بل کی رقم:* Rs. ' + upperMoney(bill.netBillAmount??bill.totalAmount));
+  textLines.push('*پچھلا بقایا:* Rs. ' + upperMoney(bill.pendingAmount??bill.openingAmount??0));
   textLines.push('*وصول رقم:* Rs. ' + upperMoney(bill.paidAmount??0));
   textLines.push('*ٹوٹل باقی رقم:* Rs. ' + upperMoney(bill.remainingBalance??0));
   textLines.push('--------------------------------');
@@ -2198,13 +2188,13 @@ function factorySaleManualView(id){
 function factorySaleManualHistory(){modal('<h3>Manual Bill History</h3><div style="overflow-x:auto"><table><thead><tr><th>Bill</th><th>Shopkeeper</th><th>Date</th><th>Grand Total</th><th>Paid Amount</th><th>Remaining Balance</th><th>Actions</th></tr></thead><tbody>'+(settings.manualBills||[]).slice().reverse().map(b=>'<tr><td>#'+esc(b.voucherNo)+'</td><td>'+esc(b.shopkeeperName)+'</td><td>'+esc(String(b.date).slice(0,10))+'</td><td>'+upperMoney(b.totalAmount)+'</td><td>'+upperMoney(b.paidAmount??0)+'</td><td>'+upperMoney(b.remainingBalance??b.totalAmount)+'</td><td>'+ ['View','Edit','Delete','Print'].map(action=>'<button class="btn ghost small" data-fs-manual-action="'+action+'" data-fs-manual-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</td></tr>').join('')+'</tbody></table></div><div class="modal-actions"><button class="btn brass" id="fsManualNew">Manual Create Bill</button><button class="btn ghost" id="fsManualClose">Close</button></div>');document.getElementById('fsManualNew').onclick=()=>factorySaleManualEditor();document.getElementById('fsManualClose').onclick=closeModal;document.querySelectorAll('[data-fs-manual-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.fsManualId,bill=(settings.manualBills||[]).find(b=>b.id===id);if(!bill)return;const action=button.dataset.fsManualAction;if(action==='View')factorySaleManualView(id);else if(action==='Edit')factorySaleManualEditor(id);else if(action==='Print'){let pref='footwear';try{pref=localStorage.getItem('fs_last_manual_header')||'footwear';}catch(_e){}factorySaleManualPrint(bill,pref);}else openConfirmModal('Delete Manual Bill #'+bill.voucherNo+'?',()=>factorySaleManualDelete(id,JSON.stringify(bill)));});}
 async function factorySaleManualStore(next,number,{ nonBlocking=true }={}){if(factorySaleManualSaving)return false;const previous=settings.manualBills,counter=settings.nextManualBillNo,hadBills=Object.prototype.hasOwnProperty.call(settings,'manualBills'),hadCounter=Object.prototype.hasOwnProperty.call(settings,'nextManualBillNo');factorySaleManualSaving=true;settings.manualBills=next;if(number!==undefined)settings.nextManualBillNo=number;if(nonBlocking){if(typeof saveDB==='function')saveDB();else if(typeof persistAll==='function')persistAll();(async()=>{try{if(typeof syncVoucherInBackground==='function')await syncVoucherInBackground('factorySale','Manual bill save');else await saveCriticalCloudState('factorySale');}catch(err){console.warn('Background manual bill store deferred:',err?.message||err);}})();factorySaleManualSaving=false;return true;}try{if(!await saveCriticalCloudState('factorySale'))throw Error('Save failed');return true;}catch(error){if(hadBills)settings.manualBills=previous;else delete settings.manualBills;if(hadCounter)settings.nextManualBillNo=counter;else delete settings.nextManualBillNo;try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){}toast('Manual bill was not saved.');return false;}finally{factorySaleManualSaving=false;}}
 async function factorySaleManualDelete(id,expected){if(factorySaleManualSaving)return;const current=(settings.manualBills||[]).find(b=>b.id===id);if(!current||JSON.stringify(current)!==expected){toast('Manual bill changed. Reopen history.');return;}settings.manualBills=(settings.manualBills||[]).filter(b=>b.id!==id);factorySaleManualHistory();toast('Manual bill deleted');(async()=>{try{await saveCriticalCloudState('factorySale');}catch(err){console.warn('Background manual bill delete deferred:',err?.message||err);}})();}
-function factorySaleManualEditor(id=''){const original=(settings.manualBills||[]).find(b=>b.id===id);if(id&&!original)return;const expected=original?JSON.stringify(original):'',draftId=original?.id||uid(),articles=factorySaleManualArticles();modal('<h3>'+ (original?'Edit Manual Bill #'+esc(original.voucherNo):'Manual Create Bill')+'</h3><label>Shopkeeper Name<input type="text" id="fsManualName" value="'+esc(original?.shopkeeperName||'')+'"></label><div style="overflow-x:auto"><table><thead><tr><th>Article</th><th>Unit</th><th>Quantity</th><th>Rate</th><th>Line Amount</th><th></th></tr></thead><tbody id="fsManualRows"></tbody></table></div><datalist id="fsManualArticleList">'+articles.map(a=>'<option value="'+esc(a.articleName)+'">').join('')+'</datalist><div style="margin-top:6px;"><button class="btn ghost small" id="fsManualAdd">+ Add Article</button></div><div class="rline"><strong>Grand Total</strong><strong id="fsManualTotal">0</strong></div><label>Paid Amount<input id="fsManualPaid" type="number" min="0" step="0.01" value="'+esc(original?.paidAmount??0)+'"></label><label>Remaining Balance<input id="fsManualRemaining" readonly></label><div class="modal-actions"><button class="btn brass" id="fsManualSave">Create Bill</button><button class="btn ghost" id="fsManualHistory">History</button><button class="btn ghost" id="fsManualCancel">Cancel</button></div>');
+function factorySaleManualEditor(id=''){const original=(settings.manualBills||[]).find(b=>b.id===id);if(id&&!original)return;const expected=original?JSON.stringify(original):'',draftId=original?.id||uid(),articles=factorySaleManualArticles();modal('<h3>'+ (original?'Edit Manual Bill #'+esc(original.voucherNo):'Manual Create Bill')+'</h3><label>Shopkeeper Name<input type="text" id="fsManualName" value="'+esc(original?.shopkeeperName||'')+'"></label><div style="overflow-x:auto"><table><thead><tr><th>Article</th><th>Unit</th><th>Quantity</th><th>Rate</th><th>Line Amount</th><th></th></tr></thead><tbody id="fsManualRows"></tbody></table></div><datalist id="fsManualArticleList">'+articles.map(a=>'<option value="'+esc(a.articleName)+'">').join('')+'</datalist><div style="margin-top:6px;"><button class="btn ghost small" id="fsManualAdd">+ Add Article</button></div><div class="rline"><strong>Bill Amount</strong><strong id="fsManualBillTotal">0</strong></div><div class="row"><div><label>Previous Pending (پچھلا بقایا)<input id="fsManualPending" type="number" min="0" step="0.01" value="'+esc(original?.pendingAmount??original?.openingAmount??0)+'"></label></div><div><label>Paid Amount<input id="fsManualPaid" type="number" min="0" step="0.01" value="'+esc(original?.paidAmount??0)+'"></label></div></div><div class="rline"><strong>Grand Total</strong><strong id="fsManualTotal">0</strong></div><label>Remaining Balance<input id="fsManualRemaining" readonly></label><div class="modal-actions"><button class="btn brass" id="fsManualSave">Create Bill</button><button class="btn ghost" id="fsManualHistory">History</button><button class="btn ghost" id="fsManualCancel">Cancel</button></div>');
  const host=document.getElementById('fsManualRows');const collect=()=>[...host.children].map(row=>({...row.manualLine,articleName:(row.querySelector('[data-manual-article-name]')?.value||'').trim(),unit:(row.querySelector('[data-manual-unit]')?.value||'').trim(),qty:row.querySelector('[data-manual-qty]').value,rate:row.querySelector('[data-manual-rate]').value}));
- const update=()=>{try{const calculated=factorySaleManualAmounts(collect());calculated.lines.forEach((line,i)=>{const el=host.children[i]?.querySelector('[data-manual-amount]');if(el)el.textContent=upperMoney(line.amount);});document.getElementById('fsManualTotal').textContent=upperMoney(calculated.totalAmount);document.getElementById('fsManualRemaining').value=upperMoney((Math.round(calculated.totalAmount*100)-Math.round(Number(document.getElementById('fsManualPaid').value)*100))/100);}catch(error){document.getElementById('fsManualRemaining').value='';document.getElementById('fsManualTotal').textContent=error.message;[...host.children].forEach(row=>{try{const a=(row.querySelector('[data-manual-article-name]')?.value||'').trim(),u=(row.querySelector('[data-manual-unit]')?.value||'').trim(),q=row.querySelector('[data-manual-qty]').value,r=row.querySelector('[data-manual-rate]').value;row.querySelector('[data-manual-amount]').textContent=upperMoney(factorySaleManualAmounts([{...row.manualLine,articleName:a,unit:u,qty:q,rate:r}]).totalAmount);}catch(e){row.querySelector('[data-manual-amount]').textContent='';}});}};
+ const update=()=>{try{const calculated=factorySaleManualAmounts(collect());calculated.lines.forEach((line,i)=>{const el=host.children[i]?.querySelector('[data-manual-amount]');if(el)el.textContent=upperMoney(line.amount);});const pendingCents=Math.max(0,Math.round((Number(document.getElementById('fsManualPending')?.value)||0)*100)),billCents=Math.round(calculated.totalAmount*100),grandCents=billCents+pendingCents,paidCents=Math.round((Number(document.getElementById('fsManualPaid')?.value)||0)*100);const billEl=document.getElementById('fsManualBillTotal');if(billEl)billEl.textContent=upperMoney(calculated.totalAmount);document.getElementById('fsManualTotal').textContent=upperMoney(grandCents/100);document.getElementById('fsManualRemaining').value=upperMoney((grandCents-paidCents)/100);}catch(error){document.getElementById('fsManualRemaining').value='';const billEl=document.getElementById('fsManualBillTotal');if(billEl)billEl.textContent=upperMoney(0);document.getElementById('fsManualTotal').textContent=error.message;[...host.children].forEach(row=>{try{const a=(row.querySelector('[data-manual-article-name]')?.value||'').trim(),u=(row.querySelector('[data-manual-unit]')?.value||'').trim(),q=row.querySelector('[data-manual-qty]').value,r=row.querySelector('[data-manual-rate]').value;row.querySelector('[data-manual-amount]').textContent=upperMoney(factorySaleManualAmounts([{...row.manualLine,articleName:a,unit:u,qty:q,rate:r}]).totalAmount);}catch(e){row.querySelector('[data-manual-amount]').textContent='';}});}};
 
- const add=(saved={})=>{const row=document.createElement('tr');row.manualLine={...saved};const savedName=saved.articleName||'';const standardUnits=['Pair','Atom (12 Jode)','SET (24 Jode)','SET (32 Jode)'];let selectedUnit='Pair';if(saved.unit){const su=saved.unit.trim().toLowerCase();if(su.includes('12')||su==='atom'||su==='atoms'||su==='item'||su==='items')selectedUnit='Atom (12 Jode)';else if(su.includes('24'))selectedUnit='SET (24 Jode)';else if(su.includes('32'))selectedUnit='SET (32 Jode)';else if(su==='pair'||su==='pairs')selectedUnit='Pair';else selectedUnit=saved.unit;}const isCustom=!standardUnits.includes(selectedUnit);row.innerHTML='<td><input data-manual-article-name list="fsManualArticleList" placeholder="Article name" value="'+esc(savedName)+'" style="min-width:130px;width:100%"></td><td><select data-manual-unit style="min-width:125px"><option value="Pair" '+(selectedUnit==='Pair'?'selected':'')+'>Pair</option><option value="Atom (12 Jode)" '+(selectedUnit==='Atom (12 Jode)'?'selected':'')+'>Atom (12 Jode)</option><option value="SET (24 Jode)" '+(selectedUnit==='SET (24 Jode)'?'selected':'')+'>SET (24 Jode)</option><option value="SET (32 Jode)" '+(selectedUnit==='SET (32 Jode)'?'selected':'')+'>SET (32 Jode)</option>'+(isCustom?'<option value="'+esc(selectedUnit)+'" selected>'+esc(selectedUnit)+'</option>':'')+'</select></td><td><input data-manual-qty type="number" min="0" step="any" placeholder="Qty" value="'+esc(saved.qty??'')+'" style="width:80px"></td><td><input data-manual-rate type="number" min="0" step="any" placeholder="Rate" value="'+esc(saved.rate??'')+'" style="width:80px"></td><td data-manual-amount style="white-space:nowrap;font-weight:700;"></td><td><button class="btn ghost small" data-manual-remove>Remove</button></td>';const nameInput=row.querySelector('[data-manual-article-name]');const unitSelect=row.querySelector('[data-manual-unit]');const qtyInput=row.querySelector('[data-manual-qty]');const rateInput=row.querySelector('[data-manual-rate]');const syncCatalog=()=>{const val=nameInput.value.trim();const matched=articles.find(a=>a.articleName.trim().toLowerCase()===val.toLowerCase());if(matched){row.manualLine={...row.manualLine,articleKey:matched.key,articleId:matched.articleId,articleName:matched.articleName,adda:matched.adda||'',unitPairs:matched.unitPairs??''};if(matched.unit){const mUnit=matched.unit.trim().toLowerCase();let target='Pair';if(mUnit.includes('12')||mUnit==='atom'||mUnit==='atoms'||mUnit==='item'||mUnit==='items')target='Atom (12 Jode)';else if(mUnit.includes('24'))target='SET (24 Jode)';else if(mUnit.includes('32'))target='SET (32 Jode)';else if(mUnit==='pair'||mUnit==='pairs')target='Pair';else target=matched.unit;let opt=[...unitSelect.options].find(o=>o.value.toLowerCase()===target.toLowerCase());if(!opt){opt=document.createElement('option');opt.value=target;opt.textContent=target;unitSelect.appendChild(opt);}unitSelect.value=target;}if(!rateInput.value&&matched.rate!==undefined&&matched.rate!==null&&matched.rate!==''){rateInput.value=matched.rate;}}else{row.manualLine={...row.manualLine,articleName:val,unit:unitSelect.value};}update();};nameInput.addEventListener('input',syncCatalog);nameInput.addEventListener('change',syncCatalog);unitSelect.addEventListener('change',()=>{row.manualLine.unit=unitSelect.value;update();});qtyInput.addEventListener('input',update);rateInput.addEventListener('input',update);row.querySelector('[data-manual-remove]').onclick=()=>{row.remove();update();};host.appendChild(row);update();};
+ const add=(saved={})=>{const row=document.createElement('tr');row.manualLine={...saved,userEditedRate:saved.rate!==undefined&&saved.rate!==null&&saved.rate!==''};const savedName=saved.articleName||'';const standardUnits=['Pair','Atom (12 Jode)','SET (24 Jode)','SET (32 Jode)'];let selectedUnit='Pair';if(saved.unit){const su=saved.unit.trim().toLowerCase();if(su.includes('12')||su==='atom'||su==='atoms'||su==='item'||su==='items')selectedUnit='Atom (12 Jode)';else if(su.includes('24'))selectedUnit='SET (24 Jode)';else if(su.includes('32'))selectedUnit='SET (32 Jode)';else if(su==='pair'||su==='pairs')selectedUnit='Pair';else selectedUnit=saved.unit;}const isCustom=!standardUnits.includes(selectedUnit);row.innerHTML='<td><input data-manual-article-name list="fsManualArticleList" placeholder="Article name" value="'+esc(savedName)+'" style="min-width:130px;width:100%"></td><td><select data-manual-unit style="min-width:125px"><option value="Pair" '+(selectedUnit==='Pair'?'selected':'')+'>Pair</option><option value="Atom (12 Jode)" '+(selectedUnit==='Atom (12 Jode)'?'selected':'')+'>Atom (12 Jode)</option><option value="SET (24 Jode)" '+(selectedUnit==='SET (24 Jode)'?'selected':'')+'>SET (24 Jode)</option><option value="SET (32 Jode)" '+(selectedUnit==='SET (32 Jode)'?'selected':'')+'>SET (32 Jode)</option>'+(isCustom?'<option value="'+esc(selectedUnit)+'" selected>'+esc(selectedUnit)+'</option>':'')+'</select></td><td><input data-manual-qty type="number" min="0" step="any" placeholder="Qty" value="'+esc(saved.qty??'')+'" style="width:80px"></td><td><input data-manual-rate type="number" min="0" step="any" placeholder="Rate" value="'+esc(saved.rate??'')+'" style="width:80px"></td><td data-manual-amount style="white-space:nowrap;font-weight:700;"></td><td><button class="btn ghost small" data-manual-remove>Remove</button></td>';const nameInput=row.querySelector('[data-manual-article-name]');const unitSelect=row.querySelector('[data-manual-unit]');const qtyInput=row.querySelector('[data-manual-qty]');const rateInput=row.querySelector('[data-manual-rate]');const syncCatalog=()=>{const val=nameInput.value.trim();const prevKey=String(row.manualLine.articleKey||'');const matched=articles.find(a=>a.articleName.trim().toLowerCase()===val.toLowerCase());if(matched){const isDifferentArticle=prevKey&&prevKey!==String(matched.key);row.manualLine={...row.manualLine,articleKey:matched.key,articleId:matched.articleId,articleName:matched.articleName,adda:matched.adda||'',unitPairs:matched.unitPairs??''};if(matched.unit){const mUnit=matched.unit.trim().toLowerCase();let target='Pair';if(mUnit.includes('12')||mUnit==='atom'||mUnit==='atoms'||mUnit==='item'||mUnit==='items')target='Atom (12 Jode)';else if(mUnit.includes('24'))target='SET (24 Jode)';else if(mUnit.includes('32'))target='SET (32 Jode)';else if(mUnit==='pair'||mUnit==='pairs')target='Pair';else target=matched.unit;let opt=[...unitSelect.options].find(o=>o.value.toLowerCase()===target.toLowerCase());if(!opt){opt=document.createElement('option');opt.value=target;opt.textContent=target;unitSelect.appendChild(opt);}unitSelect.value=target;}if((!rateInput.value||(isDifferentArticle&&!row.manualLine.userEditedRate))&&matched.rate!==undefined&&matched.rate!==null&&matched.rate!==''){rateInput.value=matched.rate;}}else{row.manualLine={...row.manualLine,articleName:val,unit:unitSelect.value};}update();};nameInput.addEventListener('input',syncCatalog);nameInput.addEventListener('change',syncCatalog);unitSelect.addEventListener('change',()=>{row.manualLine.unit=unitSelect.value;update();});qtyInput.addEventListener('input',update);rateInput.addEventListener('input',()=>{row.manualLine.userEditedRate=rateInput.value.trim()!=='';update();});row.querySelector('[data-manual-remove]').onclick=()=>{row.remove();update();};host.appendChild(row);update();};
 
- document.getElementById('fsManualPaid').oninput=update;(original?.lines||[{}]).forEach(add);document.getElementById('fsManualAdd').onclick=()=>add();document.getElementById('fsManualHistory').onclick=factorySaleManualHistory;document.getElementById('fsManualCancel').onclick=closeModal;document.getElementById('fsManualSave').onclick=async()=>{if(factorySaleManualSaving)return;if(!original&&(settings.manualBills||[]).some(b=>b.id===draftId)){factorySaleManualView(draftId);return;}const name=document.getElementById('fsManualName').value.trim();if(!name){toast('Enter Shopkeeper Name.');return;}let calculated;try{calculated=factorySaleManualAmounts(collect());}catch(error){toast(error.message);return;}const rawPaid=document.getElementById('fsManualPaid').value,paidAmount=Math.round(Number(rawPaid)*100)/100,remainingBalance=(Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100;if(rawPaid===''||!Number.isFinite(paidAmount)||paidAmount<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0){toast('Enter Paid Amount between zero and Grand Total.');return;}const bills=settings.manualBills||[];if(original&&JSON.stringify(bills.find(b=>b.id===id))!==expected){toast('Manual bill changed. Reopen it.');return;}const number=original?.voucherNo||Math.max(1001,Number(settings.nextManualBillNo)||1001,...bills.map(b=>(Number(b.voucherNo)||0)+1)),bill={...original,id:draftId,voucherNo:number,date:original?.date||new Date().toISOString(),...(original?{editedAt:new Date().toISOString()}:{}),shopkeeperName:name,lines:calculated.lines,totalAmount:calculated.totalAmount,paidAmount,remainingBalance};bill.dispatchSnapshot={id:'manual:'+bill.id,billId:bill.id,shopkeeperName:name,date:bill.date,lines:bill.lines.map((line,index)=>({id:'manual:'+bill.id+':'+index,manualBillId:bill.id,shopkeeperName:name,date:bill.date,articleId:line.articleId||line.articleKey||'manual-line-'+index,articleName:line.articleName,unit:line.unit,atoms:line.qty,ratePerUnit:line.rate,amount:line.amount}))};settings.manualBills=original?bills.map(b=>b.id===id?bill:b):[...bills,bill];if(!original)settings.nextManualBillNo=number+1;closeModal();factorySaleManualView(bill.id);toast(original?'Manual bill updated':'Manual bill created');(async()=>{try{await saveCriticalCloudState('factorySale');}catch(err){console.warn('Background manual bill save deferred:',err?.message||err);}})();};}
+ document.getElementById('fsManualPending').oninput=update;document.getElementById('fsManualPaid').oninput=update;(original?.lines||[{}]).forEach(add);document.getElementById('fsManualAdd').onclick=()=>add();document.getElementById('fsManualHistory').onclick=factorySaleManualHistory;document.getElementById('fsManualCancel').onclick=closeModal;document.getElementById('fsManualSave').onclick=async()=>{if(factorySaleManualSaving)return;if(!original&&(settings.manualBills||[]).some(b=>b.id===draftId)){factorySaleManualView(draftId);return;}const name=document.getElementById('fsManualName').value.trim();if(!name){toast('Enter Shopkeeper Name.');return;}let calculated;try{calculated=factorySaleManualAmounts(collect());}catch(error){toast(error.message);return;}const rawPending=document.getElementById('fsManualPending').value,pendingAmount=rawPending===''?0:Math.round(Number(rawPending)*100)/100;if(!Number.isFinite(pendingAmount)||pendingAmount<0||!Number.isSafeInteger(Math.round(pendingAmount*100))){toast('Enter a valid Previous Pending amount (0 or greater).');return;}const grandTotal=(Math.round(calculated.totalAmount*100)+Math.round(pendingAmount*100))/100,rawPaid=document.getElementById('fsManualPaid').value,paidAmount=Math.round(Number(rawPaid)*100)/100,remainingBalance=(Math.round(grandTotal*100)-Math.round(paidAmount*100))/100,currentBillRemaining=Math.max(0,(Math.round(calculated.totalAmount*100)-Math.round(paidAmount*100))/100);if(rawPaid===''||!Number.isFinite(paidAmount)||paidAmount<0||!Number.isSafeInteger(Math.round(paidAmount*100))||remainingBalance<0){toast('Enter Paid Amount between zero and Grand Total.');return;}const bills=settings.manualBills||[];if(original&&JSON.stringify(bills.find(b=>b.id===id))!==expected){toast('Manual bill changed. Reopen it.');return;}const number=original?.voucherNo||Math.max(1001,Number(settings.nextManualBillNo)||1001,...bills.map(b=>(Number(b.voucherNo)||0)+1)),bill={...original,id:draftId,voucherNo:number,date:original?.date||new Date().toISOString(),...(original?{editedAt:new Date().toISOString()}:{}),shopkeeperName:name,lines:calculated.lines,totalAmount:calculated.totalAmount,pendingAmount,openingAmount:pendingAmount,grandTotal,currentBillRemaining,paidAmount,remainingBalance};bill.dispatchSnapshot={id:'manual:'+bill.id,billId:bill.id,shopkeeperName:name,date:bill.date,lines:bill.lines.map((line,index)=>({id:'manual:'+bill.id+':'+index,manualBillId:bill.id,shopkeeperName:name,date:bill.date,articleId:line.articleId||line.articleKey||'manual-line-'+index,articleName:line.articleName,unit:line.unit,atoms:line.qty,ratePerUnit:line.rate,amount:line.amount}))};settings.manualBills=original?bills.map(b=>b.id===id?bill:b):[...bills,bill];if(!original)settings.nextManualBillNo=number+1;closeModal();factorySaleManualView(bill.id);toast(original?'Manual bill updated':'Manual bill created');(async()=>{try{await saveCriticalCloudState('factorySale');}catch(err){console.warn('Background manual bill save deferred:',err?.message||err);}})();};}
 
 function route(page){return ['factorySale','factorySaleToday','factorySaleShopkeeperDetail','factorySaleDispatchDetail','factorySaleShopkeeper1','factorySaleShopkeeper2','factorySaleDispatch1','factorySaleDispatch2'].includes(page);}
 function renderPage(page){load();currentPage=page;const index=shoeSoleRouteIndex();let html;if(page==='factorySale')html=pageShoeSoleSuppliers();else if(page==='factorySaleToday')html=pageShoeSoleToday();else if(page.includes('Dispatch'))html='<button class="btn ghost small" id="btnBackShoeSoleSupplierDetail" data-receivesupplier="'+index+'">Back to Shopkeeper</button>'+pageShoeSoleReceiveDetail(index);else html='<button class="btn ghost small" id="btnBackShoeSoleSuppliers">Back to Factory Sale</button>'+pageShoeSoleSupplierDetail(index);return FACTORY_SALE_CSS+html;}
