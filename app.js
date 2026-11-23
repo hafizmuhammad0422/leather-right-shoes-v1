@@ -22251,7 +22251,7 @@ function bfWeeklyVoucherHtml(module,v,allProduction=null){
  const names=JSON.parse('["\u06c1\u0641\u062a\u06c1","\u0627\u062a\u0648\u0627\u0631","\u067e\u06cc\u0631","\u0645\u0646\u06af\u0644","\u0628\u062f\u06be","\u062c\u0645\u0639\u0631\u0627\u062a"]');
  const days=names.map((dayName,index)=>{const day=new Date(range.start);day.setDate(day.getDate()+index);const daily=rows.filter(row=>bfWeeklyDateKey(row.date)===bfWeeklyDateKey(day)),holiday=allProduction&&!daily.length&&day<=displayThrough;return '<tr><td dir="rtl">'+dayName+'</td><td'+(holiday?' class="um-holiday" dir="rtl"':'')+'>'+esc(daily.length?quantityText(daily):holiday?'\u0686\u06be\u0679\u06cc':'')+'</td></tr>';}).join('')+(allProduction?'<tr><td>ہفتہ وار ٹوٹل</td><td>'+esc(quantityText(rows))+'</td></tr>':'');
  const stamp=new Date(v.createdAt||v.date),date=base.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}),time=stamp.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true});
-  return bfApplyVoucherBaqiAndKharcha(urduProductionWeeklyVoucherHtml(`<div class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;"><div class="bf-weekly-voucher"><style>
+  const html=bfApplyVoucherBaqiAndKharcha(urduProductionWeeklyVoucherHtml(`<div class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;"><div class="bf-weekly-voucher"><style>
     .bf-weekly-voucher{box-sizing:border-box;width:100%;padding:4mm 0 1mm;color:#000;background:#fff;font-family:'Bahnschrift Condensed','Arial Narrow',Arial,sans-serif;font-weight:600;line-height:1.1;text-align:center;}
     .bf-weekly-voucher *{box-sizing:border-box;}.bf-weekly-voucher .um-brand{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:700;font-size:5.2mm;letter-spacing:0;white-space:nowrap;}.bf-weekly-voucher .um-title{font-family:"Arial Narrow",Arial,sans-serif;font-weight:600;display:flex;align-items:center;gap:1.5mm;font-size:4.25mm;margin:1.5mm 0 2mm;white-space:nowrap;}.bf-weekly-voucher .um-title:before,.bf-weekly-voucher .um-title:after{content:'';flex:1;border-top:1px solid #000;}
     .bf-weekly-voucher .um-person{font-family:"Bahnschrift Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1mm;font-size:4.6mm;min-height:7mm;align-items:center;}.bf-weekly-voucher .um-person span{min-width:0;white-space:nowrap;text-align:left;}.bf-weekly-voucher .um-person span+span{white-space:nowrap;padding-left:2mm;text-align:right;}.bf-weekly-voucher .um-person span+span{border-left:1px solid #000;}.bf-weekly-voucher .um-stamp{font-weight:600;display:flex;justify-content:space-between;align-items:center;font-family:'Arial Narrow',Arial,sans-serif;font-size:3.6mm;margin:2mm 0;}
@@ -22260,6 +22260,39 @@ function bfWeeklyVoucherHtml(module,v,allProduction=null){
     .bf-weekly-voucher .um-total-single span:first-child,.bf-weekly-voucher .um-pending td{font-weight:700;}
     .bf-weekly-voucher .um-received-title{font-family:"Arial Narrow",Arial,sans-serif;font-size:4.8mm;font-weight:700;padding:1mm;}.bf-weekly-voucher .um-received-row{display:grid;grid-template-columns:36% 28% 36%;align-items:center;border-top:1px solid #000;padding:1mm .5mm;font-size:3.4mm;gap:0;}.bf-weekly-voucher .um-received-article{grid-template-columns:34% 24% 20% 22%;font-size:3mm;}.bf-weekly-voucher .um-received-row span{min-width:0;overflow-wrap:anywhere;}.bf-weekly-voucher .um-received-article span:first-child{text-align:left;}
   </style><div class="um-brand">LEATHER RIGHT SHOES BY ABID</div><div class="um-title">${finished?'FINISH':'BATTAM'} MAN WEEKLY VOUCHER</div><div class="um-person"><span style="white-space:nowrap">${esc(name)}</span><span>#${esc(displayVoucherNo)}</span></div><div class="um-stamp"><span>${esc(date)}</span><span>●</span><span>${esc(time)}</span></div><hr class="um-rule"><div class="um-frame"><table><colgroup><col style="width:52%"><col style="width:48%"></colgroup><thead><tr><th dir="rtl">دن</th><th>Received Items</th></tr></thead><tbody>${days}</tbody></table></div>${totalReceived}<div class="um-frame"><table class="um-money"><colgroup><col style="width:58%"><col style="width:42%"></colgroup><tbody><tr><td>${module==='batam'?'TOTAL LABOUR':'TOTAL AMOUNT'}</td><td>${esc(upperMoney(summary.grossEarned)+(module==='batam'&&rows.some(row=>row.rate===null)?' *':''))}</td></tr><tr><td>WEEKLY KHARCHA</td><td>${esc(upperMoney(summary.kharcha))}</td></tr><tr class="um-remaining"><td>REMAINING</td><td>${esc(upperMoney(summary.netEarned)+(module==='batam'&&rows.some(row=>row.rate===null)?' *':''))}</td></tr></tbody></table></div><hr class="um-rule"><div class="um-footer">For Contact Dial 03226574565</div></div></div>`),worker,Boolean(allProduction));
+  if(!allProduction && typeof document !== 'undefined'){
+    const wid = String(v?.workerId || worker?.id || '');
+    const wNameLower = String(worker?.name || name || '').trim().toLowerCase();
+    const inFullWeek = d => d >= range.start && d < range.end && d.getDay() !== 5;
+    const weekGasVouchers = (gasVouchers || [])
+      .filter(gv => gv && !gv.voided && !gv.deletedAt)
+      .filter(gv => {
+        const gWid = String(gv.workerRecordId || '');
+        if(wid && gWid && gWid === wid) return true;
+        return Boolean(wNameLower && String(gv.workerName || '').trim().toLowerCase() === wNameLower);
+      })
+      .filter(gv => inFullWeek(new Date(gv.date || 0)));
+    const totalWeekGasKg = Math.round((weekGasVouchers.reduce((sum, gv) => sum + (Number(gv.qtyKg) || 0), 0) + Number.EPSILON) * 100) / 100;
+    let workerWeeklyItems = entries.filter(r => active(r) && String(r.workerId) === wid && inFullWeek(dateOf(r))).reduce((sum, r) => sum + (Math.max(0, Number(r.reportedQty) || 0)), 0);
+    if(!(workerWeeklyItems > 0)){
+      const summaryFn = finished ? finishedWorkerWeekSummary : batamWorkerWeekSummary;
+      if(typeof summaryFn === 'function') workerWeeklyItems = summaryFn(wid, base, range.end).totalAtoms || 0;
+    }
+    const gasAverage = (totalWeekGasKg > 0 && workerWeeklyItems > 0)
+      ? Math.round((workerWeeklyItems / totalWeekGasKg) * 10) / 10
+      : 0;
+    const gasAverageText = gasAverage > 0
+      ? (Number.isInteger(gasAverage) ? String(gasAverage) : gasAverage.toFixed(1))
+      : '0';
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    const avgNode = host.querySelector('.um-person > span:last-child');
+    if(avgNode){
+      avgNode.innerHTML = `گیس ایوریج ${esc(gasAverageText)} (<bdi dir="ltr">${esc(String(totalWeekGasKg))} KG</bdi>)`;
+    }
+    return host.innerHTML;
+  }
+  return html;
 }
 function batamVoucherHtml(v){return bfWeeklyVoucherHtml('batam',v);}
 function bfWorkerWeeks(module,workerId){
