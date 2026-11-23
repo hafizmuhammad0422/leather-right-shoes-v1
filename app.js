@@ -107,6 +107,7 @@ function applyCloudState(state){
   settings.nextReceiptNo = Number(settings.nextReceiptNo)||1001;
   settings.units = Array.isArray(settings.units) && settings.units.length ? settings.units : ['Roll','Packet','Piece','Kg','Meter','Box'];
   normalizeUpperFeatureState();
+  if(typeof normalizeGasSuppliers==='function') normalizeGasSuppliers();
 }
 
 function hasMeaningfulLocalData(){
@@ -904,12 +905,160 @@ function normalizeDashboardMiddleBoxes(){
   if(settings.dashboardMiddleBoxes.length > 6) settings.dashboardMiddleBoxes = settings.dashboardMiddleBoxes.slice(0,6);
 }
 normalizeDashboardMiddleBoxes();
-settings.gasSupplier = (settings.gasSupplier && typeof settings.gasSupplier==='object') ? settings.gasSupplier : {};
-settings.gasSupplier.status = settings.gasSupplier.status || 'Active';
-settings.gasSupplier.gasType = settings.gasSupplier.gasType || 'LPG';
-settings.gasSupplier.perKgPrice = Number(settings.gasSupplier.perKgPrice)||0;
+const DEFAULT_GAS_SUPPLIER_ID = 'gas_supplier_1';
+function normalizeGasSupplierEntry(src, fallbackId=DEFAULT_GAS_SUPPLIER_ID){
+  const s = (src && typeof src==='object') ? src : {};
+  return {
+    id: String(s.id || fallbackId),
+    name: String(s.name || '').trim(),
+    ownerName: String(s.ownerName || '').trim(),
+    mobile: String(s.mobile || '').trim(),
+    location: String(s.location || '').trim(),
+    gasType: String(s.gasType || 'LPG').trim() || 'LPG',
+    status: s.status === 'Inactive' ? 'Inactive' : 'Active',
+    notes: String(s.notes || '').trim(),
+    photo: String(s.photo || ''),
+    perKgPrice: Math.max(0, Number(s.perKgPrice) || 0)
+  };
+}
+function normalizeGasSuppliers(){
+  if(!settings || typeof settings!=='object') settings={};
+  const gs = (settings.gasSupplier && typeof settings.gasSupplier==='object' && !Array.isArray(settings.gasSupplier)) ? settings.gasSupplier : {};
+  const billAccounts = (gs.billAccounts && typeof gs.billAccounts==='object' && !Array.isArray(gs.billAccounts)) ? {...gs.billAccounts} : {};
+  const billedExtrasBySupplier = (gs.billedExtraIdsBySupplier && typeof gs.billedExtraIdsBySupplier==='object' && !Array.isArray(gs.billedExtraIdsBySupplier)) ? {...gs.billedExtraIdsBySupplier} : {};
+  const nextBillNoBySupplier = (gs.nextBillVoucherNoBySupplier && typeof gs.nextBillVoucherNoBySupplier==='object' && !Array.isArray(gs.nextBillVoucherNoBySupplier)) ? {...gs.nextBillVoucherNoBySupplier} : {};
+  let list = Array.isArray(gs.suppliers) ? gs.suppliers.filter(x=>x && typeof x==='object').map((x,i)=>normalizeGasSupplierEntry(x, i===0?DEFAULT_GAS_SUPPLIER_ID:`gas_supplier_${i+1}`)) : [];
+  if(!list.length){
+    list = [normalizeGasSupplierEntry(gs, DEFAULT_GAS_SUPPLIER_ID)];
+  } else {
+    const curId = String(gs.activeSupplierId || gs.id || list[0].id || DEFAULT_GAS_SUPPLIER_ID);
+    const idx = list.findIndex(x=>String(x.id)===curId);
+    if(idx>=0 && String(gs.id||curId)===curId && (gs.name!==undefined || gs.ownerName!==undefined || gs.photo!==undefined)){
+      list[idx] = normalizeGasSupplierEntry({...list[idx], ...gs, id:list[idx].id}, list[idx].id);
+    }
+  }
+  const seenIds = new Set();
+  list = list.filter(x=>{ if(seenIds.has(x.id)) return false; seenIds.add(x.id); return true; });
+  if(!list.some(x=>x.id===DEFAULT_GAS_SUPPLIER_ID)){
+    list[0].id = DEFAULT_GAS_SUPPLIER_ID;
+  }
+  let activeId = String(gs.activeSupplierId || gs.id || list[0].id || DEFAULT_GAS_SUPPLIER_ID);
+  if(!list.some(x=>String(x.id)===activeId)) activeId = String(list[0].id);
+  const prevTopId = String(gs.id || DEFAULT_GAS_SUPPLIER_ID);
+  if(settings.gasSupplierBillAccount && typeof settings.gasSupplierBillAccount==='object'){
+    billAccounts[prevTopId] = JSON.parse(JSON.stringify(settings.gasSupplierBillAccount));
+  }
+  if(Array.isArray(settings.gasSupplierBilledExtraBalanceIds)){
+    billedExtrasBySupplier[prevTopId] = settings.gasSupplierBilledExtraBalanceIds.map(String);
+  }
+  if(Number.isFinite(Number(settings.gasSupplierBillNextVoucherNo)) && Number(settings.gasSupplierBillNextVoucherNo)>0){
+    nextBillNoBySupplier[prevTopId] = Number(settings.gasSupplierBillNextVoucherNo);
+  }
+  const active = list.find(x=>String(x.id)===activeId) || list[0];
+  settings.gasSupplier = {
+    ...active,
+    id: active.id,
+    activeSupplierId: active.id,
+    suppliers: list,
+    billAccounts,
+    billedExtraIdsBySupplier: billedExtrasBySupplier,
+    nextBillVoucherNoBySupplier: nextBillNoBySupplier
+  };
+  if(Object.prototype.hasOwnProperty.call(billAccounts, active.id) && billAccounts[active.id]){
+    settings.gasSupplierBillAccount = JSON.parse(JSON.stringify(billAccounts[active.id]));
+  } else if(prevTopId !== active.id){
+    delete settings.gasSupplierBillAccount;
+  }
+  if(Array.isArray(billedExtrasBySupplier[active.id])){
+    settings.gasSupplierBilledExtraBalanceIds = billedExtrasBySupplier[active.id].map(String);
+  } else if(prevTopId !== active.id){
+    settings.gasSupplierBilledExtraBalanceIds = [];
+  }
+  if(Number.isFinite(Number(nextBillNoBySupplier[active.id]))){
+    settings.gasSupplierBillNextVoucherNo = Number(nextBillNoBySupplier[active.id]);
+  }
+  return settings.gasSupplier;
+}
+function getGasSuppliers(){
+  normalizeGasSuppliers();
+  return settings.gasSupplier.suppliers;
+}
+function getActiveGasSupplier(){
+  normalizeGasSuppliers();
+  const list = settings.gasSupplier.suppliers;
+  return list.find(x=>String(x.id)===String(settings.gasSupplier.activeSupplierId)) || list[0];
+}
+function gasSupplierDisplayName(supplier, index=0){
+  return (supplier && String(supplier.name||'').trim()) ? String(supplier.name).trim() : `Gas Supplier ${index+1}`;
+}
+function isDefaultGasSupplier(supplier=getActiveGasSupplier()){
+  const list = getGasSuppliers();
+  return !supplier || String(supplier.id)===DEFAULT_GAS_SUPPLIER_ID || String(supplier.id)===String(list[0]?.id);
+}
+function gasRecordBelongsToSupplier(record, supplier=getActiveGasSupplier()){
+  if(!record || typeof record!=='object') return false;
+  const sup = supplier || getActiveGasSupplier();
+  const recId = record.gasSupplierId ?? record.supplierId;
+  if(recId != null && String(recId).trim() !== ''){
+    return String(recId) === String(sup.id);
+  }
+  if(record.supplierName && String(record.supplierName).trim() !== '' && String(sup.name||'').trim() !== ''){
+    if(String(record.supplierName).trim() === String(sup.name).trim()) return true;
+    const otherMatch = getGasSuppliers().some(s=>String(s.id)!==String(sup.id) && String(s.name||'').trim()===String(record.supplierName).trim());
+    if(otherMatch) return false;
+  }
+  return isDefaultGasSupplier(sup);
+}
+function syncActiveGasSupplierBillState(){
+  if(!settings.gasSupplier || typeof settings.gasSupplier!=='object') return;
+  const activeId = String(settings.gasSupplier.activeSupplierId || settings.gasSupplier.id || DEFAULT_GAS_SUPPLIER_ID);
+  settings.gasSupplier.billAccounts = (settings.gasSupplier.billAccounts && typeof settings.gasSupplier.billAccounts==='object') ? settings.gasSupplier.billAccounts : {};
+  settings.gasSupplier.billedExtraIdsBySupplier = (settings.gasSupplier.billedExtraIdsBySupplier && typeof settings.gasSupplier.billedExtraIdsBySupplier==='object') ? settings.gasSupplier.billedExtraIdsBySupplier : {};
+  settings.gasSupplier.nextBillVoucherNoBySupplier = (settings.gasSupplier.nextBillVoucherNoBySupplier && typeof settings.gasSupplier.nextBillVoucherNoBySupplier==='object') ? settings.gasSupplier.nextBillVoucherNoBySupplier : {};
+  if(settings.gasSupplierBillAccount && typeof settings.gasSupplierBillAccount==='object'){
+    settings.gasSupplier.billAccounts[activeId] = JSON.parse(JSON.stringify(settings.gasSupplierBillAccount));
+  } else {
+    delete settings.gasSupplier.billAccounts[activeId];
+  }
+  if(Array.isArray(settings.gasSupplierBilledExtraBalanceIds)){
+    settings.gasSupplier.billedExtraIdsBySupplier[activeId] = settings.gasSupplierBilledExtraBalanceIds.map(String);
+  }
+  if(Number.isFinite(Number(settings.gasSupplierBillNextVoucherNo))){
+    settings.gasSupplier.nextBillVoucherNoBySupplier[activeId] = Number(settings.gasSupplierBillNextVoucherNo);
+  }
+}
+function selectActiveGasSupplier(supplierId){
+  normalizeGasSuppliers();
+  syncActiveGasSupplierBillState();
+  const list = settings.gasSupplier.suppliers || [];
+  const target = list.find(x=>String(x.id)===String(supplierId));
+  if(!target) return false;
+  const billAccounts = settings.gasSupplier.billAccounts || {};
+  const billedExtrasBySupplier = settings.gasSupplier.billedExtraIdsBySupplier || {};
+  const nextBillNoBySupplier = settings.gasSupplier.nextBillVoucherNoBySupplier || {};
+  settings.gasSupplier = {
+    ...target,
+    id: target.id,
+    activeSupplierId: target.id,
+    suppliers: list,
+    billAccounts,
+    billedExtraIdsBySupplier: billedExtrasBySupplier,
+    nextBillVoucherNoBySupplier: nextBillNoBySupplier
+  };
+  if(billAccounts[target.id]){
+    settings.gasSupplierBillAccount = JSON.parse(JSON.stringify(billAccounts[target.id]));
+  } else {
+    delete settings.gasSupplierBillAccount;
+  }
+  settings.gasSupplierBilledExtraBalanceIds = Array.isArray(billedExtrasBySupplier[target.id]) ? billedExtrasBySupplier[target.id].map(String) : [];
+  if(Number.isFinite(Number(nextBillNoBySupplier[target.id]))){
+    settings.gasSupplierBillNextVoucherNo = Number(nextBillNoBySupplier[target.id]);
+  }
+  return true;
+}
+normalizeGasSuppliers();
 settings.gasExtraBalances = Array.isArray(settings.gasExtraBalances) ? settings.gasExtraBalances : [];
-settings.gasExtraBalances = settings.gasExtraBalances.filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id||uid()),date:String(x.date||new Date().toISOString()),time:String(x.time||''),details:String(x.details||x.item||''),amount:Math.max(0,Number(x.amount)||0)})).filter(x=>x.details||x.amount>0);
+settings.gasExtraBalances = settings.gasExtraBalances.filter(x=>x&&typeof x==='object').map(x=>({id:String(x.id||uid()),date:String(x.date||new Date().toISOString()),time:String(x.time||''),details:String(x.details||x.item||''),amount:Math.max(0,Number(x.amount)||0),...(x.gasSupplierId?{gasSupplierId:String(x.gasSupplierId)}:{}),...(x.supplierName?{supplierName:String(x.supplierName)}:{})})).filter(x=>x.details||x.amount>0);
 function normalizeShoeBoxSuppliers(){
   const existing = Array.isArray(settings.shoeBoxSuppliers) ? settings.shoeBoxSuppliers : [];
   const defaults = [
@@ -1784,11 +1933,11 @@ function billAccountBoardsAdapter(index){
 }
 let billAccountGasBusy=false;
 function billAccountGasAdapter(){
-  const id=String(settings.gasSupplier?.id||'gas');
-  return {name:settings.gasSupplier?.name||'Gas Supplier',cancelId:'gasBillCancel',openingKey:'openingAmount',weekly:bill=>billAccountCents(bill.gasAmount),
-    valid:()=>String(settings.gasSupplier?.id||'gas')===id,busy:()=>billAccountGasBusy,lock:value=>{billAccountGasBusy=value;},
-    read:()=>({account:settings.gasSupplierBillAccount||null,bills:settings.gasSupplierBills||[],billedExtraIds:settings.gasSupplierBilledExtraBalanceIds||[]}),
-    write:data=>{settings={...settings,gasSupplierBillAccount:data.account,gasSupplierBills:data.bills,gasSupplierBilledExtraBalanceIds:data.billedExtraIds};},
+  const sup=getActiveGasSupplier(),id=String(sup?.id||'gas');
+  return {name:sup?.name||'Gas Supplier',cancelId:'gasBillCancel',openingKey:'openingAmount',weekly:bill=>billAccountCents(bill.gasAmount),
+    valid:()=>String(getActiveGasSupplier()?.id||'gas')===id,busy:()=>billAccountGasBusy,lock:value=>{billAccountGasBusy=value;},
+    read:()=>({account:settings.gasSupplierBillAccount||null,bills:(settings.gasSupplierBills||[]).filter(b=>gasRecordBelongsToSupplier(b,sup)),billedExtraIds:settings.gasSupplierBilledExtraBalanceIds||[]}),
+    write:data=>{const byId=new Map((data.bills||[]).map(b=>[String(b.id),b]));const merged=(settings.gasSupplierBills||[]).map(b=>gasRecordBelongsToSupplier(b,sup)?(byId.get(String(b.id))||b):b);settings={...settings,gasSupplierBillAccount:data.account,gasSupplierBills:merged,gasSupplierBilledExtraBalanceIds:data.billedExtraIds};syncActiveGasSupplierBillState();},
     deleted:(data,bill)=>{if(bill.billingLifecycleVersion===1){if(!Array.isArray(bill.billingSourceExtraIds))throw Error('NEW Gas bill source snapshot is missing.');const released=Number(data.account.billReleasedGasKg??0)+Number(bill.totalGasKg);if(!Number.isFinite(released)||released<0)throw Error('Invalid saved Gas quantity.');data.account.billReleasedGasKg=released;const releasedIds=new Set(bill.billingSourceExtraIds.map(String));data.billedExtraIds=data.billedExtraIds.filter(id=>!releasedIds.has(String(id)));}},
     save:()=>saveCriticalCloudState('gas'),reconcile:()=>reconcileCloudAfterCriticalRollback(),back:()=>openGasSupplierBillModal()};
 }
@@ -9480,20 +9629,19 @@ function showUpperVoucher(v,saved=true){
   const months=[];const seenMonths=new Set();
   weeks.forEach(w=>{if(!seenMonths.has(w.monthKey)){seenMonths.add(w.monthKey);months.push({key:w.monthKey,label:w.monthLabel});}});
   const initialWeekKey=isWeeklyNav?upperLocalDateKey(getUpperWorkWeekRange(upperWorkTimestamp(v)).start):'';
-  const selectorBar=isWeeklyNav&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:520px;box-sizing:border-box;">
-      <select id="pressVoucherMonthFilter" style="min-width:115px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+  const selectorBar=isWeeklyNav&&weeks.length?`<div id="pressVoucherPeriodBar" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;margin:0 0 10px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg-soft,#f8f9fa);width:100%;max-width:440px;box-sizing:border-box;">
+      <select id="pressVoucherMonthFilter" style="min-width:110px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
         <option value="all">All Months</option>
         ${months.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('')}
       </select>
       <button type="button" class="btn ghost small" id="pressVoucherPrevWeek" title="Previous Week">◀ Prev</button>
-      <select id="pressVoucherWeekSelect" style="flex:1;min-width:190px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
+      <select id="pressVoucherWeekSelect" style="flex:1;min-width:180px;width:auto;padding:5px 8px;font-size:12px;margin:0;">
         ${weeks.map(w=>`<option value="${esc(w.weekKey)}" ${w.weekKey===initialWeekKey?'selected':''}>${esc(w.label)} • #${esc(w.latestRecord.voucherNo)}</option>`).join('')}
       </select>
       <button type="button" class="btn ghost small" id="pressVoucherNextWeek" title="Next Week">Next ▶</button>
     </div>`:'';
   const directWeeklyFor=rec=>rec.workflowVersion===1&&/^(upper mans|label mans?)$/.test(workerCategoryCompareKey(upperProductionRecordCategory(rec)));
-  modal(`<h3 id="pressVoucherModalTitle" style="margin-top:0;">${esc(upperVoucherCategoryTitle(activeVoucher))} Receive Voucher #${activeVoucher.voucherNo}</h3>
-    <div style="display:flex;flex-direction:column;align-items:center;width:100%;">
+  modal(`<div style="display:flex;flex-direction:column;align-items:center;width:100%;">
       ${selectorBar}
       <div id="upperVoucherPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">
         ${upperVoucherHtml(activeVoucher)}
@@ -9970,6 +10118,7 @@ function upperWeeklyVoucherData(v,now=new Date()){
   const base=upperWorkTimestamp(v),start=getUpperWorkWeekRange(base).start,end=new Date(start);end.setDate(end.getDate()+7);
   const through=new Date(base);through.setHours(24,0,0,0);if(through>end)through.setTime(end.getTime());
   const isWeekly=Boolean(v?.latestWeekly);
+  if(isWeekly){const currentStart=getUpperWorkWeekRange(now).start;if(start<currentStart){const weekEnd=new Date(start);weekEnd.setDate(weekEnd.getDate()+6);if(through<weekEnd)through.setTime(weekEnd.getTime());}}
   const isIndividual=!isWeekly&&Boolean(v&&(Array.isArray(v.lines)||v.id));
   const dayKey=upperLocalDateKey(base);
   const dayRecords=(settings.upperDistributions||[]).filter(r=>String(r.workerId)===String(v.workerId)&&upperLocalDateKey(upperWorkTimestamp(r))===dayKey);
@@ -10238,7 +10387,7 @@ function upperVoucherFieldStyle(id){const f=(settings.upperVoucherCustomization|
 
     document.querySelectorAll('[data-upper-pickworker] .entity-photo.zoomable').forEach(photo=>photo.addEventListener('click',event=>{event.stopPropagation();const card=photo.closest('[data-upper-pickworker]'),worker=workers.find(item=>String(item.id)===String(card?.dataset.upperPickworker));if(worker?.photo)openImageLightbox(worker.photo);}));
   }
-  return {route:workerProductionRoute,renderPage,bind};
+  return {route:workerProductionRoute,renderPage,bind,openLatestWorkerVoucher:pressOpenLatestWorkerVoucher};
 })();
 function shoesPressManRoute(page){return shoesPressManModule.route(page);}
 function shoesPressManRender(){const route=shoesPressManRoute(currentPage);updateTopbar();applyWallpaper();renderNav();document.getElementById('mainArea').innerHTML=shoesPressManModule.renderPage(currentPage);attachPageHandlers();wireDashboardSearch();document.body.classList.toggle('upper-mans-production-active',route?.view==='distributeUpper');}
@@ -20163,15 +20312,18 @@ function recalcGasWeekBalance(w){
   w.remainingKg = Math.round(((w.openingKg + w.newGasKg - w.payKg) + Number.EPSILON) * 100) / 100;
   return w.remainingKg;
 }
-function ensureCurrentGasWeek(){
+function ensureCurrentGasWeek(supplier=getActiveGasSupplier()){
   settings.gasSupplierWeeks = Array.isArray(settings.gasSupplierWeeks) ? settings.gasSupplierWeeks : [];
 settings.nextShoeBoxReceiveVoucherNo = Number(settings.nextShoeBoxReceiveVoucherNo) || 1001;
-  const weeks = settings.gasSupplierWeeks;
+  const sup = supplier || getActiveGasSupplier();
+  const weeks = settings.gasSupplierWeeks.filter(w=>gasRecordBelongsToSupplier(w, sup));
   if(!weeks.length){
     const now = new Date();
     const w = {
       weekKey: now.toISOString().slice(0,10),
       weekId: uid(),
+      gasSupplierId: String(sup.id),
+      supplierName: String(sup.name||''),
       openingKg:0,
       newGasKg:0,
       payKg:0,
@@ -20180,7 +20332,7 @@ settings.nextShoeBoxReceiveVoucherNo = Number(settings.nextShoeBoxReceiveVoucher
       closedAt:null,
       createdAt:now.toISOString()
     };
-    weeks.push(w);
+    settings.gasSupplierWeeks.push(w);
     persistAll();
     return w;
   }
@@ -20189,6 +20341,7 @@ settings.nextShoeBoxReceiveVoucherNo = Number(settings.nextShoeBoxReceiveVoucher
   return weeks[weeks.length-1];
 }
 function startNewGasWeekAfterPayment(previousWeek, paymentDate){
+  const sup = getActiveGasSupplier();
   const weeks = settings.gasSupplierWeeks;
   const paymentAt = paymentDate || new Date().toISOString();
   const carryKg = Math.max(0, Number(previousWeek.remainingKg)||0);
@@ -20199,6 +20352,8 @@ function startNewGasWeekAfterPayment(previousWeek, paymentDate){
   const w = {
     weekKey: paymentAt.slice(0,10),
     weekId: uid(),
+    gasSupplierId: String(previousWeek.gasSupplierId || sup.id),
+    supplierName: String(previousWeek.supplierName || sup.name || ''),
     // The requested opening figure carries the pre-payment remaining KG.
     // It is kept as a separate opening quantity; the paid quantity belongs
     // to the closed week and therefore cannot alter the historical record.
@@ -20214,7 +20369,8 @@ function startNewGasWeekAfterPayment(previousWeek, paymentDate){
   return w;
 }
 function openEditGasBalanceModal(){
-  const w = ensureCurrentGasWeek();
+  const sup = getActiveGasSupplier();
+  const w = ensureCurrentGasWeek(sup);
   modal(`
     <h3 style="margin-top:0;">Edit Supplier Balance — ${gasWeekRangeLabel(w.weekKey)}</h3>
     <div class="row">
@@ -20257,6 +20413,8 @@ function openEditGasBalanceModal(){
       const next = {
         weekKey:w.paymentDate.slice(0,10),
         weekId:uid(),
+        gasSupplierId:String(sup.id),
+        supplierName:String(sup.name||''),
         openingKg:beforePaymentRemaining,
         newGasKg:0,
         payKg:0,
@@ -20272,7 +20430,8 @@ function openEditGasBalanceModal(){
   };
 }
 function openPayGasBalanceModal(){
-  const w=ensureCurrentGasWeek();
+  const sup=getActiveGasSupplier();
+  const w=ensureCurrentGasWeek(sup);
   const currentRemaining=Math.max(0,Number(gasWeekKg(w,'remainingKg'))||0);
   modal(`<h3 style="margin-top:0;">Pay Balance</h3>
     <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">Current Remaining Balance</div>
@@ -20295,9 +20454,9 @@ function openPayGasBalanceModal(){
     if(advanceKg>0 && !confirm(`Remaining is ${latestRemaining} KG.\nPayment is ${amount} KG.\nExtra ${advanceKg} KG will become Advance.\n\nContinue?`))return;
     saveBtn.disabled=true;
     const snap=gasDeepSnapshot(),paymentAt=new Date().toISOString(),weeks=settings.gasSupplierWeeks;
-    const payment={id:uid(),date:paymentAt,amountKg:amount,previousRemainingKg:latestRemaining,oldWeekId:w.weekId||null,oldWeekKey:w.weekKey||null,status:'Active'};
+    const payment={id:uid(),date:paymentAt,amountKg:amount,previousRemainingKg:latestRemaining,oldWeekId:w.weekId||null,oldWeekKey:w.weekKey||null,gasSupplierId:String(sup.id),supplierName:String(sup.name||''),status:'Active'};
     w.closedAt=paymentAt;w.paymentDate=paymentAt;w.paidAtPaymentKg=amount;w.payKg=amount;w.remainingKg=0;
-    const nextWeek={weekKey:paymentAt.slice(0,10),weekId:uid(),openingKg:carryKg,newGasKg:0,payKg:0,advanceKg:advanceKg,remainingKg:carryKg,closedAt:null,createdAt:paymentAt};
+    const nextWeek={weekKey:paymentAt.slice(0,10),weekId:uid(),gasSupplierId:String(sup.id),supplierName:String(sup.name||''),openingKg:carryKg,newGasKg:0,payKg:0,advanceKg:advanceKg,remainingKg:carryKg,closedAt:null,createdAt:paymentAt};
     weeks.push(nextWeek);payment.nextWeekId=nextWeek.weekId;gasPaymentRecords().push(payment);
     audit('Gas Supplier Balance Payment',`Paid ${amount} KG — Previous Balance ${latestRemaining} KG — New Opening ${carryKg} KG${advanceKg>0?` — Advance ${advanceKg} KG`:''}`);
     if(!await gasCriticalCommit(snap,'Gas payment was NOT saved to D1. Payment, balance, advance and week change were rolled back.'))return;
@@ -20347,8 +20506,10 @@ function deleteGasPayment(paymentId){
 function openGasWeekHistoryModal(){
   settings.gasSupplierWeeks = Array.isArray(settings.gasSupplierWeeks) ? settings.gasSupplierWeeks : [];
 settings.nextShoeBoxReceiveVoucherNo = Number(settings.nextShoeBoxReceiveVoucherNo) || 1001;
-  const weeks = settings.gasSupplierWeeks.slice().sort((a,b)=> String(b.createdAt||b.weekKey).localeCompare(String(a.createdAt||a.weekKey)));
-  modal(`<h3 style="margin-top:0;">Gas Supplier — Weekly Balance History</h3><div style="margin-bottom:10px;overflow-x:auto;">${gasPaymentRecords().filter(p=>p.status!=='Deleted').length?`<table><thead><tr><th>Payment Date/Time</th><th>Paid KG</th><th data-i18n=ui_Action>Action</th></tr></thead><tbody>${gasPaymentRecords().filter(p=>p.status!=='Deleted').slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(p=>`<tr><td>${new Date(p.date).toLocaleString('en-GB')}</td><td>${p.amountKg} KG</td><td><button class="btn blue small" onclick="openEditGasPaymentModal('${p.id}')" data-i18n=ui_Edit>Edit</button> <button class="btn red small" onclick="deleteGasPayment('${p.id}')" data-i18n=ui_Delete>Delete</button></td></tr>`).join('')}</tbody></table>`:'<div style="font-size:12px;color:var(--muted);">No editable payment records yet.</div>'}</div>
+  const sup = getActiveGasSupplier();
+  const weeks = settings.gasSupplierWeeks.filter(w=>gasRecordBelongsToSupplier(w,sup)).slice().sort((a,b)=> String(b.createdAt||b.weekKey).localeCompare(String(a.createdAt||a.weekKey)));
+  const payments = gasPaymentRecords().filter(p=>p.status!=='Deleted' && gasRecordBelongsToSupplier(p,sup));
+  modal(`<h3 style="margin-top:0;">Gas Supplier — Weekly Balance History</h3><div style="margin-bottom:10px;overflow-x:auto;">${payments.length?`<table><thead><tr><th>Payment Date/Time</th><th>Paid KG</th><th data-i18n=ui_Action>Action</th></tr></thead><tbody>${payments.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(p=>`<tr><td>${new Date(p.date).toLocaleString('en-GB')}</td><td>${p.amountKg} KG</td><td><button class="btn blue small" onclick="openEditGasPaymentModal('${p.id}')" data-i18n=ui_Edit>Edit</button> <button class="btn red small" onclick="deleteGasPayment('${p.id}')" data-i18n=ui_Delete>Delete</button></td></tr>`).join('')}</tbody></table>`:'<div style="font-size:12px;color:var(--muted);">No editable payment records yet.</div>'}</div>
     <div style="overflow-x:auto;">
     ${weeks.length? `
     <table>
@@ -20375,7 +20536,8 @@ function getGasHistoryList(filter){
   const startToday = new Date(now); startToday.setHours(0,0,0,0);
   const startWeek = new Date(startToday); startWeek.setDate(startWeek.getDate()-7);
   const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const active = gasVouchers.filter(v=>!v.voided && !v.deletedAt);
+  const sup = getActiveGasSupplier();
+  const active = gasVouchers.filter(v=>!v.voided && !v.deletedAt && gasRecordBelongsToSupplier(v,sup));
   let list;
   if(filter==='today') list=active.filter(v=>new Date(v.date)>=startToday);
   else if(filter==='week') list=active.filter(v=>new Date(v.date)>=startWeek);
@@ -20462,9 +20624,10 @@ function openTodayGasHistoryModal(){
     // Worker summary is always calculated only from the selected official Worker.
     // With an unknown/ambiguous name, no Worker is selected and the summary is 0
     // rather than accidentally mixing similarly named Workers.
+    const sup = getActiveGasSupplier();
     const workerActive=selectedWorker
-      ? gasVouchers.filter(v=>!v.voided&&!v.deletedAt && gasVoucherBelongsToWorker(v,selectedWorker))
-      : (workerQ ? [] : gasVouchers.filter(v=>!v.voided&&!v.deletedAt));
+      ? gasVouchers.filter(v=>!v.voided&&!v.deletedAt && gasRecordBelongsToSupplier(v,sup) && gasVoucherBelongsToWorker(v,selectedWorker))
+      : (workerQ ? [] : gasVouchers.filter(v=>!v.voided&&!v.deletedAt && gasRecordBelongsToSupplier(v,sup)));
     const t=new Date(); t.setHours(0,0,0,0); const wStart=new Date(t); wStart.setDate(wStart.getDate()-7); const mStart=new Date(t.getFullYear(),t.getMonth(),1);
     const sum=l=>l.reduce((s,v)=>s+(Number(v.qtyKg)||0),0);
     const weekKg=sum(workerActive.filter(v=>new Date(v.date)>=wStart));
@@ -20518,14 +20681,14 @@ function gasVoucherSavedNumber(value){return value==null||typeof value==='boolea
 function gasVoucherFinancialSummary(data,bill=null){
   const saved=gasVoucherSavedNumber,sum=(...values)=>values.some(value=>value==null)?null:values.reduce((n,value)=>n+Math.round(value*100),0)/100;
   if(bill){const opening=saved(bill.openingAmount),gas=saved(bill.gasAmount),extra=saved(bill.extraBalanceAmount),paid=saved(bill.paidAmount),weekly=sum(gas,extra),total=sum(opening,weekly),computed=total==null||paid==null?null:(Math.round(total*100)-Math.round(paid*100))/100,remaining=saved(bill.remainingBalance);return {opening,weekly,total,paid,remaining:remaining!=null&&computed!=null&&Math.round(remaining*100)!==Math.round(computed*100)?null:remaining};}
-  const account=settings.gasSupplierBillAccount||{},supplier=settings.gasSupplier||{},owned=record=>{const id=record.gasSupplierId??record.supplierId;return id!=null&&String(id)!==''?supplier.id!=null&&String(id)===String(supplier.id):!record.supplierName||record.supplierName===supplier.name;},inWeek=record=>new Date(record.date)>=data.start&&new Date(record.date)<data.end&&new Date(record.date)<=data.now;
+  const account=settings.gasSupplierBillAccount||{},supplier=getActiveGasSupplier()||settings.gasSupplier||{},owned=record=>gasRecordBelongsToSupplier(record,supplier),inWeek=record=>new Date(record.date)>=data.start&&new Date(record.date)<data.end&&new Date(record.date)<=data.now;
   const bills=(settings.gasSupplierBills||[]).filter(b=>!b.billingDeleted&&owned(b)&&inWeek(b)),payments=(account.billPayments||[]).filter(p=>!p.deletedAt&&p.status!=='Deleted'&&owned(p)&&inWeek(p)),ids=new Set();let paid=0;for(const entry of [...bills.map(b=>({id:'bill:'+b.id,amount:b.paidAmount})),...payments.map(p=>({id:p.id?'payment:'+p.id:null,amount:p.amount}))]){const amount=saved(entry.amount);if(!entry.id||ids.has(entry.id)||amount==null){paid=null;break;}ids.add(entry.id);paid+=Math.round(amount*100);}if(paid!=null)paid/=100;
   let opening=null;const previous=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(account.lastBillId)&&!b.billingDeleted&&owned(b)),balance=saved(account.currentBalance),previousRemaining=saved(previous?.remainingBalance);
   if(!bills.length&&previous&&new Date(previous.date)<data.start&&balance!=null&&previousRemaining!=null&&paid!=null&&!(account.billCorrections||[]).some(inWeek)&&!(account.billBalanceAdjustments||[]).some(inWeek)&&Math.round((balance+paid)*100)===Math.round(previousRemaining*100))opening=previousRemaining;
   const weekly=sum(saved(data.gasAmount),saved(data.extraTotal)),total=sum(opening,weekly);return {opening,weekly,total,paid,remaining:total==null||paid==null?null:(Math.round(total*100)-Math.round(paid*100))/100};
 }
 function gasSupplierBillHtml(bill){
-  const date=new Date(bill.date),supplier={...(settings.gasSupplier||{}),name:bill.supplierName||settings.gasSupplier?.name||''},weekStart=new Date(date),saved=gasVoucherSavedNumber,extra=saved(bill.extraBalanceAmount);
+  const date=new Date(bill.date),activeSup=getActiveGasSupplier(),supplier={...(activeSup||settings.gasSupplier||{}),...(bill.gasSupplierId?{id:bill.gasSupplierId}:{}),name:bill.supplierName||activeSup?.name||settings.gasSupplier?.name||''},weekStart=new Date(date),saved=gasVoucherSavedNumber,extra=saved(bill.extraBalanceAmount);
   weekStart.setHours(0,0,0,0);weekStart.setDate(weekStart.getDate()-(weekStart.getDay()+1)%7);const weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+6);const through=new Date(Math.min(Date.now(),weekEnd.getTime()-1)),data=through>=weekStart?gasCurrentWeekFillingData(through,gasVouchers,[],supplier,[]):gasCurrentWeekFillingData(date,[],[],supplier,[]);data.calendarWeekReceiving=true;if(bill.gasReceivingSourceVersion===1&&Array.isArray(bill.gasReceivingSourceIds)){const ids=new Set(bill.gasReceivingSourceIds.map(String)),source=gasVouchers.filter(r=>ids.has(String(r.id)));data.days=gasCurrentWeekFillingData(through,source,[],supplier,[],true).days;}
   const proof=bill.gasBillReversal,before=new Set(proof?.beforeState?.gasSupplierBilledExtraBalanceIds?.value||[]),after=proof?.afterState?.gasSupplierBilledExtraBalanceIds?.value,ids=Array.isArray(bill.billingSourceExtraIds)?bill.billingSourceExtraIds:Array.isArray(after)?after.filter(id=>!before.has(id)):null,items=ids?(settings.gasExtraBalances||[]).filter(item=>ids.map(String).includes(String(item.id))):[];
   const verified=extra!=null&&items.every(item=>saved(item.amount)!=null)&&items.reduce((n,item)=>n+Math.round(Number(item.amount)*100),0)===Math.round(extra*100),groups=new Map();if(verified)items.forEach(item=>{const name=String(item.details||item.item||''),group=groups.get(name)||{name,cents:0};group.cents+=Math.round(Number(item.amount)*100);groups.set(name,group);});
@@ -20535,9 +20698,9 @@ function gasSupplierBillHtml(bill){
 }
 function showGasSupplierBill(id,autoPrint=false){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;modal('<h3>Bill Voucher #'+esc(bill.voucherNo||bill.id)+'</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="gasBillPrintArea" class="receipt-paper" style="width:80mm;max-width:100%;margin:auto;">'+gasSupplierBillHtml(bill)+'</div><div class="modal-actions"><button type="button" class="btn brass" id="gasBillPrint" data-i18n=ui_Print>Print</button><button type="button" class="btn ghost" id="gasBillClose" data-i18n=ui_Close>Close</button></div></div>');document.getElementById('gasBillPrint').onclick=()=>printAggregateThermal(document.getElementById('gasBillPrintArea').outerHTML,'GAS SUPPLIER WEEKLY VOUCHER','element',{settledSizing:true,continuousReceipt:true});document.getElementById('gasBillClose').onclick=()=>openGasSupplierBillModal();if(autoPrint)document.getElementById('gasBillPrint').onclick();}
 function openGasSupplierBillModal(){gasSupplierBillForm();}
-function gasSupplierBillHistoryHtml(){const history=settings.gasSupplierBills||[],groups=new Map();history.filter(b=>!b.billingDeleted).forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=week.from,label=week.from+' to '+week.to;if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th data-i18n=ui_Bill>Bill</th><th data-i18n=ui_Date_20__2f__20_Time>Date / Time</th><th data-i18n=ui_Amount>Amount</th><th data-i18n=ui_Grand_20_Total>Grand Total</th><th data-i18n=ui_Actions>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+(b.gasAmount==null?'Not saved':formatMoney(b.gasAmount))+'</td><td>'+(gasSupplierBillGrandTotal(b)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(b)))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-gas-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
+function gasSupplierBillHistoryHtml(){const sup=getActiveGasSupplier(),history=(settings.gasSupplierBills||[]).filter(b=>gasRecordBelongsToSupplier(b,sup)),groups=new Map();history.filter(b=>!b.billingDeleted).forEach(b=>{const week=sbSupplierBillWeek(new Date(b.date)),key=week.from,label=week.from+' to '+week.to;if(!groups.has(key))groups.set(key,{label,bills:[]});groups.get(key).bills.push(b);});return '<h3>Bill History</h3>'+([...groups.entries()].sort(([a],[b])=>b.localeCompare(a)).map(([,group])=>'<h4>'+esc(group.label)+'</h4><div style="overflow-x:auto;"><table><thead><tr><th data-i18n=ui_Bill>Bill</th><th data-i18n=ui_Date_20__2f__20_Time>Date / Time</th><th data-i18n=ui_Amount>Amount</th><th data-i18n=ui_Grand_20_Total>Grand Total</th><th data-i18n=ui_Actions>Actions</th></tr></thead><tbody>'+group.bills.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>'<tr><td>#'+esc(b.voucherNo||b.id)+'</td><td>'+esc(b.date)+'</td><td>'+(b.gasAmount==null?'Not saved':formatMoney(b.gasAmount))+'</td><td>'+(gasSupplierBillGrandTotal(b)==null?'Not saved':formatMoney(gasSupplierBillGrandTotal(b)))+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap;">'+['View','Edit','Delete','Print'].map(action=>'<button type="button" class="btn '+(action==='Delete'?'red':'ghost')+' small" data-gas-bill-action="'+action+'" data-bill-id="'+esc(b.id)+'">'+action+'</button>').join('')+'</div></td></tr>').join('')+'</tbody></table></div>').join('')||'<p>No bills saved.</p>');}
 function gasBindSupplierBillHistory(){document.querySelectorAll('[data-gas-bill-action]').forEach(button=>button.onclick=()=>{const id=button.dataset.billId,action=button.getAttribute('data-gas-bill-action');if(action==='View'||action==='Print')showGasSupplierBill(id,action==='Print');else if(action==='Edit')gasSupplierBillEditor(id);else gasDeleteSupplierBill(id);});}
-async function gasSupplierBillCommit(snapshot){try{return await gasCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.',{ nonBlocking:false });}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);gasVouchers=JSON.parse(snapshot.gasVouchers);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
+async function gasSupplierBillCommit(snapshot){syncActiveGasSupplierBillState();try{return await gasCriticalCommit(snapshot,'Bill changes were not saved. Original data restored.',{ nonBlocking:false });}catch(error){settings=JSON.parse(snapshot.settings);auditLog=JSON.parse(snapshot.auditLog);gasVouchers=JSON.parse(snapshot.gasVouchers);try{await reconcileCloudAfterCriticalRollback();}catch(rollbackError){console.error(rollbackError);}toast('Bill changes were not saved. Original data restored.');render();return false;}}
 // Gas billing account belongs to the existing single Gas supplier slot.
 // Kept outside supplier details so editing its name/photo cannot drop balances.
 function gasBillAccountOpening(){
@@ -20560,7 +20723,7 @@ async function gasBillActivityFingerprint(){
   return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
 }
 function gasBillReversalError(bill,fingerprint){
-  const history=settings.gasSupplierBills||[],proof=bill.gasBillReversal;
+  const sup=getActiveGasSupplier(),history=(settings.gasSupplierBills||[]).filter(b=>gasRecordBelongsToSupplier(b,sup)),proof=bill.gasBillReversal;
   if(!proof||proof.version!==1)return 'This older bill has no before-state snapshot. Exact reversal is unavailable; nothing was changed.';
   if(String(history.at(-1)?.id)!==String(bill.id))return 'Only the latest Gas bill can be reversed; later bills depend on its balance.';
   if(proof.activityFingerprint!==fingerprint||JSON.stringify(gasBillEffectState())!==JSON.stringify(proof.afterState))return 'Gas activity changed after this bill. Exact reversal is blocked to protect newer records.';
@@ -20574,24 +20737,26 @@ async function gasSaveSupplierOpeningAmount(){
   const snapshot=gasDeepSnapshot();button.disabled=true;
   try{
     settings.gasSupplierBillAccount={startingBalance:Math.round(amount*100)/100,currentBalance:Math.round(amount*100)/100,savedAt:new Date().toISOString(),lastBillId:null};
+    syncActiveGasSupplierBillState();
     if(await gasSupplierBillCommit(snapshot)){openGasSupplierBillModal();toast('Gas supplier Opening Amount saved');}
   }finally{const live=document.getElementById('gasBillSaveOpening');if(live===button)live.disabled=false;}
 }
 function gasDeleteSupplierBill(id){confirmBillAccountDelete(billAccountGasAdapter(),id);}
-function gasSupplierBillEditor(id){const bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id));if(!bill)return;gasSupplierBillForm(bill);}
+function gasSupplierBillEditor(id){const sup=getActiveGasSupplier(),bill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(id)&&gasRecordBelongsToSupplier(b,sup));if(!bill)return;gasSupplierBillForm(bill);}
 let gasReceivingBillCommitId=null;
 function gasUnbilledReceivingState(){
-  const supplier=settings.gasSupplier||{},owned=r=>{const id=r.gasSupplierId??r.supplierId;return id!=null&&String(id)!==''?supplier.id!=null&&String(id)===String(supplier.id):!r.supplierName||r.supplierName===supplier.name;},bills=(settings.gasSupplierBills||[]).filter(b=>owned(b)&&String(b.id)!==String(gasReceivingBillCommitId)),keeps=b=>!b.billingDeleted||b.billingDeleted.receivedPolicy!=='release',legacy=bills.filter(b=>b.gasReceivingSourceVersion!==1&&keeps(b));
-  let checkpoint=null;for(const bill of legacy){const p=bill.gasBillReversal,a=p?.afterState?.gasSupplierWeeks?.value?.at(-1),b=p?.beforeState?.gasSupplierWeeks?.value?.at(-1),released=Number(p?.beforeState?.gasSupplierBillAccount?.value?.billReleasedGasKg||0);if(p?.version===1&&typeof p.activityFingerprint==='string'&&a&&b&&Number(a.openingKg)===0&&Number(a.newGasKg)===0&&Number(a.remainingKg)===0&&Number.isFinite(+new Date(bill.date))&&Number(bill.totalGasKg)===Number(b.remainingKg)+released&&(!checkpoint||new Date(bill.date)>new Date(checkpoint.date)))checkpoint=bill;}
+  const supplier=getActiveGasSupplier()||settings.gasSupplier||{},owned=r=>gasRecordBelongsToSupplier(r,supplier),bills=(settings.gasSupplierBills||[]).filter(b=>owned(b)&&String(b.id)!==String(gasReceivingBillCommitId)),keeps=b=>!b.billingDeleted||b.billingDeleted.receivedPolicy!=='release',legacy=bills.filter(b=>b.gasReceivingSourceVersion!==1&&keeps(b));
+  let checkpoint=null;for(const bill of legacy){const p=bill.gasBillReversal,a=(p?.afterState?.gasSupplierWeeks?.value||[]).filter(owned).at(-1),b=(p?.beforeState?.gasSupplierWeeks?.value||[]).filter(owned).at(-1),released=Number(p?.beforeState?.gasSupplierBillAccount?.value?.billReleasedGasKg||0);if(p?.version===1&&typeof p.activityFingerprint==='string'&&a&&b&&Number(a.openingKg)===0&&Number(a.newGasKg)===0&&Number(a.remainingKg)===0&&Number.isFinite(+new Date(bill.date))&&Number(bill.totalGasKg)===Number(b.remainingKg)+released&&(!checkpoint||new Date(bill.date)>new Date(checkpoint.date)))checkpoint=bill;}
   const stop=reason=>({safe:false,reason,records:[],ids:[],qty:null});if(legacy.length&&!checkpoint)return stop('Gas receiving has no verified billing checkpoint. No history was guessed.');if(legacy.some(b=>new Date(b.date)>new Date(checkpoint.date)))return stop('A later legacy Gas bill has no verified receiving checkpoint.');
   const closed=new Set();for(const bill of bills.filter(b=>b.gasReceivingSourceVersion===1&&keeps(b))){if(!Array.isArray(bill.gasReceivingSourceIds))return stop('Saved Gas bill receiving IDs are missing.');bill.gasReceivingSourceIds.forEach(id=>closed.add(String(id)));}
   const seen=new Set(),records=[];for(const r of gasVouchers||[]){if(!owned(r)||r.voided||r.deletedAt||r.deleted===true||r.status==='Deleted')continue;const date=new Date(r.gasBalanceSnapshot?.capturedAt||r.date);if(!Number.isFinite(+date))return stop('Gas receiving date is missing or invalid.');if(checkpoint&&date<=new Date(checkpoint.date))continue;if(!r.id||seen.has(String(r.id)))return stop('Gas receiving has a missing or duplicate ID.');seen.add(String(r.id));if(closed.has(String(r.id)))continue;const qty=Number(r.qtyKg);if(!Number.isFinite(qty)||qty<=0)return stop('Gas receiving KG is invalid.');records.push(r);}
   const kept=bills.filter(keeps).filter(b=>Number.isFinite(+new Date(b.date))).slice().sort((a,b)=>new Date(b.date)-new Date(a.date)),cutoff=kept[0]?new Date(kept[0].date):null;let billable=0;
   for(const r of records){const value=r.gasBalanceEffect?.newGasKgAdded??r.qtyKg,qty=Number(value);if(!Number.isFinite(qty)||qty<0||qty>Number(r.qtyKg))return stop('Gas receiving payable-KG snapshot is invalid.');billable+=qty;}
-  const payments=(settings.gasPayments||[]).filter(p=>p.status!=='Deleted'&&!p.deletedAt&&(!cutoff||new Date(p.date)>cutoff)),paidWeeks=new Set();for(const p of payments){const amount=Number(p.amountKg),before=Number(p.previousRemainingKg);if(!Number.isFinite(amount)||amount<0||!Number.isFinite(before)||before<0)return stop('Gas KG payment snapshot is incomplete.');billable-=Math.min(amount,before);if(p.oldWeekId)paidWeeks.add(String(p.oldWeekId));}
-  for(const w of settings.gasSupplierWeeks||[]){if(!w.closedAt||!w.paymentDate||cutoff&&new Date(w.paymentDate)<=cutoff||paidWeeks.has(String(w.weekId))||w.paidKg==null)continue;const amount=Number(w.paidKg),available=Number(w.openingKg)+Number(w.newGasKg);if(!Number.isFinite(amount)||amount<0||!Number.isFinite(available)||available<0)return stop('Legacy Gas KG payment snapshot is incomplete.');billable-=Math.min(amount,available);}
+  const payments=(settings.gasPayments||[]).filter(p=>owned(p)&&p.status!=='Deleted'&&!p.deletedAt&&(!cutoff||new Date(p.date)>cutoff)),paidWeeks=new Set();for(const p of payments){const amount=Number(p.amountKg),before=Number(p.previousRemainingKg);if(!Number.isFinite(amount)||amount<0||!Number.isFinite(before)||before<0)return stop('Gas KG payment snapshot is incomplete.');billable-=Math.min(amount,before);if(p.oldWeekId)paidWeeks.add(String(p.oldWeekId));}
+  const supWeeks=(settings.gasSupplierWeeks||[]).filter(owned);
+  for(const w of supWeeks){if(!w.closedAt||!w.paymentDate||cutoff&&new Date(w.paymentDate)<=cutoff||paidWeeks.has(String(w.weekId))||w.paidKg==null)continue;const amount=Number(w.paidKg),available=Number(w.openingKg)+Number(w.newGasKg);if(!Number.isFinite(amount)||amount<0||!Number.isFinite(available)||available<0)return stop('Legacy Gas KG payment snapshot is incomplete.');billable-=Math.min(amount,available);}
   const released=Number(settings.gasSupplierBillAccount?.billReleasedGasKg||0),mapped=bills.filter(b=>b.billingDeleted?.receivedPolicy==='release'&&b.gasReceivingSourceVersion===1).reduce((n,b)=>n+Number(b.totalGasKg),0);if(!Number.isFinite(released)||released<0||released>mapped)return stop('Released legacy Gas KG has no verified receiving IDs. No quantities were guessed.');
-  const ledger=Math.max(0,Number(settings.gasSupplierWeeks?.at(-1)?.remainingKg)||0);if(ledger+released>Math.max(0,billable)+0.000001)return stop('Gas ledger contains KG without verified unbilled receiving links. Reconciliation is required.');
+  const ledger=Math.max(0,Number(supWeeks.at(-1)?.remainingKg)||0);if(ledger+released>Math.max(0,billable)+0.000001)return stop('Gas ledger contains KG without verified unbilled receiving links. Reconciliation is required.');
   records.sort((a,b)=>new Date(a.date)-new Date(b.date));return {safe:true,records,ids:records.map(r=>String(r.id)),qty:records.reduce((n,r)=>n+Number(r.qtyKg),0),billableQty:Math.max(0,Math.round((billable+Number.EPSILON)*100)/100)};
 }
 function gasSupplierBillForm(bill=null){const receiving=bill?null:gasUnbilledReceivingState();if(receiving&&!receiving.safe){toast(receiving.reason);return;}const receivingKey=receiving?JSON.stringify(receiving.ids):null;const week=ensureCurrentGasWeek(),opening=bill?.openingAmount??gasBillAccountOpening(),kg=bill?.totalGasKg??receiving.billableQty,extra=bill?.extraBalanceAmount??gasExtraBalanceTotal();modal('<h3>'+ (bill?'Edit Bill':'Create Bill')+'</h3>'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label>Opening Amount</label><input id="gasBillOpening" type="number" min="0" step="0.01" value="'+esc(opening)+'" '+((settings.gasSupplierBillAccount||bill?.gasBillReversal)?'readonly':'')+'><button type="button" class="btn ghost small" id="gasBillSaveOpening" '+((settings.gasSupplierBillAccount||bill)?'disabled':'')+'>Save Opening Amount</button></div><div><label>Extra Balance</label><input id="gasBillExtra" readonly value="'+esc(extra)+'"></div></div>'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label>Total Gas (KG)</label><input id="gasBillKg" readonly value="'+esc(kg)+'"></div><div><label>Price Per KG</label><input id="gasBillRate" type="number" min="0" step="0.01" value="'+esc(bill?.pricePerKg??0)+'"></div></div>'+'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;"><div><label data-i18n=ui_Paid_20_Amount>Paid Amount</label><input id="gasBillPaid" type="number" min="0" step="0.01" value="'+esc(bill?.paidAmount??0)+'"></div><div><label data-i18n=ui_Remaining_20_Balance>Remaining Balance</label><input id="gasBillRemaining" readonly></div></div>'+'<div class="rline"><strong>Gas Amount</strong><strong id="gasBillTotal"></strong></div>'+'<div class="rline"><strong>Grand Total</strong><strong id="gasBillGrandTotal"></strong></div>'+'<div class="modal-actions"><button type="button" class="btn brass" id="gasBillSave">'+(bill?'Save Changes':'Create / Save Bill')+'</button><button type="button" class="btn ghost" id="gasBillCancel" data-i18n=ui_Cancel>Cancel</button></div>'+gasSupplierBillHistoryHtml());
@@ -20615,19 +20780,22 @@ document.getElementById('gasBillSave').onclick=async()=>{
     if(bill&&bill.gasBillReversal){const live=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(bill.id));if(!live||JSON.stringify(live)!==JSON.stringify(bill)){toast('Bill changed. Reopen it.');return;}const error=gasBillReversalError(live,activityFingerprint);if(error){toast(error);return;}if(openingAmount!==bill.openingAmount){toast('Saved opening is locked for reversible bills.');return;}}
     if(!bill){const current=gasUnbilledReceivingState();if(!current.safe||JSON.stringify(current.ids)!==receivingKey){toast('Gas receiving changed. Reopen Create Bill.');return;}}
     if(!bill&&(gasUnbilledReceivingState().billableQty!==kg||gasExtraBalanceTotal()!==extra)){toast('Gas quantity or Extra Balance changed. Reopen Create Bill.');return;}
-    const snapshot=gasDeepSnapshot(),owner=settings,history=owner.gasSupplierBills||[],next=Math.max(Number(owner.gasSupplierBillNextVoucherNo)||1,...history.map(b=>(Number(b.voucherNo)||0)+1));
+    const activeSup=getActiveGasSupplier(),snapshot=gasDeepSnapshot(),owner=settings,history=owner.gasSupplierBills||[],supHistory=history.filter(b=>gasRecordBelongsToSupplier(b,activeSup)),next=Math.max(Number(owner.gasSupplierBillNextVoucherNo)||1,...supHistory.map(b=>(Number(b.voucherNo)||0)+1));
     const beforeState=gasBillEffectState();
-    const saved={...(bill||{}),...(bill?{}:{gasReceivingSourceVersion:1,gasReceivingSourceIds:receiving.ids.slice(),billingLifecycleVersion:1,billingSourceExtraIds:(owner.gasExtraBalances||[]).filter(entry=>!(owner.gasSupplierBilledExtraBalanceIds||[]).map(String).includes(String(entry.id))).map(entry=>String(entry.id))}),id:bill?.id||uid(),date:bill?.date||new Date().toISOString(),voucherNo:bill?.voucherNo||next,supplierName:bill?.supplierName||settings.gasSupplier?.name||'Gas Supplier',openingAmount,totalGasKg:kg,pricePerKg:rate,gasAmount:amount,extraBalanceAmount:extra,paidAmount,remainingBalance,...(bill?{updatedAt:new Date().toISOString()}:{})};
+    const activeExtras=(owner.gasExtraBalances||[]).filter(entry=>gasRecordBelongsToSupplier(entry,activeSup));
+    const saved={...(bill||{}),...(bill?{}:{gasReceivingSourceVersion:1,gasReceivingSourceIds:receiving.ids.slice(),billingLifecycleVersion:1,billingSourceExtraIds:activeExtras.filter(entry=>!(owner.gasSupplierBilledExtraBalanceIds||[]).map(String).includes(String(entry.id))).map(entry=>String(entry.id))}),id:bill?.id||uid(),date:bill?.date||new Date().toISOString(),voucherNo:bill?.voucherNo||next,gasSupplierId:bill?.gasSupplierId||activeSup?.id||DEFAULT_GAS_SUPPLIER_ID,supplierName:bill?.supplierName||activeSup?.name||'Gas Supplier',openingAmount,totalGasKg:kg,pricePerKg:rate,gasAmount:amount,extraBalanceAmount:extra,paidAmount,remainingBalance,...(bill?{updatedAt:new Date().toISOString()}:{})};
     if(!bill)gasReceivingBillCommitId=saved.id;
     owner.gasSupplierBills=bill?history.map(b=>String(b.id)===String(bill.id)?saved:b):[...history,saved];
     if(!bill){
       owner.gasSupplierBillNextVoucherNo=next+1;
-      const currentWeek=ensureCurrentGasWeek();currentWeek.openingKg=0;currentWeek.newGasKg=0;currentWeek.remainingKg=0;
-      owner.gasSupplierBilledExtraBalanceIds=[...new Set([...(owner.gasSupplierBilledExtraBalanceIds||[]).map(String),...(owner.gasExtraBalances||[]).map(entry=>String(entry.id))])];
+      const currentWeek=ensureCurrentGasWeek(activeSup);currentWeek.openingKg=0;currentWeek.newGasKg=0;currentWeek.remainingKg=0;
+      owner.gasSupplierBilledExtraBalanceIds=[...new Set([...(owner.gasSupplierBilledExtraBalanceIds||[]).map(String),...activeExtras.map(entry=>String(entry.id))])];
       owner.gasSupplierBillAccount={...(owner.gasSupplierBillAccount||{startingBalance:openingAmount,savedAt:new Date().toISOString()}),currentBalance:remainingBalance,lastBillId:saved.id,billReleasedGasKg:0};
+      syncActiveGasSupplierBillState();
       saved.gasBillReversal={version:1,beforeState,afterState:gasBillEffectState(),activityFingerprint};
     }else if(bill.gasBillReversal){
       owner.gasSupplierBillAccount={...owner.gasSupplierBillAccount,currentBalance:remainingBalance,lastBillId:saved.id};
+      syncActiveGasSupplierBillState();
       saved.gasBillReversal={...bill.gasBillReversal,afterState:gasBillEffectState()};
     }
     const committed=await gasSupplierBillCommit(snapshot);gasReceivingBillCommitId=null;if(committed){if(!bill)render();showGasSupplierBill(saved.id);}
@@ -20638,9 +20806,10 @@ document.getElementById('gasBillSave').onclick=async()=>{
  if(bill)mountBillAccountEditor(monetaryAdapter,{billId:bill.id,opening:'gasBillOpening',paid:'gasBillPaid',save:'gasBillSave',remaining:'gasBillRemaining',grand:'gasBillGrandTotal',unchanged:()=>Number(document.getElementById('gasBillRate').value)===Number(bill.pricePerKg)});
 }
 
-function gasExtraBalanceTotal(){
+function gasExtraBalanceTotal(supplier=getActiveGasSupplier()){
+  const sup = supplier || getActiveGasSupplier();
   const billedIds=new Set((settings.gasSupplierBilledExtraBalanceIds||[]).map(String));
-  return Math.max(0, Math.round((settings.gasExtraBalances||[]).filter(entry=>!billedIds.has(String(entry.id))).reduce((sum,x)=>sum+(Number(x.amount)||0),0)*100)/100);
+  return Math.max(0, Math.round((settings.gasExtraBalances||[]).filter(entry=>gasRecordBelongsToSupplier(entry,sup)&&!billedIds.has(String(entry.id))).reduce((sum,x)=>sum+(Number(x.amount)||0),0)*100)/100);
 }
 
 function openGasExtraBalanceModal(){
@@ -20649,7 +20818,7 @@ function openGasExtraBalanceModal(){
   document.getElementById('gasExtraSave').onclick=async()=>{
     const details=document.getElementById('gasExtraDetails').value.trim(), amount=Math.max(0,Number(document.getElementById('gasExtraAmount').value)||0);
     if(!details){toast('Enter Item / Details');return;} if(amount<=0){toast('Enter a valid amount');return;}
-    const snap=gasDeepSnapshot(),now=new Date(); settings.gasExtraBalances=settings.gasExtraBalances||[]; settings.gasExtraBalances.push({id:uid(),date:now.toISOString(),time:now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),details,amount});
+    const sup=getActiveGasSupplier(),snap=gasDeepSnapshot(),now=new Date(); settings.gasExtraBalances=settings.gasExtraBalances||[]; settings.gasExtraBalances.push({id:uid(),date:now.toISOString(),time:now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),details,amount,gasSupplierId:String(sup.id),supplierName:String(sup.name||'')});
     audit('Gas Extra Balance Created',`${details} — Rs. ${amount}`);
     if(!await gasCriticalCommit(snap,'Extra Balance was NOT saved to D1. No change was kept.'))return;
     closeModal(); render(); toast('Extra Balance saved');
@@ -20658,7 +20827,7 @@ function openGasExtraBalanceModal(){
 
 
 function openEditGasExtraBalanceModal(id){
-  const x=(settings.gasExtraBalances||[]).find(r=>String(r.id)===String(id));if(!x)return;
+  const sup=getActiveGasSupplier(),x=(settings.gasExtraBalances||[]).find(r=>String(r.id)===String(id)&&gasRecordBelongsToSupplier(r,sup));if(!x)return;
   modal(`<h3 style="margin-top:0;">Edit Extra Balance</h3><div class="row"><div><label>Item / Details</label><input id="gasExtraEditDetails" value="${esc(x.details||'')}"></div><div><label>Amount (Rs.)</label><input id="gasExtraEditAmount" type="number" min="0.01" step="0.01" value="${Number(x.amount)||0}"></div></div><div class="modal-actions"><button class="btn brass" id="gasExtraEditSave" data-i18n=ui_Save>Save</button><button class="btn ghost" id="gasExtraEditCancel" data-i18n=ui_Cancel>Cancel</button></div>`);
   document.getElementById('gasExtraEditCancel').onclick=closeModal;
   document.getElementById('gasExtraEditSave').onclick=async()=>{
@@ -20671,7 +20840,7 @@ function openEditGasExtraBalanceModal(id){
   };
 }
 function pageGasExtraBalance(){
-  const total=gasExtraBalanceTotal(), list=(settings.gasExtraBalances||[]).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const sup=getActiveGasSupplier(),total=gasExtraBalanceTotal(sup), list=(settings.gasExtraBalances||[]).filter(x=>gasRecordBelongsToSupplier(x,sup)).slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
   return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;"><div><h2 class="page-title" style="margin-bottom:4px;">Extra Balance</h2><div style="font-size:12px;color:var(--muted);">Gas Supplier — Extra Balance records</div></div><button type="button" class="btn ghost" id="btnBackGasExtraBalance">← Back to Gas Supplier</button></div><div class="dashboard-financial-row" style="grid-template-columns:minmax(220px,320px);margin-bottom:12px;"><div class="financial-card"><div class="label">TOTAL EXTRA BALANCE</div><div class="amount">${formatMoney(total)}</div><div class="desc">All saved Extra Balance entries</div></div></div><div class="card" style="margin-bottom:12px;"><button type="button" class="btn brass" id="btnPageAddGasExtraBalance">+ Add Extra Balance</button></div><div class="card" style="overflow-x:auto;">${list.length?`<table><thead><tr><th data-i18n=ui_Date>Date</th><th data-i18n=ui_Time>Time</th><th>Details / Item</th><th data-i18n=ui_Amount>Amount</th><th data-i18n=ui_Action>Action</th></tr></thead><tbody>${list.map(x=>`<tr><td>${new Date(x.date).toLocaleDateString('en-GB')}</td><td>${esc(x.time||'')}</td><td>${esc(x.details)}</td><td><strong>${formatMoney(x.amount)}</strong></td><td><button type="button" class="btn blue small" data-page-editgasextra="${esc(x.id)}" data-i18n=ui_Edit>Edit</button> <button type="button" class="btn red small" data-page-deletegasextra="${esc(x.id)}" data-i18n=ui_Delete>Delete</button></td></tr>`).join('')}</tbody></table>`:`<div class="empty">No Extra Balance entries yet.</div>`}</div>`;
 }
 
@@ -20687,9 +20856,9 @@ function pageTodayGasUsage(){
   ${showSummary?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-bottom:12px;"><div class="gas-balance-item"><div class="gas-balance-label">${label} Gas</div><div class="gas-balance-value">${total} KG</div></div><div class="gas-balance-item"><div class="gas-balance-label">Total Amount</div><div class="gas-balance-value">${formatMoney(amount)}</div></div></div>`:''}
   <div class="card" id="todayGasPagePrintArea"><div style="font-weight:800;margin-bottom:8px;">${label} — ${list.length} Vouchers — ${total} KG</div>${list.length?`<table><thead><tr><th data-i18n=ui_Voucher>Voucher</th><th data-i18n=ui_Date>Date</th><th data-i18n=ui_Time>Time</th><th data-i18n=ui_Worker>Worker</th><th>KG</th><th data-i18n=ui_Amount>Amount</th><th data-i18n=ui_Action>Action</th></tr></thead><tbody>${list.map(v=>`<tr><td>#${v.voucherNo}</td><td>${new Date(v.date).toLocaleDateString('en-GB')}</td><td>${new Date(v.date).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</td><td>${esc(v.workerName||'')}</td><td>${v.qtyKg} KG</td><td>${v.amount!=null?formatMoney(v.amount):'—'}</td><td><button class="btn teal small" data-gasusageview="${v.id}">View / Print</button> <button class="btn red small" onclick="deleteGasVoucher('${v.id}')" data-i18n=ui_Delete>Delete</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No gas vouchers.</div>'}</div>`;
 }
-function gasCurrentWeekFillingData(now=new Date(),records=gasVouchers,expenses=settings.gasExtraBalances||[],supplier=settings.gasSupplier||{},savedBills=settings.gasSupplierBills||[],receivingCycle=false){
+function gasCurrentWeekFillingData(now=new Date(),records=gasVouchers,expenses=settings.gasExtraBalances||[],supplier=getActiveGasSupplier()||settings.gasSupplier||{},savedBills=settings.gasSupplierBills||[],receivingCycle=false){
   const start=new Date(now);start.setHours(0,0,0,0);start.setDate(start.getDate()-(start.getDay()+1)%7);const end=new Date(start);end.setDate(end.getDate()+6);
-  const owned=record=>{const id=record.gasSupplierId??record.supplierId;if(id!=null&&String(id)!=='')return supplier.id!=null&&String(id)===String(supplier.id);return !record.supplierName||String(record.supplierName)===String(supplier.name||'');},inWeek=record=>{const date=new Date(record.date);return !record.voided&&!record.deletedAt&&record.deleted!==true&&record.status!=='Deleted'&&(receivingCycle||date>=start&&date<end)&&date<=now&&owned(record);};
+  const owned=record=>gasRecordBelongsToSupplier(record,supplier),inWeek=record=>{const date=new Date(record.date);return !record.voided&&!record.deletedAt&&record.deleted!==true&&record.status!=='Deleted'&&(receivingCycle||date>=start&&date<end)&&date<=now&&owned(record);};
   const rows=records.filter(record=>inWeek(record)&&Number.isFinite(Number(record.qtyKg))&&Number(record.qtyKg)>0).slice().sort((a,b)=>new Date(a.date)-new Date(b.date));
   const dayCount=receivingCycle&&rows.some(r=>new Date(r.date).getDay()===5)?7:6,days=Array.from({length:dayCount},(_,index)=>{const date=new Date(start);date.setDate(date.getDate()+index);const next=new Date(date);next.setDate(next.getDate()+1);return {date,qty:rows.filter(r=>receivingCycle?(new Date(r.date).getDay()+1)%7===index:new Date(r.date)>=date&&new Date(r.date)<next).reduce((sum,r)=>sum+Number(r.qtyKg),0)};}),expenseGroups=new Map();
   const pendingBill=(settings.gasSupplierBills||[]).find(b=>String(b.id)===String(gasReceivingBillCommitId)),expenseIds=pendingBill?.gasBillReversal?.beforeState?.gasSupplierBilledExtraBalanceIds?.value||settings.gasSupplierBilledExtraBalanceIds||[],billedExpenses=new Set(expenseIds.map(String));expenses.filter(record=>(!receivingCycle||!billedExpenses.has(String(record.id)))&&inWeek(record)&&Number.isFinite(Number(record.amount))&&Number(record.amount)>0).forEach(record=>{const name=String(record.details||record.item||''),item=expenseGroups.get(name)||{name,amountCents:0};item.amountCents+=Math.round(Number(record.amount)*100);expenseGroups.set(name,item);});
@@ -20722,9 +20891,11 @@ function openLatestGasFillingVoucher(){
   const receiving=gasUnbilledReceivingState();if(!receiving.safe){toast(receiving.reason);return;}const data=gasCurrentWeekFillingData(new Date(),receiving.records,settings.gasExtraBalances||[],settings.gasSupplier||{},settings.gasSupplierBills||[],true);modal('<h3 style="margin-top:0;">Latest Gas Filling</h3><div style="display:flex;flex-direction:column;align-items:center;width:100%;"><div id="gasCurrentWeekPrintArea" class="receipt-paper" style="width:80mm;margin:auto;">'+gasCurrentWeekFillingHtml(data)+'</div><div class="modal-actions" style="display:flex;justify-content:center;align-items:center;gap:8px;flex-wrap:nowrap;width:100%;clear:both;position:relative;margin-top:12px;"><button type="button" class="btn brass" id="gasCurrentWeekPrint">پرنٹ</button><button type="button" class="btn ghost" id="gasCurrentWeekClose">بند کریں</button></div></div>');document.getElementById('gasCurrentWeekPrint').onclick=()=>printAggregateThermal(document.getElementById('gasCurrentWeekPrintArea').outerHTML,'GAS SUPPLIER WEEKLY VOUCHER','element',{settledSizing:true,continuousReceipt:true});document.getElementById('gasCurrentWeekClose').onclick=closeModal;
 }
 function pageGasSupplier(){
-  const gs = settings.gasSupplier||{},unbilledReceiving=gasUnbilledReceivingState();
-  const gasWeek = ensureCurrentGasWeek();
-  const active = gasVouchers.filter(v=>!v.voided);
+  const suppliers = getGasSuppliers();
+  const gs = getActiveGasSupplier()||{};
+  const unbilledReceiving=gasUnbilledReceivingState();
+  const gasWeek = ensureCurrentGasWeek(gs);
+  const active = gasVouchers.filter(v=>!v.voided && !v.deletedAt && gasRecordBelongsToSupplier(v,gs));
   const today = new Date(); today.setHours(0,0,0,0);
   const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate()-7);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -20737,6 +20908,10 @@ function pageGasSupplier(){
       <div>
         <h2 class="page-title" style="margin-bottom:4px;">🔥 Gas Supplier &amp; Vouchers</h2>
         <div style="font-size:12px;color:var(--muted);">Manage gas supplier details and generate gas vouchers for workers.</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        ${suppliers.map((sup,idx)=>`<button type="button" class="btn ${String(sup.id)===String(gs.id)?'brass':'ghost'} small" data-select-gassupplier="${esc(sup.id)}">🔥 ${esc(gasSupplierDisplayName(sup,idx))}</button>`).join('')}
+        <button type="button" class="btn brass small" id="btnAddGasSupplier">＋ Add Supplier</button>
       </div>
     </div>
 
@@ -20811,8 +20986,8 @@ function pageGasSupplier(){
 }
 
 function openGasRemainingValueModal(){
-  const gs=settings.gasSupplier||{};
-  const w=ensureCurrentGasWeek();
+  const gs=getActiveGasSupplier()||settings.gasSupplier||{};
+  const w=ensureCurrentGasWeek(gs);
   const remaining=Math.max(0,Number(gasWeekKg(w,'remainingKg'))||0);
   const current=Math.max(0,Number(gs.perKgPrice)||0);
   modal(`
@@ -20831,6 +21006,8 @@ function openGasRemainingValueModal(){
   document.getElementById('gasPerKgCancel').onclick=closeModal;
   document.getElementById('gasPerKgSave').onclick=()=>{
     const price=Math.max(0,Number(input.value)||0);
+    const active=getActiveGasSupplier();
+    if(active) active.perKgPrice=price;
     settings.gasSupplier=settings.gasSupplier||{};
     settings.gasSupplier.perKgPrice=price;
     persistAll();
@@ -20841,11 +21018,13 @@ function openGasRemainingValueModal(){
   setTimeout(()=>input.focus(),50);
 }
 
-function openEditGasSupplierModal(){
-  const gs = settings.gasSupplier||{};
+function openEditGasSupplierModal(isNew=false){
+  if(isNew && typeof isNew==='object') isNew=false;
+  normalizeGasSuppliers();
+  const gs = isNew ? {name:'',ownerName:'',mobile:'',location:'',gasType:'LPG',status:'Active',notes:'',photo:'',perKgPrice:0} : (getActiveGasSupplier()||{});
   let pendingPhoto = gs.photo||'';
   modal(`
-    <h3 style="margin-top:0;">Edit Supplier Details</h3>
+    <h3 style="margin-top:0;">${isNew?'Add Gas Supplier':'Edit Supplier Details'}</h3>
     <div class="row">
       <div><label>Shop Name</label><input id="gsName" value="${gs.name?esc(gs.name):''}" placeholder="e.g. Khan Gas Agency"></div>
       <div><label>Owner Name</label><input id="gsOwner" value="${gs.ownerName?esc(gs.ownerName):''}" placeholder="e.g. Khan Muhammad"></div>
@@ -20885,7 +21064,9 @@ function openEditGasSupplierModal(){
   document.getElementById('gsSave').onclick=()=>{
     const name = factoryReadName('gsName');
     if(!name){ toast('Enter shop name'); return; }
-    settings.gasSupplier = {
+    syncActiveGasSupplierBillState();
+    const list = getGasSuppliers();
+    const entryData = {
       name,
       ownerName: factoryReadName('gsOwner'),
       mobile: document.getElementById('gsMobile').value.trim(),
@@ -20893,9 +21074,23 @@ function openEditGasSupplierModal(){
       gasType: document.getElementById('gsGasType').value.trim()||'LPG',
       status: document.getElementById('gsStatus').value,
       notes: document.getElementById('gsNotes').value.trim(),
-      photo: pendingPhoto
+      photo: pendingPhoto,
+      perKgPrice: Math.max(0, Number(gs.perKgPrice)||0)
     };
-    persistAll(); closeModal(); render(); toast('Supplier details saved');
+    if(isNew){
+      const newId = 'gas_supplier_' + uid();
+      const created = normalizeGasSupplierEntry({...entryData, id:newId}, newId);
+      list.push(created);
+      selectActiveGasSupplier(created.id);
+      ensureCurrentGasWeek(created);
+    } else {
+      const activeId = String(settings.gasSupplier.activeSupplierId || settings.gasSupplier.id || DEFAULT_GAS_SUPPLIER_ID);
+      const idx = list.findIndex(x=>String(x.id)===activeId);
+      const updated = normalizeGasSupplierEntry({...gs, ...entryData, id:activeId}, activeId);
+      if(idx>=0) list[idx] = updated; else list.push(updated);
+      selectActiveGasSupplier(activeId);
+    }
+    persistAll(); closeModal(); render(); toast(isNew?'Gas supplier added':'Supplier details saved');
   };
 }
 
@@ -21171,11 +21366,14 @@ function openCreateGasVoucherModal(){
     if(!qtyKg){ toast('Only positive whole KG are allowed. Example: 1, 2, 3. Decimal KG are not allowed.'); gasSaveBtn.disabled=false; return; }
     const customFieldValues = {};
     document.querySelectorAll('.gvCustomField').forEach(inp=>{ customFieldValues[inp.dataset.cfid] = inp.value.trim(); });
-    const extraBalanceAmount = gasExtraBalanceTotal();
+    const activeSup = getActiveGasSupplier();
+    const extraBalanceAmount = gasExtraBalanceTotal(activeSup);
     const voucher = {
       id: uid(),
       voucherNo: nextUniqueGasVoucherNo(),
       date: new Date().toISOString(),
+      gasSupplierId: String(activeSup.id),
+      supplierName: String(activeSup.name||''),
       workerName: worker.name,
       workerRecordId: String(worker.id),
       workerId: document.getElementById('gvWorkerId').value.trim(),
@@ -21353,7 +21551,9 @@ function renderGasVoucherPaper(voucher, previewMode=false, titleText='GAS VOUCHE
     overallGasVal = typeof gasFieldValue === 'function' ? gasFieldValue(voucher, 'totalGasKg', previewMode) : '';
   }
 
+  const activeSupForVoucher = getActiveGasSupplier();
   const weekExtraAmount = (settings.gasExtraBalances||[])
+    .filter(e => gasRecordBelongsToSupplier(e, activeSupForVoucher))
     .filter(e => {
       const d = new Date(e.date||0);
       return d >= range.start && d < range.end;
@@ -24576,9 +24776,9 @@ function bindCurrentWeekWorkerVoucherDoubleClick(){
  if(document.__currentWeekWorkerVoucherDoubleClickBound)return;document.__currentWeekWorkerVoucherDoubleClickBound=true;let previous=null;
  document.addEventListener('click',event=>{
   if(!event.detail){previous=null;return;}const card=event.target?.closest?.('[data-upper-pickworker],[data-batam-pickworker],[data-finished-pickworker]');if(!card){previous=null;return;}
-  let module='',workerId='';if(card.hasAttribute('data-upper-pickworker')){if(workerCategoryCompareKey(upperProductionCategory)!=='upper mans'){previous=null;return;}module='upper';workerId=card.dataset.upperPickworker;}else if(card.hasAttribute('data-batam-pickworker')){module='batam';workerId=card.dataset.batamPickworker;}else{module='finished';workerId=card.dataset.finishedPickworker;}
+  let module='',workerId='';if(card.hasAttribute('data-upper-pickworker')){if(shoesPressManRoute(currentPage)){module='press';workerId=card.dataset.upperPickworker;}else if(workerCategoryCompareKey(upperProductionCategory)!=='upper mans'){previous=null;return;}else{module='upper';workerId=card.dataset.upperPickworker;}}else if(card.hasAttribute('data-batam-pickworker')){module='batam';workerId=card.dataset.batamPickworker;}else{module='finished';workerId=card.dataset.finishedPickworker;}
   const now=Date.now(),isDouble=previous&&previous.module===module&&previous.workerId===String(workerId)&&now-previous.time<=650;
-  if(isDouble){previous=null;if(module==='upper')event.__upperWeeklyVoucherDoubleClick=true;window.setTimeout(()=>{if(module==='upper')openCurrentWeekUpperManCardVoucher(workerId);else openCurrentWeekBfWorkerCardVoucher(module,workerId);},0);}else previous={module,workerId:String(workerId),time:now};
+  if(isDouble){previous=null;if(module==='press')window.setTimeout(()=>shoesPressManModule.openLatestWorkerVoucher?.(workerId),0);else if(module==='upper')event.__upperWeeklyVoucherDoubleClick=true,window.setTimeout(()=>{openCurrentWeekUpperManCardVoucher(workerId);},0);else openCurrentWeekBfWorkerCardVoucher(module,workerId);}else previous={module,workerId:String(workerId),time:now};
  },true);
 }
 
@@ -25110,7 +25310,11 @@ function bindCurrentWeekWorkerVoucherDoubleClick(){
 
 
   // Gas Supplier & Vouchers
-  document.getElementById('btnEditGasSupplier')?.addEventListener('click', openEditGasSupplierModal);
+  document.getElementById('btnEditGasSupplier')?.addEventListener('click', ()=>openEditGasSupplierModal(false));
+  document.getElementById('btnAddGasSupplier')?.addEventListener('click', ()=>openEditGasSupplierModal(true));
+  document.querySelectorAll('[data-select-gassupplier]').forEach(btn=>btn.addEventListener('click', ()=>{
+    if(selectActiveGasSupplier(btn.dataset.selectGassupplier)){ persistAll(); render(); }
+  }));
   document.getElementById('btnEditGasBalance')?.addEventListener('click', openEditGasBalanceModal);
   document.getElementById('btnPayGasBalance')?.addEventListener('click', openPayGasBalanceModal);
   document.getElementById('btnLatestGasFilling')?.addEventListener('click', openLatestGasFillingVoucher);
