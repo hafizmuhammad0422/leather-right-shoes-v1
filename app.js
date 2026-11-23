@@ -13081,15 +13081,15 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     const q=round3(qty);if(!(q>0))return;
     stage[field]=round3((stage[field]||0)+q);
   };
+  const laminationStage={key:'lamination',label:'Lamination (Nasir)',sub:'Shoes Lamination Shops',unit:'METER',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]};
   const stages=[
-    {key:'lamination',label:'Lamination (Nasir)',sub:'Shoes Lamination Shops',unit:'METER',hasPendingTracking:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[]},
-    {key:'press',label:'Press Man (Nasir)',sub:'Shoes Press Man',unit:'SET',hasPendingTracking:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[]},
-    {key:'upper',label:'Upper Man',sub:'Upper Mans Production',unit:'SET',hasPendingTracking:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[]},
-    {key:'stitch',label:'Stitch Man',sub:'Stitch Man (Shoes Press Man)',unit:'SET',hasPendingTracking:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[]},
-    {key:'bottom',label:'Bottom Man',sub:'Batam Mans Production',unit:'SET',hasPendingTracking:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[]},
-    {key:'finish',label:'Finish Man',sub:'Finished Man Production',unit:'SET',hasPendingTracking:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[]}
+    {key:'press',label:'Press Man',sub:'Shoes Press Man',unit:'SET',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
+    {key:'upper',label:'Upper Man',sub:'Upper Mans Production',unit:'SET',hasPendingTracking:true,allowManualOpening:false,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
+    {key:'stitch',label:'Stitch Man',sub:'Stitch Man (Shoes Press Man)',unit:'SET',hasPendingTracking:true,allowManualOpening:false,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
+    {key:'bottom',label:'Bottom Man',sub:'Batam Mans Production',unit:'SET',hasPendingTracking:false,allowManualOpening:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
+    {key:'finish',label:'Finish Man',sub:'Finished Man Production',unit:'SET',hasPendingTracking:false,allowManualOpening:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[],workerList:[]}
   ];
-  const byKey=Object.fromEntries(stages.map(s=>[s.key,s]));
+  const byKey={...Object.fromEntries(stages.map(s=>[s.key,s])),lamination:laminationStage};
   const pushItem=(stage,metric,dt,voucherNo,workerName,itemName,unit,qty)=>stage.items.push({metric:metric||'received',date:upperLocalDateKey(dt),voucherNo:voucherNo!=null&&voucherNo!==''?String(voucherNo):'—',workerName:String(workerName||'—'),itemName:String(itemName||'—'),unit:String(unit||'SET'),qty:round3(qty)});
   const lineArticleName=(l,articles)=>l.articleName||(l.articleId?articles.find(a=>String(a.id)===String(l.articleId))?.name:'')||'';
   const lamState=settings.shoesLaminationShopsProduction,lamWorkers=lamState?.settings?.laminationWorkers||lamState?.workers||[],lamArticles=[...(lamState?.settings?.upperArticles||[]),...(lamState?.settings?.upperMaterials||[])];
@@ -13174,14 +13174,15 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     if(isIn&&counted)byKey.lamination.records++;
   });
   byKey.lamination.closingQty=round3(byKey.lamination.openQty+byKey.lamination.issuedQty-byKey.lamination.receivedQty);
+  const isCurrentUpperWeek=upperLocalDateKey(range.start)===upperLocalDateKey(getUpperWorkWeekRange(new Date()).start);
+  const pendingThroughDate=isCurrentUpperWeek?range.end:range.start;
   const pressState=settings.shoesPressManProduction,pressWorkers=pressState?.workers||[],pressArticles=pressState?.settings?.upperArticles||[],pressDists=pressState?.settings?.upperDistributions||[];
   pressDists.filter(r=>active(r)&&r.workflowVersion===1&&r.pressCutting===true).forEach(r=>{
-    const dt=dateOf(r),isBefore=beforeWeek(dt),isIn=inWeek(dt);
-    if(!isBefore&&!isIn)return;
+    const dt=dateOf(r),isIn=inWeek(dt);
+    if(!isIn)return;
     const worker=pressWorkers.find(w=>String(w.id)===String(r.workerId));
     const isStitch=(worker||r).pressWorkerCategory==='Stitch Man';
     const wName=worker?.name||r.workerName||'';
-    if(!isStitch&&!tfsIsNasirWorker(wName))return;
     const target=isStitch?byKey.stitch:byKey.press;
     let counted=false;
     (r.lines||[]).forEach(l=>{
@@ -13189,29 +13190,55 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
       const d=upperLineDisplay(l),aName=lineArticleName(l,pressArticles);
       if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
       const iss=round3(d.issued),rec=round3(d.received);
-      if(isBefore){
-        const net=round3(iss-rec);
-        if(net!==0){target.openQty=round3(target.openQty+net);pushItem(target,'opening',dt,r.voucherNo,wName,aName,'SET',net);}
-      }else{
-        if(iss>0){addStageQty(target,'issuedQty',iss);pushItem(target,'issued',dt,r.voucherNo,wName,aName,'SET',iss);counted=true;}
-        if(rec>0){addStageQty(target,'receivedQty',rec);addStageQty(target,'setQty',rec);pushItem(target,'received',dt,r.voucherNo,wName,aName,'SET',rec);counted=true;}
+      if(iss>0){addStageQty(target,'issuedQty',iss);pushItem(target,'issued',dt,r.voucherNo,wName,aName,'SET',iss);counted=true;}
+      if(rec>0){addStageQty(target,'receivedQty',rec);addStageQty(target,'setQty',rec);pushItem(target,'received',dt,r.voucherNo,wName,aName,'SET',rec);counted=true;}
+    });
+    if(counted)target.records++;
+  });
+  const pressManualResets=(pressState?.settings?.upperManualPendingResets||[]).filter(active);
+  const stitchWorkerIds=new Set([...pressDists.map(r=>String(r.workerId)),...(pressState?.settings?.upperPendingRecords||[]).map(r=>String(r.workerId)),...pressManualResets.map(r=>String(r.workerId))]);
+  stitchWorkerIds.forEach(wId=>{
+    const worker=pressWorkers.find(w=>String(w.id)===wId);
+    const isStitch=worker?.pressWorkerCategory==='Stitch Man'||pressDists.some(r=>String(r.workerId)===wId&&r.pressWorkerCategory==='Stitch Man')||pressManualResets.some(r=>String(r.workerId)===wId&&r.pressWorkerCategory==='Stitch Man');
+    if(!isStitch)return;
+    const wName=worker?.name||pressDists.find(r=>String(r.workerId)===wId)?.workerName||pressManualResets.find(r=>String(r.workerId)===wId)?.workerName||'';
+    const groups=new Map(),events=[];
+    (pressState?.settings?.upperPendingRecords||[]).filter(r=>active(r)&&String(r.workerId)===wId).forEach((r,idx)=>{
+      const aName=lineArticleName(r,pressArticles);
+      if(!tfsIsOnePieceSetArticle(aName))return;
+      const delta=round3(r.delta!=null?r.delta:(r.action==='minus'?-(Number(r.qty)||0):(Number(r.qty)||0)));
+      events.push({date:+dateOf(r),order:idx,key:String(r.articleId||aName),name:aName,qty:delta,dateStr:upperLocalDateKey(dateOf(r))});
+    });
+    pressDists.filter(r=>active(r)&&r.workflowVersion===1&&r.pressCutting===true&&String(r.workerId)===wId).forEach((r,idx)=>{
+      const dt=dateOf(r);
+      (r.lines||[]).forEach(l=>{
+        if(!l.articleId&&!l.articleName)return;
+        const d=upperLineDisplay(l),aName=lineArticleName(l,pressArticles);
+        if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+        const net=round3(d.issued-d.received);
+        if(net===0&&!events.length)return;
+        events.push({id:r.id,date:+dt,order:idx,key:String(l.articleId||aName),name:aName,qty:net,dateStr:upperLocalDateKey(dt)});
+      });
+    });
+    pressManualResets.filter(r=>String(r.workerId)===wId).forEach((r,idx)=>{
+      const aName=lineArticleName(r,pressArticles);
+      if(String(r.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+      events.push({date:+new Date(r.date),order:idx,reset:r,key:String(r.articleId||aName),name:aName,qty:round3(r.qty),dateStr:upperLocalDateKey(new Date(r.date))});
+    });
+    events.sort((a,b)=>a.date-b.date||a.order-b.order);
+    events.forEach(ev=>{
+      if(ev.date>=+pendingThroughDate)return;
+      const g=groups.get(ev.key)||{name:ev.name,qty:0,dateStr:ev.dateStr};
+      g.qty=ev.reset?ev.qty:round3(g.qty+ev.qty);
+      g.dateStr=ev.dateStr;
+      groups.set(ev.key,g);
+    });
+    groups.forEach(g=>{
+      if(g.qty>0){
+        byKey.stitch.openQty=round3(byKey.stitch.openQty+g.qty);
+        pushItem(byKey.stitch,'opening',new Date((g.dateStr||upperLocalDateKey(range.start))+'T00:00:00'),'PEND',wName,g.name,'SET',g.qty);
       }
     });
-    if(isIn&&counted)target.records++;
-  });
-  (pressState?.settings?.upperPendingRecords||[]).filter(active).forEach(p=>{
-    const dt=dateOf(p);if(!beforeWeek(dt))return;
-    const aName=lineArticleName(p,pressArticles);
-    if(!tfsIsOnePieceSetArticle(aName))return;
-    const worker=pressWorkers.find(w=>String(w.id)===String(p.workerId));
-    const isStitch=(worker||p).pressWorkerCategory==='Stitch Man';
-    const wName=worker?.name||p.workerName||'';
-    if(!isStitch&&!tfsIsNasirWorker(wName))return;
-    const delta=round3(p.delta!=null?p.delta:(p.action==='minus'?-(Number(p.qty)||0):(Number(p.qty)||0)));
-    if(delta===0)return;
-    const target=isStitch?byKey.stitch:byKey.press;
-    target.openQty=round3(target.openQty+delta);
-    pushItem(target,'opening',dt,'ADJ',wName,aName,'SET',delta);
   });
   byKey.press.closingQty=round3(byKey.press.openQty+byKey.press.issuedQty-byKey.press.receivedQty);
   byKey.stitch.closingQty=round3(byKey.stitch.openQty+byKey.stitch.issuedQty-byKey.stitch.receivedQty);
@@ -13225,7 +13252,6 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     const worker=pressWorkers.find(w=>String(w.id)===String(item.workerId));
     if((worker||item).pressWorkerCategory==='Stitch Man')return;
     const wName=worker?.name||item.workerName||'';
-    if(!tfsIsNasirWorker(wName))return;
     let counted=false;const dt=dateOf(item);
     const addMeterItem=(matName,qty)=>{
       const m=round3(qty);if(!(m>0))return;
@@ -13239,33 +13265,62 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
   });
   const upperArticles=settings.upperArticles||[];
   (settings.upperDistributions||[]).filter(r=>active(r)&&r.workflowVersion===1&&workerCategoryCompareKey(upperProductionRecordCategory(r))==='upper mans').forEach(r=>{
-    const dt=dateOf(r),isBefore=beforeWeek(dt),isIn=inWeek(dt);
-    if(!isBefore&&!isIn)return;
+    const dt=dateOf(r),isIn=inWeek(dt);
+    if(!isIn)return;
     let counted=false;const wName=r.workerName||workers.find(w=>String(w.id)===String(r.workerId))?.name||'';
     (r.lines||[]).forEach(l=>{
       if(!l.articleId&&!l.articleName)return;
       const d=upperLineDisplay(l),aName=lineArticleName(l,upperArticles);
       if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
       const iss=round3(d.issued),rec=round3(d.received);
-      if(isBefore){
-        const net=round3(iss-rec);
-        if(net!==0){byKey.upper.openQty=round3(byKey.upper.openQty+net);pushItem(byKey.upper,'opening',dt,r.voucherNo,wName,aName,'SET',net);}
-      }else{
-        if(iss>0){addStageQty(byKey.upper,'issuedQty',iss);pushItem(byKey.upper,'issued',dt,r.voucherNo,wName,aName,'SET',iss);counted=true;}
-        if(rec>0){addStageQty(byKey.upper,'receivedQty',rec);addStageQty(byKey.upper,'setQty',rec);pushItem(byKey.upper,'received',dt,r.voucherNo,wName,aName,'SET',rec);counted=true;}
+      if(iss>0){addStageQty(byKey.upper,'issuedQty',iss);pushItem(byKey.upper,'issued',dt,r.voucherNo,wName,aName,'SET',iss);counted=true;}
+      if(rec>0){addStageQty(byKey.upper,'receivedQty',rec);addStageQty(byKey.upper,'setQty',rec);pushItem(byKey.upper,'received',dt,r.voucherNo,wName,aName,'SET',rec);counted=true;}
+    });
+    if(counted)byKey.upper.records++;
+  });
+  const upperAccountIds=new Set();
+  [...(settings.upperPendingRecords||[]),...(settings.upperDistributions||[]),...(settings.upperManualPendingResets||[])].filter(r=>active(r)&&upperManRecord(r)).forEach(r=>{
+    if(r.workerId!==undefined&&r.workerId!==null)upperAccountIds.add(String(r.workerId));
+  });
+  upperAccountIds.forEach(wId=>{
+    const worker=workers.find(w=>String(w.id)===wId);
+    const wName=worker?.name||(settings.upperManualPendingResets||[]).find(r=>String(r.workerId)===wId)?.workerName||(settings.upperDistributions||[]).find(r=>String(r.workerId)===wId)?.workerName||'';
+    const state=upperManPendingState(wId,settings.upperDistributions||[],null,pendingThroughDate,settings.upperPendingRecords||[]);
+    const matchedKeys=new Set();
+    (state.groups||[]).forEach(g=>{
+      if(g.legacy)return;
+      const aName=g.name||(g.articleId?upperArticles.find(a=>String(a.id)===String(g.articleId))?.name:'')||'';
+      if(String(g.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+      if(g.articleId)matchedKeys.add(String(g.articleId));
+      const q=round3(g.qty);
+      if(q!==0){
+        byKey.upper.openQty=round3(byKey.upper.openQty+q);
+        const dt=Number.isFinite(g.lastDate)?new Date(g.lastDate):range.start;
+        pushItem(byKey.upper,'opening',dt,'PEND',wName,aName,'SET',q);
       }
     });
-    if(isIn&&counted)byKey.upper.records++;
-  });
-  (settings.upperPendingRecords||[]).filter(active).forEach(p=>{
-    const dt=dateOf(p);if(!beforeWeek(dt))return;
-    const aName=lineArticleName(p,upperArticles);
-    if(!tfsIsOnePieceSetArticle(aName))return;
-    const wName=p.workerName||workers.find(w=>String(w.id)===String(p.workerId))?.name||'';
-    const delta=round3(p.delta!=null?p.delta:(p.action==='minus'?-(Number(p.qty)||0):(Number(p.qty)||0)));
-    if(delta===0)return;
-    byKey.upper.openQty=round3(byKey.upper.openQty+delta);
-    pushItem(byKey.upper,'opening',dt,'ADJ',wName,aName,'SET',delta);
+    const nameOnlyGroups=new Map();
+    (settings.upperDistributions||[]).filter(r=>active(r)&&r.workflowVersion===1&&upperManRecord(r)&&String(r.workerId)===wId&&+upperWorkTimestamp(r)<+pendingThroughDate).forEach(r=>{
+      const dt=upperWorkTimestamp(r);
+      (r.lines||[]).forEach(l=>{
+        if(l.articleId&&matchedKeys.has(String(l.articleId)))return;
+        if(l.articleId)return;
+        const d=upperLineDisplay(l),aName=lineArticleName(l,upperArticles);
+        if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+        const net=round3(d.issued-d.received);
+        if(net===0)return;
+        const cur=nameOnlyGroups.get(aName)||{qty:0,dt};
+        cur.qty=round3(cur.qty+net);
+        cur.dt=dt;
+        nameOnlyGroups.set(aName,cur);
+      });
+    });
+    nameOnlyGroups.forEach((val,aName)=>{
+      if(val.qty!==0){
+        byKey.upper.openQty=round3(byKey.upper.openQty+val.qty);
+        pushItem(byKey.upper,'opening',val.dt,'PEND',wName,aName,'SET',val.qty);
+      }
+    });
   });
   byKey.upper.closingQty=round3(byKey.upper.openQty+byKey.upper.issuedQty-byKey.upper.receivedQty);
   [['batam','bottom'],['finished','finish']].forEach(([mod,stageKey])=>{
@@ -13284,32 +13339,84 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
   });
   const weekKey=upperLocalDateKey(range.start);
   const openingOverrides=(settings.tfsOnePieceOpeningOverrides&&typeof settings.tfsOnePieceOpeningOverrides==='object'&&!Array.isArray(settings.tfsOnePieceOpeningOverrides))?settings.tfsOnePieceOpeningOverrides:{};
+  const findCarriedOpeningOverride=stageKey=>{
+    const direct=openingOverrides[weekKey+'::'+stageKey];
+    if(direct&&typeof direct.qty==='number'&&Number.isFinite(direct.qty))return {ov:direct,sourceWeek:weekKey,exact:true};
+    let bestWeek='',bestOv=null;
+    Object.keys(openingOverrides).forEach(k=>{
+      const parts=String(k).split('::');
+      if(parts.length===2&&parts[1]===stageKey&&parts[0]<weekKey){
+        const cand=openingOverrides[k];
+        if(cand&&typeof cand.qty==='number'&&Number.isFinite(cand.qty)&&parts[0]>bestWeek){
+          bestWeek=parts[0];bestOv=cand;
+        }
+      }
+    });
+    return bestOv?{ov:bestOv,sourceWeek:bestWeek,exact:false}:null;
+  };
   stages.forEach(s=>{
     if(s.hasPendingTracking){
       s.autoOpenQty=round3(s.openQty);
       s.isManualOpening=false;
-      const ov=openingOverrides[weekKey+'::'+s.key];
-      if(ov&&typeof ov.qty==='number'&&Number.isFinite(ov.qty)){
-        s.isManualOpening=true;
-        s.openQty=round3(ov.qty);
-        s.closingQty=round3(s.openQty+s.issuedQty-s.receivedQty);
-        s.items.unshift({metric:'opening',date:ov.date||weekKey,voucherNo:'OPEN',workerName:'Manual Opening',itemName:'Manual Opening Override (Auto: '+tfsOnePieceFormatQty(s.autoOpenQty)+' '+s.unit+')',unit:s.unit,qty:s.openQty});
+      if(s.allowManualOpening){
+        const match=findCarriedOpeningOverride(s.key);
+        if(match){
+          s.isManualOpening=true;
+          s.openQty=round3(match.ov.qty);
+          s.closingQty=round3(s.openQty+s.issuedQty-s.receivedQty);
+          s.items=s.items.filter(it=>it.metric!=='opening');
+          s.items.unshift({metric:'opening',date:match.ov.date||match.sourceWeek,voucherNo:'OPEN',workerName:match.exact?'Manual Opening':'Carried Opening ('+match.sourceWeek+')',itemName:'Manual Opening Stock (Auto: '+tfsOnePieceFormatQty(s.autoOpenQty)+' '+s.unit+')',unit:s.unit,qty:s.openQty});
+        }
       }
     }
   });
   stages.forEach(s=>s.items.sort((a,b)=>a.date.localeCompare(b.date)||a.workerName.localeCompare(b.workerName)||a.itemName.localeCompare(b.itemName)));
   const fmtBal=(val,unit)=>val===null?'—':tfsOnePieceFormatQty(val)+' '+unit;
   stages.forEach(s=>{
+    const wMap=new Map(),oMap=new Map();
+    s.items.filter(it=>it.metric==='received'&&String(it.unit).toUpperCase()===String(s.unit).toUpperCase()).forEach(it=>{
+      const clean=String(it.workerName||'—').trim()||'—';
+      const k=clean.toLowerCase();
+      const entry=wMap.get(k)||{workerName:clean,setQty:0,entriesCount:0,articles:new Set()};
+      entry.setQty=round3(entry.setQty+(Number(it.qty)||0));
+      entry.entriesCount++;
+      if(it.itemName)entry.articles.add(String(it.itemName));
+      wMap.set(k,entry);
+    });
+    s.items.filter(it=>it.metric==='opening'&&String(it.unit).toUpperCase()===String(s.unit).toUpperCase()).forEach(it=>{
+      const clean=String(it.workerName||'—').trim()||'—';
+      const k=clean.toLowerCase();
+      const entry=oMap.get(k)||{workerName:clean,setQty:0,entriesCount:0,articles:new Set()};
+      entry.setQty=round3(entry.setQty+(Number(it.qty)||0));
+      entry.entriesCount++;
+      if(it.itemName)entry.articles.add(String(it.itemName));
+      oMap.set(k,entry);
+    });
+    s.workerList=[...wMap.values()].filter(w=>w.setQty>0).map(w=>({
+      workerName:w.workerName,
+      setQty:w.setQty,
+      entriesCount:w.entriesCount,
+      articles:[...w.articles].join(', '),
+      text:tfsOnePieceFormatQty(w.setQty)+' '+s.unit
+    })).sort((a,b)=>b.setQty-a.setQty||a.workerName.localeCompare(b.workerName));
+    s.openingWorkerList=[...oMap.values()].filter(w=>w.setQty!==0).map(w=>({
+      workerName:w.workerName,
+      setQty:w.setQty,
+      entriesCount:w.entriesCount,
+      articles:[...w.articles].join(', '),
+      text:tfsOnePieceFormatQty(w.setQty)+' '+s.unit
+    })).sort((a,b)=>b.setQty-a.setQty||a.workerName.localeCompare(b.workerName));
+    s.effectiveSetQty=round3((Number(s.openQty)||0)+(Number(s.setQty)||0));
     s.openText=fmtBal(s.openQty,s.unit);
     s.issuedText=fmtBal(s.issuedQty,s.unit);
-    s.receivedText=s.key==='press'&&s.meterQty>0?(tfsOnePieceFormatQty(s.receivedQty)+' SET / '+tfsOnePieceFormatQty(s.meterQty)+' METER'):fmtBal(s.receivedQty,s.unit);
+    s.receivedText=fmtBal(s.receivedQty,s.unit);
     s.closingText=fmtBal(s.closingQty,s.unit);
     const parts=[];
     if(s.setQty>0)parts.push(tfsOnePieceFormatQty(s.setQty)+' SET');
     if(s.meterQty>0)parts.push(tfsOnePieceFormatQty(s.meterQty)+' METER');
     s.totalText=parts.length?parts.join(' / '):'0';
   });
-  const lamMeters=byKey.lamination.meterQty||0,pressMeters=pressOnePieceMeters,totalPressMeters=round3(pressOnePieceMeters+pressOtherMeters),pressSets=byKey.press.setQty||0;
+  const lamMeters=byKey.lamination.meterQty||0,pressMeters=pressOnePieceMeters,totalPressMeters=round3(pressOnePieceMeters+pressOtherMeters),pressSets=byKey.press.setQty||0,pressEffectiveSets=byKey.press.effectiveSetQty||0;
   const avgMetersPerSet=pressSets>0&&pressOnePieceMeters>0?round3(pressOnePieceMeters/pressSets):0;
   const setsPerMeter=pressSets>0&&pressOnePieceMeters>0?round3(pressSets/pressOnePieceMeters):0;
   const meterDiff=round3(lamMeters-totalPressMeters);
@@ -13321,13 +13428,17 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
       s.diffText=fmtDiff(meterDiff,'m');s.diffSubText='vs Press Used';s.diffColor=diffColor(meterDiff);
     }else if(s.key==='press'){
       s.diffVsCutting=0;s.diffVsPrev=null;
-      s.diffText='Baseline';s.diffSubText='';s.diffColor='#475569';
+      s.diffText='Baseline ('+tfsOnePieceFormatQty(pressEffectiveSets)+' SET)';
+      s.diffSubText=s.openQty>0?'Open '+tfsOnePieceFormatQty(s.openQty)+' + Rec '+tfsOnePieceFormatQty(s.setQty):'';
+      s.diffColor='#475569';
     }else{
-      const prevSet=stages[i-1]?.setQty||0;
-      s.diffVsCutting=round3(s.setQty-pressSets);
-      s.diffVsPrev=round3(s.setQty-prevSet);
+      const prevStage=stages[i-1];
+      const prevSet=prevStage?.effectiveSetQty||0;
+      const curSet=s.effectiveSetQty||0;
+      s.diffVsCutting=round3(curSet-pressEffectiveSets);
+      s.diffVsPrev=round3(curSet-prevSet);
       s.diffText=fmtDiff(s.diffVsCutting,'SET');
-      s.diffSubText='vs Prev: '+fmtDiff(s.diffVsPrev,'SET');
+      s.diffSubText='vs Prev: '+fmtDiff(s.diffVsPrev,'SET')+(s.openQty>0?' (Total: '+tfsOnePieceFormatQty(curSet)+' SET)':'');
       s.diffColor=diffColor(s.diffVsCutting);
     }
   });
@@ -13361,9 +13472,10 @@ function tfsOnePieceSetWeeks(){
 }
 function tfsOnePieceSetCard(){
   const data=tfsOnePieceSetVerificationData(new Date());
-  const finish=data.stages.find(s=>s.key==='finish')?.setQty||0;
-  const lam=data.lamMeters||0;
-  const sub=finish>0||lam>0?`F: ${tfsOnePieceFormatQty(finish)} SET | L: ${tfsOnePieceFormatQty(lam)} m`:'Weekly Set & Meter Check';
+  const pressStage=data.stages.find(s=>s.key==='press'),finishStage=data.stages.find(s=>s.key==='finish');
+  const press=pressStage?.effectiveSetQty??pressStage?.setQty??0;
+  const finish=finishStage?.effectiveSetQty??finishStage?.setQty??0;
+  const sub=press>0||finish>0?`P: ${tfsOnePieceFormatQty(press)} SET | F: ${tfsOnePieceFormatQty(finish)} SET`:'Weekly One Piece Set Check';
   return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="4" role="button" tabindex="0" aria-label="One Piece Set Verification details"><span>One Piece Set Verification</span><strong>${esc(sub)}</strong></div>`;
 }
 function openTfsOnePieceSetVerification(weekKey=''){
@@ -13372,11 +13484,51 @@ function openTfsOnePieceSetVerification(weekKey=''){
 }
 function openTfsOnePieceStageDetailModal(stageKey,baseDate=new Date(),metric='all'){
   const d=tfsOnePieceSetVerificationData(baseDate),stage=d.stages.find(s=>s.key===stageKey);if(!stage)return;
-  const mKey=['opening','issued','received','closing'].includes(metric)?metric:'all';
-  const metricTitles={all:'All Entries',opening:'Opening Balance',issued:'Week Issued',received:'Week Received / Cutting',closing:'Closing Balance'};
-  const typeLabels={opening:'Opening',issued:'Issued',received:'Received'};
-  const typeColors={opening:'#475569',issued:'#1d4ed8',received:'#15803d'};
-  const items=(mKey==='opening'||mKey==='issued'||mKey==='received')?stage.items.filter(x=>x.metric===mKey):stage.items;
+  const mKey=['opening','received'].includes(metric)?metric:'all';
+  const metricTitles={all:'Received & Opening Breakdown',opening:'Opening Stock Breakdown',received:'Received Breakdown (Worker & Voucher Detail)'};
+  const typeLabels={opening:'Opening',received:'Received'};
+  const typeColors={opening:'#475569',received:'#15803d'};
+  const items=((mKey==='opening'||mKey==='received')?stage.items.filter(x=>x.metric===mKey):stage.items.filter(x=>x.metric==='opening'||x.metric==='received')).filter(x=>String(x.unit).toUpperCase()===String(stage.unit).toUpperCase());
+  const openingWorkerSummaryHtml=(mKey!=='received'&&(stage.openingWorkerList&&stage.openingWorkerList.length))?`<div style="margin-bottom:12px;">
+    <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Opening / Pending Summary (Kis Worker ke Paas Kitna Opening / Pending Stock Hai)</div>
+    <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
+          <th style="padding:6px;text-align:left;">#</th>
+          <th style="padding:6px;text-align:left;">Worker Name</th>
+          <th style="padding:6px;text-align:left;">Article</th>
+          <th style="padding:6px;text-align:right;">Opening / Pending Qty</th>
+        </tr></thead>
+        <tbody>${stage.openingWorkerList.map((w,idx)=>`<tr>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);">${idx+1}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;">${esc(w.workerName)}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);color:var(--muted);">${esc(w.articles||'One Piece Set')}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:800;color:#475569;">${esc(w.text)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`:'';
+  const workerSummaryHtml=(mKey!=='opening'&&(stage.workerList&&stage.workerList.length))?`<div style="margin-bottom:12px;">
+    <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Worker-Wise Summary (Kis Worker ne Kitna Banaya)</div>
+    <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
+          <th style="padding:6px;text-align:left;">#</th>
+          <th style="padding:6px;text-align:left;">Worker Name</th>
+          <th style="padding:6px;text-align:left;">Article</th>
+          <th style="padding:6px;text-align:center;">Vouchers</th>
+          <th style="padding:6px;text-align:right;">Total Quantity</th>
+        </tr></thead>
+        <tbody>${stage.workerList.map((w,idx)=>`<tr>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);">${idx+1}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;">${esc(w.workerName)}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);color:var(--muted);">${esc(w.articles||'One Piece Set')}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:center;">${w.entriesCount}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:800;color:#15803d;">${esc(w.text)}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>`:'';
   const rowsHtml=items.length?items.map(item=>`<tr>
     <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;color:${typeColors[item.metric]||'#334155'};white-space:nowrap;">${esc(typeLabels[item.metric]||item.metric)}</td>
     <td style="padding:5px 6px;border-top:1px solid var(--line);white-space:nowrap;">${esc(item.date)}</td>
@@ -13386,11 +13538,14 @@ function openTfsOnePieceStageDetailModal(stageKey,baseDate=new Date(),metric='al
     <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:700;">${esc(tfsOnePieceFormatQty(item.qty))} ${esc(item.unit)}</td>
   </tr>`).join(''):`<tr><td colspan="6" class="empty">Is work week mein is section ki koi matching entry nahi mili.</td></tr>`;
   modal(`<h3 style="margin:0 0 4px;">${esc(stage.label)} — ${esc(metricTitles[mKey]||'Breakdown')}</h3>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${esc(stage.sub)} • ${esc(d.weekLabel)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Data Source: <b>${esc(stage.sub)}</b> • ${esc(d.weekLabel)}</div>
     <div style="font-size:11.5px;color:#1f2937;margin-bottom:10px;padding:6px 8px;background:var(--bg-soft,#f8f9fa);border:1px solid var(--line);border-radius:6px;">
-      Opening: <b>${esc(stage.openText)}</b> • Issued: <b>${esc(stage.issuedText)}</b> • Received: <b>${esc(stage.receivedText)}</b> • Closing: <b>${esc(stage.closingText)}</b>
+      Opening Stock: <b>${esc(stage.openText)}</b> • Total Received: <b>${esc(stage.receivedText)}</b> • Stage Total: <b>${esc(tfsOnePieceFormatQty(stage.effectiveSetQty||0))} ${esc(stage.unit)}</b>
     </div>
-    <div style="overflow-x:auto;max-height:60dvh;border:1px solid var(--line);border-radius:6px;">
+    ${openingWorkerSummaryHtml}
+    ${workerSummaryHtml}
+    <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Voucher-Wise Source Entries (Quantity Kahan se Aayi)</div>
+    <div style="overflow-x:auto;max-height:48dvh;border:1px solid var(--line);border-radius:6px;">
       <table style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
           <th style="padding:6px;text-align:left;">Type</th>
@@ -13433,7 +13588,7 @@ async function saveTfsOnePieceOpeningStock(stageKey,weekKey,qtyValue,isReset=fal
 }
 function openTfsOnePieceEditOpeningModal(stageKey,baseDate=new Date()){
   const d=tfsOnePieceSetVerificationData(baseDate),stage=d.stages.find(s=>s.key===stageKey);
-  if(!stage||!stage.hasPendingTracking)return;
+  if(!stage||!stage.hasPendingTracking||!stage.allowManualOpening)return;
   modal(`<h3 style="margin:0 0 6px;">Edit Opening Stock — ${esc(stage.label)}</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${esc(stage.sub)} • ${esc(d.weekLabel)}<br>Auto Carry-Forward: <b>${esc(tfsOnePieceFormatQty(stage.autoOpenQty||0))} ${esc(stage.unit)}</b></div>
     <label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px;">Opening Balance (${esc(stage.unit)})</label>
@@ -13453,22 +13608,17 @@ function openTfsOnePieceEditOpeningModal(stageKey,baseDate=new Date()){
 }
 function tfsOnePieceSetContentHtml(baseDate){
   const d=tfsOnePieceSetVerificationData(baseDate);
-  const cellAttr=(key,metric,title)=>`data-tfs-ops-stage="${esc(key)}" data-tfs-ops-metric="${esc(metric)}" role="button" tabindex="0" style="padding:7px 8px;border-top:1px solid var(--line);text-align:right;cursor:pointer;" title="${esc(title)}"`;
+  const cellAttr=(key,metric,title)=>`data-tfs-ops-stage="${esc(key)}" data-tfs-ops-metric="${esc(metric)}" role="button" tabindex="0" style="padding:7px 8px;border-top:1px solid var(--line);text-align:right;cursor:pointer;vertical-align:middle;" title="${esc(title)}"`;
   const stageRows=d.stages.map((s,i)=>`<tr data-tfs-ops-stage="${esc(s.key)}">
-    <td data-tfs-ops-stage="${esc(s.key)}" data-tfs-ops-metric="all" role="button" tabindex="0" style="padding:7px 8px;border-top:1px solid var(--line);font-weight:700;cursor:pointer;" title="Click for all entries">${i+1}. ${esc(s.label)}<div style="font-size:10.5px;font-weight:400;color:var(--muted);">${esc(s.sub)} • Click cells for details</div></td>
-    ${s.hasPendingTracking?`<td ${cellAttr(s.key,'opening','Click for Opening breakdown')}><span style="font-weight:600;color:#475569;">${esc(s.openText)}</span> <button type="button" data-tfs-ops-edit-open="${esc(s.key)}" title="Edit Opening Stock" style="border:0;background:transparent;padding:0 2px;cursor:pointer;font-size:11px;color:#2563eb;">✎</button>${s.isManualOpening?`<div style="font-size:9.5px;color:#2563eb;">Manual</div>`:''}</td>`:`<td style="padding:7px 8px;border-top:1px solid var(--line);text-align:right;color:var(--muted);">—</td>`}
-    ${s.hasPendingTracking?`<td ${cellAttr(s.key,'issued','Click for Issued breakdown')}><span style="font-weight:600;color:#1d4ed8;">${esc(s.issuedText)}</span></td>`:`<td style="padding:7px 8px;border-top:1px solid var(--line);text-align:right;color:var(--muted);">—</td>`}
-    <td ${cellAttr(s.key,'received','Click for Received/Cutting breakdown')}><span style="font-weight:800;">${esc(s.receivedText)}</span>${s.records>0?`<div style="font-size:10px;color:var(--muted);">${s.records} entries</div>`:''}</td>
-    ${s.hasPendingTracking?`<td ${cellAttr(s.key,'closing','Click for Closing balance breakdown')}><span style="font-weight:800;color:${s.closingQty>0?'#b45309':'#15803d'};">${esc(s.closingText)}</span></td>`:`<td style="padding:7px 8px;border-top:1px solid var(--line);text-align:right;color:var(--muted);">—</td>`}
-    <td style="padding:7px 8px;border-top:1px solid var(--line);text-align:right;font-weight:800;color:${s.diffColor};">${esc(s.diffText)}${s.diffSubText?`<div style="font-size:10px;font-weight:500;color:var(--muted);">${esc(s.diffSubText)}</div>`:''}</td>
-  </tr>`).join('');
-  const setStages=d.stages.filter(s=>s.key!=='lamination');
-  const hasSets=setStages.some(s=>s.setQty>0),hasMeters=d.lamMeters>0||d.totalPressMeters>0;
-  const setPipeline=hasSets?`<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;"><div style="font-weight:800;margin-bottom:4px;">Set Pipeline</div><div style="line-height:1.5;color:#1f2937;">${setStages.map(s=>`${esc(s.label)}: <b>${esc(tfsOnePieceFormatQty(s.setQty||0))}</b>`).join(' → ')}</div></div>`:'';
-  const otherBreak=d.pressOtherMaterials.length?' ('+d.pressOtherMaterials.map(([n,q])=>`${esc(n)}: ${esc(tfsOnePieceFormatQty(q))} m`).join(', ')+')':'';
-  const lamBreak=d.lamMaterials.length?' ('+d.lamMaterials.map(([n,q])=>`${esc(n)}: ${esc(tfsOnePieceFormatQty(q))} m`).join(', ')+')':'';
-  const meterPipeline=hasMeters?`<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;"><div style="font-weight:800;margin-bottom:4px;">Meter Pipeline & Press Average</div><div style="line-height:1.6;color:#1f2937;">Lamination (Nasir): <b>${esc(tfsOnePieceFormatQty(d.lamMeters))} m</b>${lamBreak} → Press One Piece: <b>${esc(tfsOnePieceFormatQty(d.pressMeters))} m</b>${d.pressOtherMeters>0?` + Other/Pumping: <b>${esc(tfsOnePieceFormatQty(d.pressOtherMeters))} m</b>${otherBreak}`:''} • Total Used: <b>${esc(tfsOnePieceFormatQty(d.totalPressMeters))} m</b> • Meter Diff: <b>${esc(tfsOnePieceFormatQty(d.meterDiff))} m</b>${d.avgMetersPerSet>0?` • Press Avg/Set: <b>${esc(tfsOnePieceFormatQty(d.avgMetersPerSet))} m</b> (${esc(tfsOnePieceFormatQty(d.setsPerMeter))} SET/m)`:''}</div></div>`:'';
-  const pipelines=(setPipeline||meterPipeline)?`<div style="display:grid;gap:8px;margin-top:12px;">${setPipeline}${meterPipeline}</div>`:`<div class="empty" style="margin-top:10px;">Is work week mein kisi bhi stage ki One Piece Set ya Meter quantity nahi mili.</div>`;
+      <td data-tfs-ops-stage="${esc(s.key)}" data-tfs-ops-metric="all" role="button" tabindex="0" style="padding:7px 8px;border-top:1px solid var(--line);font-weight:700;cursor:pointer;vertical-align:middle;" title="Click for all entries">${i+1}. ${esc(s.label)}<div style="font-size:10.5px;font-weight:400;color:var(--muted);">${esc(s.sub)}</div></td>
+      <td ${cellAttr(s.key,'opening','Click for Opening Stock breakdown')}><span style="font-weight:600;color:#475569;">${esc(s.openText)}</span>${s.allowManualOpening?` <button type="button" data-tfs-ops-edit-open="${esc(s.key)}" title="Edit Opening Stock" style="border:0;background:transparent;padding:0 2px;cursor:pointer;font-size:11px;color:#2563eb;">✎</button>${s.isManualOpening?`<div style="font-size:9.5px;color:#2563eb;">Manual</div>`:''}`:(s.hasPendingTracking?`<div style="font-size:9.5px;color:var(--muted);">Auto Pending</div>`:'')}</td>
+      <td ${cellAttr(s.key,'received','Click quantity to see worker-wise & voucher breakdown')}><span style="font-weight:800;color:#15803d;text-decoration:underline;text-underline-offset:3px;">${esc(s.receivedText)}</span></td>
+      <td style="padding:7px 8px;border-top:1px solid var(--line);text-align:right;font-weight:800;color:${s.diffColor};vertical-align:middle;">${esc(s.diffText)}${s.diffSubText?`<div style="font-size:10px;font-weight:500;color:var(--muted);">${esc(s.diffSubText)}</div>`:''}</td>
+    </tr>`).join('');
+  const setStages=d.stages;
+  const hasSets=setStages.some(s=>s.setQty>0||(Number(s.openQty)||0)>0);
+  const setPipeline=hasSets?`<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;"><div style="font-weight:800;margin-bottom:4px;">Set Pipeline</div><div style="line-height:1.5;color:#1f2937;">${setStages.map(s=>`${esc(s.label)}: <b>${esc(tfsOnePieceFormatQty(s.setQty||0))} SET</b>${(Number(s.openQty)||0)>0?` <span style="font-size:11px;color:#475569;">(Open: ${esc(tfsOnePieceFormatQty(s.openQty))})</span>`:''}`).join(' → ')}</div></div>`:'';
+  const pipelines=setPipeline?`<div style="display:grid;gap:8px;margin-top:12px;">${setPipeline}</div>`:`<div class="empty" style="margin-top:10px;">Is work week mein kisi bhi stage ki One Piece Set quantity nahi mili.</div>`;
   return `<div style="border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--bg-soft,#f8f9fa);">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
       <strong style="font-size:14px;">One Piece Set Verification (${esc(d.weekLabel)})</strong>
@@ -13478,10 +13628,8 @@ function tfsOnePieceSetContentHtml(baseDate){
       <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
         <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
           <th style="padding:6px 8px;text-align:left;">Stage</th>
-          <th style="padding:6px 8px;text-align:right;">Opening</th>
-          <th style="padding:6px 8px;text-align:right;">Issued</th>
-          <th style="padding:6px 8px;text-align:right;">Received/Cut</th>
-          <th style="padding:6px 8px;text-align:right;">Closing</th>
+          <th style="padding:6px 8px;text-align:right;">Opening Stock</th>
+          <th style="padding:6px 8px;text-align:right;">Received</th>
           <th style="padding:6px 8px;text-align:right;">Diff (+/-)</th>
         </tr></thead>
         <tbody>${stageRows}</tbody>
