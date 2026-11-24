@@ -13491,12 +13491,7 @@ function tfsOnePieceSetWeeks(){
   return [...weeks.values()].sort((a,b)=>b.weekKey.localeCompare(a.weekKey));
 }
 function tfsOnePieceSetCard(){
-  const data=tfsOnePieceSetVerificationData(new Date());
-  const pressStage=data.stages.find(s=>s.key==='press'),finishStage=data.stages.find(s=>s.key==='finish');
-  const press=pressStage?.effectiveSetQty??pressStage?.setQty??0;
-  const finish=finishStage?.effectiveSetQty??finishStage?.setQty??0;
-  const sub=press>0||finish>0?`P: ${tfsOnePieceFormatQty(press)} SET | F: ${tfsOnePieceFormatQty(finish)} SET`:'Weekly One Piece Set Check';
-  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="4" role="button" tabindex="0" aria-label="One Piece Set Verification details"><span>One Piece Set Verification</span><strong>${esc(sub)}</strong></div>`;
+  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="4" role="button" tabindex="0" aria-label="One Piece Set Verification details"><strong>One Piece Set Verification</strong></div>`;
 }
 function openTfsOnePieceSetVerification(weekKey=''){
   if(weekKey)window.__tfsOnePieceWeekKey=weekKey;
@@ -13950,12 +13945,7 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
   return {weekLabel,weekKey,stages,pressAtoms,pressEffectiveAtoms};
 }
 function tfsOnePieceAtomCard(){
-  const data=tfsOnePieceAtomVerificationData(new Date());
-  const pressStage=data.stages.find(s=>s.key==='press'),finishStage=data.stages.find(s=>s.key==='finish');
-  const press=pressStage?.effectiveSetQty??pressStage?.setQty??0;
-  const finish=finishStage?.effectiveSetQty??finishStage?.setQty??0;
-  const sub=press>0||finish>0?`P: ${tfsOnePieceFormatQty(press)} ATOMS | F: ${tfsOnePieceFormatQty(finish)} ATOMS`:'Weekly One Piece Atom Check';
-  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="5" role="button" tabindex="0" aria-label="One Piece Atom Verification details"><span>One Piece Atom Verification</span><strong>${esc(sub)}</strong></div>`;
+  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="5" role="button" tabindex="0" aria-label="One Piece Atom Verification details"><strong>One Piece Atom Verification</strong></div>`;
 }
 function openTfsOnePieceAtomVerification(weekKey=''){
   if(weekKey)window.__tfsOnePieceAtomWeekKey=weekKey;
@@ -14391,12 +14381,7 @@ function tfsFlexibleItemVerificationData(baseDate=new Date()){
   return {weekLabel,weekKey,stages,pressAtoms,pressEffectiveAtoms};
 }
 function tfsFlexibleItemCard(){
-  const data=tfsFlexibleItemVerificationData(new Date());
-  const pressStage=data.stages.find(s=>s.key==='press'),finishStage=data.stages.find(s=>s.key==='finish');
-  const press=pressStage?.effectiveSetQty??pressStage?.setQty??0;
-  const finish=finishStage?.effectiveSetQty??finishStage?.setQty??0;
-  const sub=press>0||finish>0?`P: ${tfsOnePieceFormatQty(press)} ATOMS | F: ${tfsOnePieceFormatQty(finish)} ATOMS`:'Weekly Flexible Atom Check';
-  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="6" role="button" tabindex="0" aria-label="Flexible Atom Verification details"><span>Flexible Atom Verification</span><strong>${esc(sub)}</strong></div>`;
+  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="6" role="button" tabindex="0" aria-label="Flexible Atom Verification details"><strong>Flexible Atom Verification</strong></div>`;
 }
 function openTfsFlexibleItemVerification(weekKey=''){
   if(weekKey)window.__tfsFlexibleItemWeekKey=weekKey;
@@ -14832,12 +14817,7 @@ function tfsMoza8814VerificationData(baseDate=new Date()){
   return {weekLabel,weekKey,stages,pressAtoms,pressEffectiveAtoms};
 }
 function tfsMoza8814Card(){
-  const data=tfsMoza8814VerificationData(new Date());
-  const pressStage=data.stages.find(s=>s.key==='press'),finishStage=data.stages.find(s=>s.key==='finish');
-  const press=pressStage?.effectiveSetQty??pressStage?.setQty??0;
-  const finish=finishStage?.effectiveSetQty??finishStage?.setQty??0;
-  const sub=press>0||finish>0?`P: ${tfsOnePieceFormatQty(press)} ATOMS | F: ${tfsOnePieceFormatQty(finish)} ATOMS`:'Weekly 8814 Moza Check';
-  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="7" role="button" tabindex="0" aria-label="8814 Moza Verification details"><span>8814 Moza Verification</span><strong>${esc(sub)}</strong></div>`;
+  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="7" role="button" tabindex="0" aria-label="8814 Moza Verification details"><strong>8814 Moza Verification</strong></div>`;
 }
 function openTfsMoza8814Verification(weekKey=''){
   if(weekKey)window.__tfsMoza8814WeekKey=weekKey;
@@ -15322,12 +15302,7 @@ function tfsPumpiKidsSetVerificationData(baseDate=new Date()){
   return {weekLabel,weekKey,stages,pressSets,pressEffectiveSets};
 }
 function tfsPumpiKidsSetCard(){
-  const data=tfsPumpiKidsSetVerificationData(new Date());
-  const pressStage=data.stages.find(s=>s.key==='press'),finishStage=data.stages.find(s=>s.key==='finish');
-  const press=pressStage?.effectiveSetQty??pressStage?.setQty??0;
-  const finish=finishStage?.effectiveSetQty??finishStage?.setQty??0;
-  const sub=press>0||finish>0?`P: ${tfsOnePieceFormatQty(press)} SET | F: ${tfsOnePieceFormatQty(finish)} SET`:'Weekly Pumpi Kids Set Check';
-  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="8" role="button" tabindex="0" aria-label="Pumpi Kids Set Verification details"><span>Pumpi Kids Set Verification</span><strong>${esc(sub)}</strong></div>`;
+  return `<div class="tfs-card tfs-one-piece-verification" draggable="true" data-tfs-card="8" role="button" tabindex="0" aria-label="Pumpi Kids Set Verification details"><strong>Pumpi Kids Set Verification</strong></div>`;
 }
 function openTfsPumpiKidsSetVerification(weekKey=''){
   if(weekKey)window.__tfsPumpiKidsSetWeekKey=weekKey;
