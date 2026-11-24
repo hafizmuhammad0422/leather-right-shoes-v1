@@ -13738,6 +13738,18 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
   const isCurrentUpperWeek=upperLocalDateKey(range.start)===upperLocalDateKey(getUpperWorkWeekRange(new Date()).start);
   const pendingThroughDate=isCurrentUpperWeek?range.end:range.start;
   const pressState=settings.shoesPressManProduction,pressWorkers=pressState?.workers||[],pressArticles=pressState?.settings?.upperArticles||[],pressDists=pressState?.settings?.upperDistributions||[];
+  const isPressOnePieceMozaName=name=>{
+    const s=String(name||'').trim().toLowerCase().replace(/\s+/g,' ');
+    if(!s||s.includes('batawa')||s.includes('batava')||s.includes('tukri')||s.includes('tukdi')||s.includes('cream')||s.includes('brown'))return false;
+    return s==='one piece moza'||s==='1 piece moza'||s==='onepiece moza'||s==='ون پیس موزہ';
+  };
+  const lineIsPressOnePieceMoza=(l,articles)=>{
+    const saved=l?.articleId?articles.find(a=>String(a.id)===String(l.articleId))?.name:'';
+    const raw=l?.articleName||l?.name||'';
+    if(saved&&!isPressOnePieceMozaName(saved))return false;
+    if(raw&&!isPressOnePieceMozaName(raw))return false;
+    return isPressOnePieceMozaName(saved||raw);
+  };
   pressDists.filter(r=>active(r)&&r.workflowVersion===1&&r.pressCutting===true).forEach(r=>{
     const dt=dateOf(r),isIn=inWeek(dt);
     if(!isIn)return;
@@ -13745,12 +13757,14 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
     const isStitch=(worker||r).pressWorkerCategory==='Stitch Man';
     if(isStitch)return;
     const wName=worker?.name||r.workerName||'';
+    const wNorm=String(wName||'').trim().toLowerCase().replace(/\s+/g,' ');
+    if(!wNorm.includes('kashif')&&!wNorm.includes('کاشف'))return;
     const target=byKey.press;
     let counted=false;
     (r.lines||[]).forEach(l=>{
       if(!l.articleId&&!l.articleName)return;
       const d=upperLineDisplay(l),aName=lineArticleName(l,pressArticles);
-      if(!tfsIsAtomUnit(d.unit)||!lineIsOnePieceAtom(l,pressArticles))return;
+      if(!tfsIsAtomUnit(d.unit)||!lineIsPressOnePieceMoza(l,pressArticles))return;
       const iss=round3(d.issued),rec=round3(d.received);
       if(iss>0){addStageQty(target,'issuedQty',iss);pushItem(target,'issued',dt,r.voucherNo,wName,aName,'ATOMS',iss);counted=true;}
       if(rec>0){addStageQty(target,'receivedQty',rec);addStageQty(target,'setQty',rec);pushItem(target,'received',dt,r.voucherNo,wName,aName,'ATOMS',rec);counted=true;}
