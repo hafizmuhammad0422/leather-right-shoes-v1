@@ -13091,8 +13091,8 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     {key:'press',label:'Press Man',sub:'Shoes Press Man',unit:'SET',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
     {key:'upper',label:'Upper Man',sub:'Upper Mans Production',unit:'SET',hasPendingTracking:true,allowManualOpening:false,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
     {key:'stitch',label:'Stitch Man',sub:'Stitch Man (Shoes Press Man)',unit:'SET',hasPendingTracking:true,allowManualOpening:false,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
-    {key:'bottom',label:'Bottom Man',sub:'Batam Mans Production',unit:'SET',hasPendingTracking:false,allowManualOpening:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
-    {key:'finish',label:'Finish Man',sub:'Finished Man Production',unit:'SET',hasPendingTracking:false,allowManualOpening:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[],workerList:[]}
+    {key:'bottom',label:'Bottom Man',sub:'Batam Mans Production',unit:'SET',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
+    {key:'finish',label:'Finish Man',sub:'Finished Man Production',unit:'SET',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]}
   ];
   const byKey={...Object.fromEntries(stages.map(s=>[s.key,s])),lamination:laminationStage};
   const pushItem=(stage,metric,dt,voucherNo,workerName,itemName,unit,qty)=>stage.items.push({metric:metric||'received',date:upperLocalDateKey(dt),voucherNo:voucherNo!=null&&voucherNo!==''?String(voucherNo):'—',workerName:String(workerName||'—'),itemName:String(itemName||'—'),unit:String(unit||'SET'),qty:round3(qty)});
@@ -13392,9 +13392,10 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     s.items.filter(it=>it.metric==='received'&&String(it.unit).toUpperCase()===String(s.unit).toUpperCase()).forEach(it=>{
       const clean=String(it.workerName||'—').trim()||'—';
       const k=clean.toLowerCase();
-      const entry=wMap.get(k)||{workerName:clean,setQty:0,entriesCount:0,articles:new Set()};
+      const entry=wMap.get(k)||{workerName:clean,setQty:0,entriesCount:0,days:new Set(),articles:new Set()};
       entry.setQty=round3(entry.setQty+(Number(it.qty)||0));
       entry.entriesCount++;
+      if(it.date)entry.days.add(String(it.date));
       if(it.itemName)entry.articles.add(String(it.itemName));
       wMap.set(k,entry);
     });
@@ -13411,6 +13412,7 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
       workerName:w.workerName,
       setQty:w.setQty,
       entriesCount:w.entriesCount,
+      daysCount:w.days.size||w.entriesCount,
       articles:[...w.articles].join(', '),
       text:tfsOnePieceFormatQty(w.setQty)+' '+s.unit
     })).sort((a,b)=>b.setQty-a.setQty||a.workerName.localeCompare(b.workerName));
@@ -13500,10 +13502,7 @@ function openTfsOnePieceSetVerification(weekKey=''){
 function openTfsOnePieceStageDetailModal(stageKey,baseDate=new Date(),metric='all'){
   const d=tfsOnePieceSetVerificationData(baseDate),stage=d.stages.find(s=>s.key===stageKey);if(!stage)return;
   const mKey=['opening','received'].includes(metric)?metric:'all';
-  const metricTitles={all:'Received & Opening Breakdown',opening:'Opening Stock Breakdown',received:'Received Breakdown (Worker & Voucher Detail)'};
-  const typeLabels={opening:'Opening',received:'Received'};
-  const typeColors={opening:'#475569',received:'#15803d'};
-  const items=((mKey==='opening'||mKey==='received')?stage.items.filter(x=>x.metric===mKey):stage.items.filter(x=>x.metric==='opening'||x.metric==='received')).filter(x=>String(x.unit).toUpperCase()===String(stage.unit).toUpperCase());
+  const metricTitles={all:'Received & Opening Breakdown',opening:'Opening Stock Breakdown',received:'Received Breakdown (Worker Summary)'};
   const openingWorkerSummaryHtml=(mKey!=='received'&&(stage.openingWorkerList&&stage.openingWorkerList.length))?`<div style="margin-bottom:12px;">
     <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Opening / Pending Summary (Kis Worker ke Paas Kitna Opening / Pending Stock Hai)</div>
     <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px;">
@@ -13522,7 +13521,7 @@ function openTfsOnePieceStageDetailModal(stageKey,baseDate=new Date(),metric='al
         </tr>`).join('')}</tbody>
       </table>
     </div>
-  </div>`:'';
+  </div>`:(mKey==='opening'?`<div class="empty" style="margin-bottom:12px;">Is work week mein is section ka koi Opening / Pending stock nahi hai.</div>`:'');
   const workerSummaryHtml=(mKey!=='opening'&&(stage.workerList&&stage.workerList.length))?`<div style="margin-bottom:12px;">
     <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Worker-Wise Summary (Kis Worker ne Kitna Banaya)</div>
     <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px;">
@@ -13531,27 +13530,19 @@ function openTfsOnePieceStageDetailModal(stageKey,baseDate=new Date(),metric='al
           <th style="padding:6px;text-align:left;">#</th>
           <th style="padding:6px;text-align:left;">Worker Name</th>
           <th style="padding:6px;text-align:left;">Article</th>
-          <th style="padding:6px;text-align:center;">Vouchers</th>
+          <th style="padding:6px;text-align:center;">Days</th>
           <th style="padding:6px;text-align:right;">Total Quantity</th>
         </tr></thead>
         <tbody>${stage.workerList.map((w,idx)=>`<tr>
           <td style="padding:5px 6px;border-top:1px solid var(--line);">${idx+1}</td>
           <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;">${esc(w.workerName)}</td>
           <td style="padding:5px 6px;border-top:1px solid var(--line);color:var(--muted);">${esc(w.articles||'One Piece Set')}</td>
-          <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:center;">${w.entriesCount}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:center;font-weight:700;">${w.daysCount||w.entriesCount}</td>
           <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:800;color:#15803d;">${esc(w.text)}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div>
-  </div>`:'';
-  const rowsHtml=items.length?items.map(item=>`<tr>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;color:${typeColors[item.metric]||'#334155'};white-space:nowrap;">${esc(typeLabels[item.metric]||item.metric)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);white-space:nowrap;">${esc(item.date)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);">#${esc(item.voucherNo)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:600;">${esc(item.workerName)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);">${esc(item.itemName)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:700;">${esc(tfsOnePieceFormatQty(item.qty))} ${esc(item.unit)}</td>
-  </tr>`).join(''):`<tr><td colspan="6" class="empty">Is work week mein is section ki koi matching entry nahi mili.</td></tr>`;
+  </div>`:(mKey!=='opening'?`<div class="empty" style="margin-bottom:12px;">Is work week mein is stage ki koi Received entry nahi mili.</div>`:'');
   modal(`<h3 style="margin:0 0 4px;">${esc(stage.label)} — ${esc(metricTitles[mKey]||'Breakdown')}</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Data Source: <b>${esc(stage.sub)}</b> • ${esc(d.weekLabel)}</div>
     <div style="font-size:11.5px;color:#1f2937;margin-bottom:10px;padding:6px 8px;background:var(--bg-soft,#f8f9fa);border:1px solid var(--line);border-radius:6px;">
@@ -13559,20 +13550,6 @@ function openTfsOnePieceStageDetailModal(stageKey,baseDate=new Date(),metric='al
     </div>
     ${openingWorkerSummaryHtml}
     ${workerSummaryHtml}
-    <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Voucher-Wise Source Entries (Quantity Kahan se Aayi)</div>
-    <div style="overflow-x:auto;max-height:48dvh;border:1px solid var(--line);border-radius:6px;">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
-          <th style="padding:6px;text-align:left;">Type</th>
-          <th style="padding:6px;text-align:left;">Date</th>
-          <th style="padding:6px;text-align:left;">Voucher</th>
-          <th style="padding:6px;text-align:left;">Worker</th>
-          <th style="padding:6px;text-align:left;">Article / Material</th>
-          <th style="padding:6px;text-align:right;">Qty</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
     <div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button></div>`);
 }
 async function saveTfsOnePieceOpeningStock(stageKey,weekKey,qtyValue,isReset=false){
@@ -13742,9 +13719,8 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
   const stages=[
     {key:'press',label:'Press Man',sub:'Shoes Press Man',unit:'ATOMS',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
     {key:'upper',label:'Upper Man',sub:'Upper Mans Production',unit:'ATOMS',hasPendingTracking:true,allowManualOpening:false,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
-    {key:'stitch',label:'Stitch Man',sub:'Stitch Man (Shoes Press Man)',unit:'ATOMS',hasPendingTracking:true,allowManualOpening:false,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
-    {key:'bottom',label:'Bottom Man',sub:'Batam Mans Production',unit:'ATOMS',hasPendingTracking:false,allowManualOpening:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
-    {key:'finish',label:'Finish Man',sub:'Finished Man Production',unit:'ATOMS',hasPendingTracking:false,allowManualOpening:false,openQty:null,issuedQty:null,receivedQty:0,closingQty:null,setQty:0,meterQty:0,records:0,items:[],workerList:[]}
+    {key:'bottom',label:'Bottom Man',sub:'Batam Mans Production',unit:'ATOMS',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]},
+    {key:'finish',label:'Finish Man',sub:'Finished Man Production',unit:'ATOMS',hasPendingTracking:true,allowManualOpening:true,openQty:0,issuedQty:0,receivedQty:0,closingQty:0,setQty:0,meterQty:0,records:0,items:[],workerList:[]}
   ];
   const byKey=Object.fromEntries(stages.map(s=>[s.key,s]));
   const pushItem=(stage,metric,dt,voucherNo,workerName,itemName,unit,qty)=>stage.items.push({metric:metric||'received',date:upperLocalDateKey(dt),voucherNo:voucherNo!=null&&voucherNo!==''?String(voucherNo):'—',workerName:String(workerName||'—'),itemName:String(itemName||'—'),unit:String(unit||'ATOMS'),qty:round3(qty)});
@@ -13767,8 +13743,9 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
     if(!isIn)return;
     const worker=pressWorkers.find(w=>String(w.id)===String(r.workerId));
     const isStitch=(worker||r).pressWorkerCategory==='Stitch Man';
+    if(isStitch)return;
     const wName=worker?.name||r.workerName||'';
-    const target=isStitch?byKey.stitch:byKey.press;
+    const target=byKey.press;
     let counted=false;
     (r.lines||[]).forEach(l=>{
       if(!l.articleId&&!l.articleName)return;
@@ -13780,55 +13757,7 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
     });
     if(counted)target.records++;
   });
-  const pressManualResets=(pressState?.settings?.upperManualPendingResets||[]).filter(active);
-  const stitchWorkerIds=new Set([...pressDists.map(r=>String(r.workerId)),...(pressState?.settings?.upperPendingRecords||[]).map(r=>String(r.workerId)),...pressManualResets.map(r=>String(r.workerId))]);
-  stitchWorkerIds.forEach(wId=>{
-    const worker=pressWorkers.find(w=>String(w.id)===wId);
-    const isStitch=worker?.pressWorkerCategory==='Stitch Man'||pressDists.some(r=>String(r.workerId)===wId&&r.pressWorkerCategory==='Stitch Man')||pressManualResets.some(r=>String(r.workerId)===wId&&r.pressWorkerCategory==='Stitch Man');
-    if(!isStitch)return;
-    const wName=worker?.name||pressDists.find(r=>String(r.workerId)===wId)?.workerName||pressManualResets.find(r=>String(r.workerId)===wId)?.workerName||'';
-    const groups=new Map(),events=[];
-    (pressState?.settings?.upperPendingRecords||[]).filter(r=>active(r)&&String(r.workerId)===wId).forEach((r,idx)=>{
-      const aName=lineArticleName(r,pressArticles);
-      const art=r.articleId?pressArticles.find(a=>String(a.id)===String(r.articleId)):null;
-      const unit=r.unit||art?.unit||'ATOMS';
-      if(!tfsIsAtomUnit(unit)||!lineIsOnePieceAtom(r,pressArticles))return;
-      const delta=round3(r.delta!=null?r.delta:(r.action==='minus'?-(Number(r.qty)||0):(Number(r.qty)||0)));
-      events.push({date:+dateOf(r),order:idx,key:String(r.articleId||aName),name:aName,qty:delta,dateStr:upperLocalDateKey(dateOf(r))});
-    });
-    pressDists.filter(r=>active(r)&&r.workflowVersion===1&&r.pressCutting===true&&String(r.workerId)===wId).forEach((r,idx)=>{
-      const dt=dateOf(r);
-      (r.lines||[]).forEach(l=>{
-        if(!l.articleId&&!l.articleName)return;
-        const d=upperLineDisplay(l),aName=lineArticleName(l,pressArticles);
-        if(!tfsIsAtomUnit(d.unit)||!lineIsOnePieceAtom(l,pressArticles))return;
-        const net=round3(d.issued-d.received);
-        if(net===0&&!events.length)return;
-        events.push({id:r.id,date:+dt,order:idx,key:String(l.articleId||aName),name:aName,qty:net,dateStr:upperLocalDateKey(dt)});
-      });
-    });
-    pressManualResets.filter(r=>String(r.workerId)===wId).forEach((r,idx)=>{
-      const aName=lineArticleName(r,pressArticles);
-      if(!tfsIsAtomUnit(r.unit)||!lineIsOnePieceAtom(r,pressArticles))return;
-      events.push({date:+new Date(r.date),order:idx,reset:r,key:String(r.articleId||aName),name:aName,qty:round3(r.qty),dateStr:upperLocalDateKey(new Date(r.date))});
-    });
-    events.sort((a,b)=>a.date-b.date||a.order-b.order);
-    events.forEach(ev=>{
-      if(ev.date>=+pendingThroughDate)return;
-      const g=groups.get(ev.key)||{name:ev.name,qty:0,dateStr:ev.dateStr};
-      g.qty=ev.reset?ev.qty:round3(g.qty+ev.qty);
-      g.dateStr=ev.dateStr;
-      groups.set(ev.key,g);
-    });
-    groups.forEach(g=>{
-      if(g.qty>0){
-        byKey.stitch.openQty=round3(byKey.stitch.openQty+g.qty);
-        pushItem(byKey.stitch,'opening',new Date((g.dateStr||upperLocalDateKey(range.start))+'T00:00:00'),'PEND',wName,g.name,'ATOMS',g.qty);
-      }
-    });
-  });
   byKey.press.closingQty=round3(byKey.press.openQty+byKey.press.issuedQty-byKey.press.receivedQty);
-  byKey.stitch.closingQty=round3(byKey.stitch.openQty+byKey.stitch.issuedQty-byKey.stitch.receivedQty);
   const upperArticles=settings.upperArticles||[];
   (settings.upperDistributions||[]).filter(r=>active(r)&&r.workflowVersion===1&&workerCategoryCompareKey(upperProductionRecordCategory(r))==='upper mans').forEach(r=>{
     const dt=dateOf(r),isIn=inWeek(dt);
@@ -13943,9 +13872,10 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
     s.items.filter(it=>it.metric==='received'&&tfsIsAtomUnit(it.unit)).forEach(it=>{
       const clean=String(it.workerName||'—').trim()||'—';
       const k=clean.toLowerCase();
-      const entry=wMap.get(k)||{workerName:clean,setQty:0,entriesCount:0,articles:new Set()};
+      const entry=wMap.get(k)||{workerName:clean,setQty:0,entriesCount:0,days:new Set(),articles:new Set()};
       entry.setQty=round3(entry.setQty+(Number(it.qty)||0));
       entry.entriesCount++;
+      if(it.date)entry.days.add(String(it.date));
       if(it.itemName)entry.articles.add(String(it.itemName));
       wMap.set(k,entry);
     });
@@ -13962,6 +13892,7 @@ function tfsOnePieceAtomVerificationData(baseDate=new Date()){
       workerName:w.workerName,
       setQty:w.setQty,
       entriesCount:w.entriesCount,
+      daysCount:w.days.size||w.entriesCount,
       articles:[...w.articles].join(', '),
       text:tfsOnePieceFormatQty(w.setQty)+' '+s.unit
     })).sort((a,b)=>b.setQty-a.setQty||a.workerName.localeCompare(b.workerName));
@@ -14016,10 +13947,7 @@ function openTfsOnePieceAtomVerification(weekKey=''){
 function openTfsOnePieceAtomStageDetailModal(stageKey,baseDate=new Date(),metric='all'){
   const d=tfsOnePieceAtomVerificationData(baseDate),stage=d.stages.find(s=>s.key===stageKey);if(!stage)return;
   const mKey=['opening','received'].includes(metric)?metric:'all';
-  const metricTitles={all:'Received & Opening Breakdown',opening:'Opening Stock Breakdown',received:'Received Breakdown (Worker & Voucher Detail)'};
-  const typeLabels={opening:'Opening',received:'Received'};
-  const typeColors={opening:'#475569',received:'#15803d'};
-  const items=((mKey==='opening'||mKey==='received')?stage.items.filter(x=>x.metric===mKey):stage.items.filter(x=>x.metric==='opening'||x.metric==='received')).filter(x=>tfsIsAtomUnit(x.unit));
+  const metricTitles={all:'Received & Opening Breakdown',opening:'Opening Stock Breakdown',received:'Received Breakdown (Worker Summary)'};
   const openingWorkerSummaryHtml=(mKey!=='received'&&(stage.openingWorkerList&&stage.openingWorkerList.length))?`<div style="margin-bottom:12px;">
     <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Opening / Pending Summary (Kis Worker ke Paas Kitna Opening / Pending Stock Hai)</div>
     <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px;">
@@ -14038,7 +13966,7 @@ function openTfsOnePieceAtomStageDetailModal(stageKey,baseDate=new Date(),metric
         </tr>`).join('')}</tbody>
       </table>
     </div>
-  </div>`:'';
+  </div>`:(mKey==='opening'?`<div class="empty" style="margin-bottom:12px;">Is work week mein is section ka koi Opening / Pending stock nahi hai.</div>`:'');
   const workerSummaryHtml=(mKey!=='opening'&&(stage.workerList&&stage.workerList.length))?`<div style="margin-bottom:12px;">
     <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Worker-Wise Summary (Kis Worker ne Kitna Banaya)</div>
     <div style="overflow-x:auto;border:1px solid var(--line);border-radius:6px;">
@@ -14047,27 +13975,19 @@ function openTfsOnePieceAtomStageDetailModal(stageKey,baseDate=new Date(),metric
           <th style="padding:6px;text-align:left;">#</th>
           <th style="padding:6px;text-align:left;">Worker Name</th>
           <th style="padding:6px;text-align:left;">Article</th>
-          <th style="padding:6px;text-align:center;">Vouchers</th>
+          <th style="padding:6px;text-align:center;">Days</th>
           <th style="padding:6px;text-align:right;">Total Quantity</th>
         </tr></thead>
         <tbody>${stage.workerList.map((w,idx)=>`<tr>
           <td style="padding:5px 6px;border-top:1px solid var(--line);">${idx+1}</td>
           <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;">${esc(w.workerName)}</td>
           <td style="padding:5px 6px;border-top:1px solid var(--line);color:var(--muted);">${esc(w.articles||'One Piece Atom')}</td>
-          <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:center;">${w.entriesCount}</td>
+          <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:center;font-weight:700;">${w.daysCount||w.entriesCount}</td>
           <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:800;color:#15803d;">${esc(w.text)}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div>
-  </div>`:'';
-  const rowsHtml=items.length?items.map(item=>`<tr>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:700;color:${typeColors[item.metric]||'#334155'};white-space:nowrap;">${esc(typeLabels[item.metric]||item.metric)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);white-space:nowrap;">${esc(item.date)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);">#${esc(item.voucherNo)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);font-weight:600;">${esc(item.workerName)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);">${esc(item.itemName)}</td>
-    <td style="padding:5px 6px;border-top:1px solid var(--line);text-align:right;font-weight:700;">${esc(tfsOnePieceFormatQty(item.qty))} ${esc(item.unit)}</td>
-  </tr>`).join(''):`<tr><td colspan="6" class="empty">Is work week mein is section ki koi matching entry nahi mili.</td></tr>`;
+  </div>`:(mKey!=='opening'?`<div class="empty" style="margin-bottom:12px;">Is work week mein is stage ki koi Received entry nahi mili.</div>`:'');
   modal(`<h3 style="margin:0 0 4px;">${esc(stage.label)} — ${esc(metricTitles[mKey]||'Breakdown')}</h3>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Data Source: <b>${esc(stage.sub)}</b> • ${esc(d.weekLabel)}</div>
     <div style="font-size:11.5px;color:#1f2937;margin-bottom:10px;padding:6px 8px;background:var(--bg-soft,#f8f9fa);border:1px solid var(--line);border-radius:6px;">
@@ -14075,20 +13995,6 @@ function openTfsOnePieceAtomStageDetailModal(stageKey,baseDate=new Date(),metric
     </div>
     ${openingWorkerSummaryHtml}
     ${workerSummaryHtml}
-    <div style="font-size:12px;font-weight:800;color:#0f172a;margin-bottom:6px;">Voucher-Wise Source Entries (Quantity Kahan se Aayi)</div>
-    <div style="overflow-x:auto;max-height:48dvh;border:1px solid var(--line);border-radius:6px;">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead><tr style="background:var(--bg-soft,#f1f5f9);color:var(--muted);font-size:11px;">
-          <th style="padding:6px;text-align:left;">Type</th>
-          <th style="padding:6px;text-align:left;">Date</th>
-          <th style="padding:6px;text-align:left;">Voucher</th>
-          <th style="padding:6px;text-align:left;">Worker</th>
-          <th style="padding:6px;text-align:left;">Article / Material</th>
-          <th style="padding:6px;text-align:right;">Qty</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
     <div class="modal-actions" style="margin-top:12px;"><button type="button" class="btn ghost" onclick="closeModal()" data-i18n=ui_Close>Close</button></div>`);
 }
 async function saveTfsOnePieceAtomOpeningStock(stageKey,weekKey,qtyValue,isReset=false){
