@@ -13060,7 +13060,11 @@ function openTfsLaborWeeklyVoucher(){
 function tfsOnePieceFormatQty(n){const v=Math.round((Number(n)||0)*1000)/1000;return Number.isInteger(v)?String(v):String(v);}
 function tfsIsOnePieceSetArticle(name){
   const s=String(name||'').trim().toLowerCase().replace(/\s+/g,' ');
-  return s.includes('one piece')||s.includes('1 piece')||s.includes('onepiece')||s.includes('ون پیس');
+  if(!s)return false;
+  if(/\b(bachkan[a-z]*|p[aei]?ro[hy]+i|p[aei]?ro[hy]+e+)\b/i.test(s)||s.includes('bachkan')||s.includes('pirohi')||s.includes('piroyi')||s.includes('parohi')||s.includes('paroyi')||s.includes('perohi')||s.includes('peroyi')||s.includes('prohi')||s.includes('proyi')||s.includes('piroye')||s.includes('بچکانہ')||s.includes('پروہی')||s.includes('پروئی')||s.includes('پیروئی')||s.includes('پروہ'))return false;
+  const isOnePiece=s.includes('one piece')||s.includes('1 piece')||s.includes('onepiece')||s.includes('ون پیس');
+  const isKid=s.includes('kid')||s.includes('کڈ');
+  return isOnePiece&&isKid;
 }
 function tfsIsNasirWorker(name){
   return String(name||'').trim().toLowerCase().replace(/\s+/g,' ').includes('nasir');
@@ -13091,7 +13095,17 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
   ];
   const byKey={...Object.fromEntries(stages.map(s=>[s.key,s])),lamination:laminationStage};
   const pushItem=(stage,metric,dt,voucherNo,workerName,itemName,unit,qty)=>stage.items.push({metric:metric||'received',date:upperLocalDateKey(dt),voucherNo:voucherNo!=null&&voucherNo!==''?String(voucherNo):'—',workerName:String(workerName||'—'),itemName:String(itemName||'—'),unit:String(unit||'SET'),qty:round3(qty)});
-  const lineArticleName=(l,articles)=>l.articleName||(l.articleId?articles.find(a=>String(a.id)===String(l.articleId))?.name:'')||'';
+  const lineArticleName=(l,articles)=>{
+    const saved=l?.articleId?articles.find(a=>String(a.id)===String(l.articleId))?.name:'';
+    return saved||l?.articleName||l?.name||'';
+  };
+  const lineIsOnePieceKid=(l,articles)=>{
+    const saved=l?.articleId?articles.find(a=>String(a.id)===String(l.articleId))?.name:'';
+    const raw=l?.articleName||l?.name||'';
+    if(saved&&!tfsIsOnePieceSetArticle(saved))return false;
+    if(raw&&!tfsIsOnePieceSetArticle(raw))return false;
+    return tfsIsOnePieceSetArticle(saved||raw);
+  };
   const lamState=settings.shoesLaminationShopsProduction,lamWorkers=lamState?.settings?.laminationWorkers||lamState?.workers||[],lamArticles=[...(lamState?.settings?.upperArticles||[]),...(lamState?.settings?.upperMaterials||[])];
   const lamIssues=new Map(),lamMaterials=new Map();
   const addMapQty=(map,name,qty)=>{const q=round3(qty);if(!(q>0))return;const k=String(name||'Material').trim()||'Material';map.set(k,round3((map.get(k)||0)+q));};
@@ -13188,7 +13202,7 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     (r.lines||[]).forEach(l=>{
       if(!l.articleId&&!l.articleName)return;
       const d=upperLineDisplay(l),aName=lineArticleName(l,pressArticles);
-      if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+      if(String(d.unit||'').toUpperCase()!=='SET'||!lineIsOnePieceKid(l,pressArticles))return;
       const iss=round3(d.issued),rec=round3(d.received);
       if(iss>0){addStageQty(target,'issuedQty',iss);pushItem(target,'issued',dt,r.voucherNo,wName,aName,'SET',iss);counted=true;}
       if(rec>0){addStageQty(target,'receivedQty',rec);addStageQty(target,'setQty',rec);pushItem(target,'received',dt,r.voucherNo,wName,aName,'SET',rec);counted=true;}
@@ -13205,7 +13219,7 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     const groups=new Map(),events=[];
     (pressState?.settings?.upperPendingRecords||[]).filter(r=>active(r)&&String(r.workerId)===wId).forEach((r,idx)=>{
       const aName=lineArticleName(r,pressArticles);
-      if(!tfsIsOnePieceSetArticle(aName))return;
+      if(!lineIsOnePieceKid(r,pressArticles))return;
       const delta=round3(r.delta!=null?r.delta:(r.action==='minus'?-(Number(r.qty)||0):(Number(r.qty)||0)));
       events.push({date:+dateOf(r),order:idx,key:String(r.articleId||aName),name:aName,qty:delta,dateStr:upperLocalDateKey(dateOf(r))});
     });
@@ -13214,7 +13228,7 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
       (r.lines||[]).forEach(l=>{
         if(!l.articleId&&!l.articleName)return;
         const d=upperLineDisplay(l),aName=lineArticleName(l,pressArticles);
-        if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+        if(String(d.unit||'').toUpperCase()!=='SET'||!lineIsOnePieceKid(l,pressArticles))return;
         const net=round3(d.issued-d.received);
         if(net===0&&!events.length)return;
         events.push({id:r.id,date:+dt,order:idx,key:String(l.articleId||aName),name:aName,qty:net,dateStr:upperLocalDateKey(dt)});
@@ -13222,7 +13236,7 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     });
     pressManualResets.filter(r=>String(r.workerId)===wId).forEach((r,idx)=>{
       const aName=lineArticleName(r,pressArticles);
-      if(String(r.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+      if(String(r.unit||'').toUpperCase()!=='SET'||!lineIsOnePieceKid(r,pressArticles))return;
       events.push({date:+new Date(r.date),order:idx,reset:r,key:String(r.articleId||aName),name:aName,qty:round3(r.qty),dateStr:upperLocalDateKey(new Date(r.date))});
     });
     events.sort((a,b)=>a.date-b.date||a.order-b.order);
@@ -13271,7 +13285,7 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     (r.lines||[]).forEach(l=>{
       if(!l.articleId&&!l.articleName)return;
       const d=upperLineDisplay(l),aName=lineArticleName(l,upperArticles);
-      if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+      if(String(d.unit||'').toUpperCase()!=='SET'||!lineIsOnePieceKid(l,upperArticles))return;
       const iss=round3(d.issued),rec=round3(d.received);
       if(iss>0){addStageQty(byKey.upper,'issuedQty',iss);pushItem(byKey.upper,'issued',dt,r.voucherNo,wName,aName,'SET',iss);counted=true;}
       if(rec>0){addStageQty(byKey.upper,'receivedQty',rec);addStageQty(byKey.upper,'setQty',rec);pushItem(byKey.upper,'received',dt,r.voucherNo,wName,aName,'SET',rec);counted=true;}
@@ -13289,8 +13303,8 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
     const matchedKeys=new Set();
     (state.groups||[]).forEach(g=>{
       if(g.legacy)return;
-      const aName=g.name||(g.articleId?upperArticles.find(a=>String(a.id)===String(g.articleId))?.name:'')||'';
-      if(String(g.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+      const aName=lineArticleName(g,upperArticles);
+      if(String(g.unit||'').toUpperCase()!=='SET'||!lineIsOnePieceKid(g,upperArticles))return;
       if(g.articleId)matchedKeys.add(String(g.articleId));
       const q=round3(g.qty);
       if(q!==0){
@@ -13306,7 +13320,7 @@ function tfsOnePieceSetVerificationData(baseDate=new Date()){
         if(l.articleId&&matchedKeys.has(String(l.articleId)))return;
         if(l.articleId)return;
         const d=upperLineDisplay(l),aName=lineArticleName(l,upperArticles);
-        if(String(d.unit||'').toUpperCase()!=='SET'||!tfsIsOnePieceSetArticle(aName))return;
+        if(String(d.unit||'').toUpperCase()!=='SET'||!lineIsOnePieceKid(l,upperArticles))return;
         const net=round3(d.issued-d.received);
         if(net===0)return;
         const cur=nameOnlyGroups.get(aName)||{qty:0,dt};
